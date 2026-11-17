@@ -1,0 +1,63 @@
+name: Web
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Secret scan
+        run: node scripts/scan-secrets.mjs
+
+      - name: Generated table types
+        run: node server/scripts/generate-table-types.mjs --check
+
+      - name: Lint, types, tests
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+
+      - name: Coverage
+        run: |
+          mkdir -p server/coverage
+          cd server
+          node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info test/*.test.ts
+        continue-on-error: false
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: End to end
+        run: npx playwright test
+        working-directory: web
+
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: command-center-screenshots
+          path: web/test-results/screenshots
+          if-no-files-found: ignore

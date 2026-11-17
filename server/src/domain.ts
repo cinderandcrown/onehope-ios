@@ -1,0 +1,587 @@
+export const ROLES = [
+  "master_admin",
+  "pastor",
+  "care_team",
+  "finance",
+  "kids_director",
+  "team_leader",
+  "volunteer",
+  "member",
+] as const;
+
+export type Role = (typeof ROLES)[number];
+
+export const ACTIONS = [
+  "view_public",
+  "view_directory",
+  "edit_own_profile",
+  "view_household_tier3",
+  "view_all_giving",
+  "view_care_notes",
+  "share_care_note",
+  "view_kids_medical",
+  "view_background_checks",
+  "manage_serving",
+  "manage_events",
+  "manage_checkin",
+  "compose_communications",
+  "approve_expenses",
+  "manage_integrations",
+  "manage_module_flags",
+  "grant_staff_roles",
+  "assign_team_roles",
+  "propose_master_admin",
+  "view_audit_log",
+] as const;
+
+export type Action = (typeof ACTIONS)[number];
+
+export const ROLE_ORDER: readonly Role[] = ROLES;
+
+const MEMBER_ACTIONS: readonly Action[] = [
+  "view_public",
+  "view_directory",
+  "edit_own_profile",
+  "view_household_tier3",
+];
+
+export function actionsFor(role: Role): readonly Action[] {
+  switch (role) {
+    case "member":
+      return MEMBER_ACTIONS;
+    case "volunteer":
+      return MEMBER_ACTIONS;
+    case "team_leader":
+      return [...MEMBER_ACTIONS, "manage_serving"];
+    case "kids_director":
+      return [...MEMBER_ACTIONS, "manage_checkin", "view_kids_medical", "view_background_checks"];
+    case "finance":
+      return [...MEMBER_ACTIONS, "view_all_giving", "approve_expenses"];
+    case "care_team":
+      return [...MEMBER_ACTIONS, "view_care_notes", "share_care_note"];
+    case "pastor":
+      return [
+        ...MEMBER_ACTIONS,
+        "view_all_giving",
+        "view_care_notes",
+        "share_care_note",
+        "view_kids_medical",
+        "view_background_checks",
+        "manage_serving",
+        "manage_events",
+        "manage_checkin",
+        "compose_communications",
+        "approve_expenses",
+        "assign_team_roles",
+        "view_audit_log",
+      ];
+    case "master_admin":
+      return ACTIONS;
+    default:
+      return assertNever(role);
+  }
+}
+
+const PERMISSIONS: Record<Role, ReadonlySet<Action>> = {
+  master_admin: new Set(actionsFor("master_admin")),
+  pastor: new Set(actionsFor("pastor")),
+  care_team: new Set(actionsFor("care_team")),
+  finance: new Set(actionsFor("finance")),
+  kids_director: new Set(actionsFor("kids_director")),
+  team_leader: new Set(actionsFor("team_leader")),
+  volunteer: new Set(actionsFor("volunteer")),
+  member: new Set(actionsFor("member")),
+};
+
+export function allows(role: Role, action: Action): boolean {
+  return PERMISSIONS[role].has(action);
+}
+
+export function permissionMatrix(): { role: Role; grants: Record<Action, boolean> }[] {
+  return ROLE_ORDER.map((role) => {
+    const grants = {} as Record<Action, boolean>;
+    for (const action of ACTIONS) grants[action] = allows(role, action);
+    return { role, grants };
+  });
+}
+
+export const STAFF_ROLES: ReadonlySet<Role> = new Set<Role>([
+  "master_admin",
+  "pastor",
+  "care_team",
+  "finance",
+  "kids_director",
+  "team_leader",
+]);
+
+export function isStaff(role: Role): boolean {
+  return STAFF_ROLES.has(role);
+}
+
+export const TIER3_ACTIONS: ReadonlySet<Action> = new Set<Action>([
+  "view_household_tier3",
+  "view_all_giving",
+  "view_care_notes",
+  "share_care_note",
+  "view_kids_medical",
+  "view_background_checks",
+]);
+
+export const SENSITIVE_STAFF_ROLES: ReadonlySet<Role> = new Set<Role>([
+  "pastor",
+  "care_team",
+  "finance",
+  "kids_director",
+]);
+
+export const TEAM_ASSIGNABLE_ROLES: ReadonlySet<Role> = new Set<Role>(["team_leader", "volunteer", "member"]);
+
+export class AccessError extends Error {
+  readonly code:
+    | "unauthenticated"
+    | "mfa_required"
+    | "step_up_required"
+    | "forbidden"
+    | "not_found"
+    | "invalid"
+    | "sends_disabled"
+    | "seat_empty"
+    | "two_person"
+    | "session_expired";
+
+  constructor(code: AccessError["code"], message: string) {
+    super(message);
+    this.name = "AccessError";
+    this.code = code;
+  }
+}
+
+export type Actor = {
+  personId: string;
+  householdId: string | null;
+  role: Role;
+  mfaVerified: boolean;
+  stepUpUntil: number;
+  sample: boolean;
+};
+
+export function assertNever(value: never): never {
+  throw new Error(`Unhandled variant: ${JSON.stringify(value)}`);
+}
+
+export function authorize(actor: Actor, action: Action, now: number): void {
+  if (isStaff(actor.role) && !actor.mfaVerified) {
+    throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
+  }
+  if (!allows(actor.role, action)) {
+    throw new AccessError(
+      "forbidden",
+      `The ${labelRole(actor.role)} role cannot ${action.replaceAll("_", " ")}.`,
+    );
+  }
+  if (TIER3_ACTIONS.has(action) && actor.stepUpUntil < now) {
+    throw new AccessError("step_up_required", "Confirm it's you again before opening sensitive records.");
+  }
+}
+
+export function labelRole(role: Role): string {
+  switch (role) {
+    case "master_admin":
+      return "Master Admin";
+    case "pastor":
+      return "Pastor";
+    case "care_team":
+      return "Care team";
+    case "finance":
+      return "Finance";
+    case "kids_director":
+      return "Kids director";
+    case "team_leader":
+      return "Team leader";
+    case "volunteer":
+      return "Volunteer";
+    case "member":
+      return "Member";
+    default:
+      return assertNever(role);
+  }
+}
+
+export const CHURCH = {
+  name: "One Hope",
+  legalNote: "One Hope Church, Richardson, Texas",
+  addressLine: "1251 S. Sherman St., Ste. 112",
+  city: "Richardson",
+  region: "TX",
+  postalCode: "75081",
+  timeZone: "America/Chicago",
+  serviceHour: 10,
+  serviceMinute: 30,
+  preServiceHour: 10,
+  preServiceMinute: 0,
+  youtubeHandle: "@Weareonehope",
+  youtubeChannelId: "UCq2WteT5jNlWmXNofRMvQfw",
+  facebook: "iamonehope",
+  instagram: "iamonehope",
+  leadPastors: ["Derek Miller", "Jen Miller"],
+  mapsUrl:
+    "https://maps.apple.com/?address=1251%20S.%20Sherman%20St.%20Ste.%20112%2C%20Richardson%2C%20TX%2075081",
+} as const;
+
+export const MODULES = [
+  "discipleship",
+  "serving",
+  "worship",
+  "kids",
+  "communications",
+  "facilities",
+  "finance",
+  "missions",
+  "admin",
+  "media",
+  "groups",
+  "events",
+  "giving",
+  "checkin",
+  "prayer",
+] as const;
+
+export type ModuleId = (typeof MODULES)[number];
+
+export function sameHousehold(actor: Actor, householdId: string | null): boolean {
+  return actor.householdId !== null && actor.householdId === householdId;
+}
+
+type ZonedParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  weekday: string;
+};
+
+function zonedParts(date: Date, timeZone: string): ZonedParts {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const bag: Record<string, string> = {};
+  for (const part of fmt.formatToParts(date)) bag[part.type] = part.value;
+  return {
+    year: Number(bag.year),
+    month: Number(bag.month),
+    day: Number(bag.day),
+    hour: Number(bag.hour),
+    minute: Number(bag.minute),
+    second: Number(bag.second),
+    weekday: bag.weekday ?? "Sun",
+  };
+}
+
+function offsetMinutes(instant: Date, timeZone: string): number {
+  const parts = zonedParts(instant, timeZone);
+  const localAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return Math.round((localAsUtc - instant.getTime()) / 60000);
+}
+
+export function zonedTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  let utc = Date.UTC(year, month - 1, day, hour, minute, 0);
+  for (let i = 0; i < 3; i += 1) {
+    const off = offsetMinutes(new Date(utc), timeZone);
+    utc = Date.UTC(year, month - 1, day, hour, minute, 0) - off * 60000;
+  }
+  return new Date(utc);
+}
+
+export function nextSundayService(
+  now: Date,
+  timeZone = CHURCH.timeZone,
+): { preService: Date; service: Date } {
+  const parts = zonedParts(now, timeZone);
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const idx = weekdays.indexOf(parts.weekday);
+  let add = (7 - (idx < 0 ? 0 : idx)) % 7;
+  const todayService = zonedTimeToUtc(
+    parts.year,
+    parts.month,
+    parts.day,
+    CHURCH.serviceHour,
+    CHURCH.serviceMinute,
+    timeZone,
+  );
+  if (add === 0 && now.getTime() > todayService.getTime()) add = 7;
+  const civil = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + add));
+  const year = civil.getUTCFullYear();
+  const month = civil.getUTCMonth() + 1;
+  const day = civil.getUTCDate();
+  return {
+    preService: zonedTimeToUtc(year, month, day, CHURCH.preServiceHour, CHURCH.preServiceMinute, timeZone),
+    service: zonedTimeToUtc(year, month, day, CHURCH.serviceHour, CHURCH.serviceMinute, timeZone),
+  };
+}
+
+export type PickupInput = {
+  code: string;
+  expectedCode: string;
+  guardianAuthorized: boolean;
+  custodyRestricted: boolean;
+  adultsOnDuty: number;
+};
+
+export type PickupDecision = { allowed: boolean; reason: string };
+
+function codesMatch(left: string, right: string): boolean {
+  const a = left.trim();
+  const b = right.trim();
+  const length = Math.max(a.length, b.length);
+  let mismatch = a.length === b.length ? 0 : 1;
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (a.charCodeAt(index) || 0) ^ (b.charCodeAt(index) || 0);
+  }
+  return mismatch === 0;
+}
+
+export function evaluatePickup(input: PickupInput): PickupDecision {
+  if (input.adultsOnDuty < 2) return { allowed: false, reason: "Two adults must be on duty at the station." };
+  if (!input.guardianAuthorized)
+    return { allowed: false, reason: "This adult is not an authorized guardian." };
+  if (input.custodyRestricted) return { allowed: false, reason: "A custody restriction blocks this pickup." };
+  if (!codesMatch(input.code, input.expectedCode))
+    return { allowed: false, reason: "Security code does not match." };
+  return { allowed: true, reason: "Guardian verified and the security code matches." };
+}
+
+export type Booking = { id: string; roomId: string; start: number; end: number };
+
+export function findRoomConflict(
+  existing: readonly Booking[],
+  candidate: { roomId: string; start: number; end: number; ignoreId?: string },
+): Booking | null {
+  if (candidate.end <= candidate.start)
+    throw new AccessError("invalid", "The booking end must be after the start.");
+  return (
+    existing.find(
+      (booking) =>
+        booking.roomId === candidate.roomId &&
+        booking.id !== candidate.ignoreId &&
+        booking.start < candidate.end &&
+        candidate.start < booking.end,
+    ) ?? null
+  );
+}
+
+export type SchedulePerson = {
+  personId: string;
+  positionId: string;
+  blockouts: { start: number; end: number }[];
+};
+export type ScheduleNeed = { positionId: string; count: number };
+
+export function autoSchedule(
+  needs: readonly ScheduleNeed[],
+  people: readonly SchedulePerson[],
+  serviceStart: number,
+  serviceEnd: number,
+): { positionId: string; personId: string }[] {
+  const used = new Set<string>();
+  const assigned: { positionId: string; personId: string }[] = [];
+  for (const need of needs) {
+    let filled = 0;
+    for (const person of people) {
+      if (filled >= need.count) break;
+      if (person.positionId !== need.positionId) continue;
+      const key = `${person.personId}:${need.positionId}`;
+      if (used.has(key)) continue;
+      const blocked = person.blockouts.some((block) => block.start < serviceEnd && serviceStart < block.end);
+      if (blocked) continue;
+      used.add(key);
+      assigned.push({ positionId: need.positionId, personId: person.personId });
+      filled += 1;
+    }
+  }
+  return assigned;
+}
+
+const CARD_KEYS = new Set(["cardnumber", "pan", "cvc", "cvv", "card", "number"]);
+
+function looksLikePan(value: string): boolean {
+  const digits = value.replace(/[\s-]/g, "");
+  return /^\d{13,19}$/.test(digits);
+}
+
+export function assertNoCardData(input: unknown): void {
+  if (!input || typeof input !== "object") return;
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (CARD_KEYS.has(key.toLowerCase())) {
+      throw new AccessError("invalid", "Card numbers stay at Stripe. This server does not accept them.");
+    }
+    if (typeof value === "string" && looksLikePan(value)) {
+      throw new AccessError("invalid", "Card numbers stay at Stripe. This server does not accept them.");
+    }
+    if (value && typeof value === "object") assertNoCardData(value);
+  }
+}
+
+export function canChargeLive(flags: {
+  stripeSecretKey: string;
+  givingLive: boolean;
+  applePayNonprofitApproved: boolean;
+}): boolean {
+  return flags.stripeSecretKey.length > 0 && flags.givingLive && flags.applePayNonprofitApproved;
+}
+
+export type DirectoryPerson = {
+  id: string;
+  displayName: string;
+  email: string;
+  emailPublic: boolean;
+  phone: string;
+  phonePublic: boolean;
+};
+
+export function projectDirectory(viewerId: string, people: readonly DirectoryPerson[]): DirectoryPerson[] {
+  return people.map((person) => {
+    const self = person.id === viewerId;
+    return {
+      ...person,
+      email: self || person.emailPublic ? person.email : "",
+      phone: self || person.phonePublic ? person.phone : "",
+    };
+  });
+}
+
+export type ExpenseState = "draft" | "submitted" | "approved" | "denied";
+export type ExpenseAction = "submit" | "approve" | "deny" | "reset";
+
+export function transitionExpense(state: ExpenseState, action: ExpenseAction): ExpenseState {
+  switch (state) {
+    case "draft":
+      if (action === "submit") return "submitted";
+      break;
+    case "submitted":
+      if (action === "approve") return "approved";
+      if (action === "deny") return "denied";
+      break;
+    case "approved":
+    case "denied":
+      if (action === "reset") return "draft";
+      break;
+    default:
+      return assertNever(state);
+  }
+  throw new AccessError("invalid", `Cannot ${action} an expense that is ${state}.`);
+}
+
+export function eventToIcs(event: {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  location: string;
+  description: string;
+}): string {
+  const stamp = (date: Date) =>
+    date
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "Z");
+  const clean = (value: string) => value.replace(/[\r\n]+/g, " ");
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//One Hope//Church//EN",
+    "BEGIN:VEVENT",
+    `UID:${event.id}@onehope.local`,
+    `DTSTAMP:${stamp(new Date())}`,
+    `DTSTART:${stamp(event.start)}`,
+    `DTEND:${stamp(event.end)}`,
+    `SUMMARY:${clean(event.title)}`,
+    `LOCATION:${clean(event.location)}`,
+    `DESCRIPTION:${clean(event.description)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
+export type YoutubeVideo = {
+  id: string;
+  title: string;
+  published: string;
+  link: string;
+  thumbnail: string | null;
+};
+
+function firstMatch(source: string, pattern: RegExp): string {
+  return source.match(pattern)?.[1] ?? "";
+}
+
+export function parseYoutubeRss(xml: string): YoutubeVideo[] {
+  return xml
+    .split("<entry>")
+    .slice(1)
+    .map((entry) => {
+      const id =
+        firstMatch(entry, /<yt:videoId>([^<]+)<\/yt:videoId>/) ||
+        firstMatch(entry, /<id>yt:video:([^<]+)<\/id>/);
+      const title = decodeXml(firstMatch(entry, /<title>([^<]*)<\/title>/));
+      const published = firstMatch(entry, /<published>([^<]+)<\/published>/);
+      const link =
+        firstMatch(entry, /<link[^>]*href="([^"]+)"/) || (id ? `https://www.youtube.com/watch?v=${id}` : "");
+      const thumbnail = firstMatch(entry, /<media:thumbnail[^>]*url="([^"]+)"/) || null;
+      return { id, title, published, link, thumbnail };
+    })
+    .filter((video) => video.id.length > 0);
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'");
+}
+
+export function zebraLabel(childName: string, securityCode: string): string {
+  const name = childName.replace(/[\^~]/g, "");
+  const code = securityCode.replace(/\D/g, "").slice(0, 4);
+  return [
+    "^XA",
+    "^FO30,30^A0N,28,28^FDOne Hope Kids^FS",
+    `^FO30,70^A0N,42,42^FD${name}^FS`,
+    `^FO30,130^A0N,32,32^FDCode ${code}^FS`,
+    "^XZ",
+  ].join("");
+}
+
+export function eligibleForRetention(createdAt: number, now: number, years: number): boolean {
+  const cutoff = new Date(now);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
+  return createdAt < cutoff.getTime();
+}
+
+export const SAMPLE_FUNNEL = {
+  sample: true as const,
+  visitors: 40,
+  members: 22,
+  givers: 14,
+  servers: 9,
+};
+
+export const RETENTION_YEARS = { audit: 7, giving: 7, care: 7, kids: 7 } as const;

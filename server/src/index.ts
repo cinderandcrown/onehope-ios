@@ -1,0 +1,20 @@
+import { ChurchStore } from "./store";
+
+export { createApi, API_ROUTES } from "./api";
+export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
+export { loadConfig } from "./config";
+export * from "./contracts";
+export * from "./domain";
+export { createLogger, redact, noopReporter } from "./logger";
+export { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "./sample-accounts";
+export { ChurchStore } from "./store";
+export { memorySyncStore, runSync } from "./sync";
+export { totpCode, decodeBase32 } from "./totp";
+export { VERSION } from "./version";
+
+const globalStore = globalThis as typeof globalThis & { __onehope?: ChurchStore };
+
+export function getDemoStore(): ChurchStore {
+  if (!globalStore.__onehope) globalStore.__onehope = ChurchStore.demo();
+  return globalStore.__onehope;
+}
