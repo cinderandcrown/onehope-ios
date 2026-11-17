@@ -11,11 +11,13 @@ final class TabUITests: XCTestCase {
             let tab = app.tabBars.buttons[name]
             XCTAssertTrue(tab.waitForExistence(timeout: 15), "Missing \(name) tab")
             tab.tap()
+            if name == "Home" {
+                XCTAssertTrue(app.staticTexts["One Hope"].waitForExistence(timeout: 5))
+            }
             let shot = XCTAttachment(screenshot: app.screenshot())
             shot.name = name
             shot.lifetime = .keepAlways
             add(shot)
         }
-        XCTAssertTrue(app.staticTexts["One Hope"].exists)
     }
 }
