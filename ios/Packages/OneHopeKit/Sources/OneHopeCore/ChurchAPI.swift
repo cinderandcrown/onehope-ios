@@ -225,6 +225,7 @@ private struct PeopleReply: Decodable {
         let emailPublic: Bool
         let phonePublic: Bool
     }
+
     let people: [Person]
 }
 

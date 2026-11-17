@@ -6,7 +6,9 @@ public struct MoreView: View {
     private let snapshot: ChurchSnapshot
     @AppStorage("onehope.notifications") private var notifications = true
 
-    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
+    public init(snapshot: ChurchSnapshot) {
+        self.snapshot = snapshot
+    }
 
     public var body: some View {
         NavigationStack {
@@ -14,7 +16,9 @@ public struct MoreView: View {
                 Section("Account") {
                     Text(snapshot.accountName)
                     Text(snapshot.accountEmail).font(.footnote)
-                    if !snapshot.fromAPI { SampleBadge() }
+                    if !snapshot.fromAPI {
+                        SampleBadge()
+                    }
                 }
                 Section("Directory") {
                     ForEach(snapshot.directory) { person in

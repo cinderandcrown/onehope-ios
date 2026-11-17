@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ChurchClock {
-    public static let chicago: TimeZone = TimeZone(identifier: "America/Chicago") ?? .gmt
+    public static let chicago = TimeZone(identifier: "America/Chicago") ?? .gmt
 }
 
 public struct ServiceWindow: Equatable, Sendable {
@@ -75,7 +75,7 @@ public enum PickupRules {
         let second = Array(right.trimmingCharacters(in: .whitespaces).utf8)
         let length = max(first.count, second.count)
         var mismatch = first.count == second.count ? 0 : 1
-        for index in 0..<length {
+        for index in 0 ..< length {
             let leftByte = index < first.count ? Int(first[index]) : 0
             let rightByte = index < second.count ? Int(second[index]) : 0
             mismatch |= leftByte ^ rightByte

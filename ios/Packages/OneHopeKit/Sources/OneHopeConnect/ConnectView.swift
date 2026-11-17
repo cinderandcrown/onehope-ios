@@ -7,19 +7,25 @@ public struct ConnectView: View {
     @State private var code = ""
     @State private var decision: PickupDecision?
 
-    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
+    public init(snapshot: ChurchSnapshot) {
+        self.snapshot = snapshot
+    }
 
     public var body: some View {
         NavigationStack {
             List {
                 Section("Groups") {
-                    if snapshot.groups.isEmpty { EmptyHint("No groups yet.") }
+                    if snapshot.groups.isEmpty {
+                        EmptyHint("No groups yet.")
+                    }
                     ForEach(snapshot.groups) { group in
                         VStack(alignment: .leading) {
                             Text(group.name)
                             Text(group.summary).font(.footnote)
                             Text(group.joined ? "Joined" : "Not joined").font(.footnote)
-                            if group.sample { SampleBadge() }
+                            if group.sample {
+                                SampleBadge()
+                            }
                         }
                     }
                 }
@@ -28,16 +34,22 @@ public struct ConnectView: View {
                         VStack(alignment: .leading) {
                             Text(event.title)
                             Text(event.detail).font(.footnote)
-                            if event.sample { SampleBadge() }
+                            if event.sample {
+                                SampleBadge()
+                            }
                         }
                     }
                 }
                 Section("Prayer") {
-                    if snapshot.prayers.isEmpty { EmptyHint("No prayers you can see.") }
+                    if snapshot.prayers.isEmpty {
+                        EmptyHint("No prayers you can see.")
+                    }
                     ForEach(snapshot.prayers) { prayer in
                         VStack(alignment: .leading) {
                             Text(prayer.body)
-                            if prayer.sample { SampleBadge() }
+                            if prayer.sample {
+                                SampleBadge()
+                            }
                         }
                     }
                 }
@@ -49,7 +61,9 @@ public struct ConnectView: View {
                         )
                         Haptics.tap()
                     }
-                    if let decision { Text(decision.reason) }
+                    if let decision {
+                        Text(decision.reason)
+                    }
                     Text("The station still requires two adults and a guardian who is not custody-restricted.")
                         .font(.footnote)
                 }

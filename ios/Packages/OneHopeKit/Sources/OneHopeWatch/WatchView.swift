@@ -4,7 +4,9 @@ import SwiftUI
 
 public struct WatchView: View {
     private let snapshot: ChurchSnapshot
-    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
+    public init(snapshot: ChurchSnapshot) {
+        self.snapshot = snapshot
+    }
 
     public var body: some View {
         NavigationStack {
@@ -13,7 +15,9 @@ public struct WatchView: View {
                     PhotoCard("video")
                     HStack {
                         Text(snapshot.sermonTitle).font(.title2)
-                        if snapshot.sermonSample { SampleBadge() }
+                        if snapshot.sermonSample {
+                            SampleBadge()
+                        }
                     }
                     Text(snapshot.sermonNote).font(.body)
                     Text("John 3:16, KJV").font(.headline)

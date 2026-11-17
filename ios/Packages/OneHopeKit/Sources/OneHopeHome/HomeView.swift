@@ -4,7 +4,9 @@ import SwiftUI
 
 public struct HomeView: View {
     private let snapshot: ChurchSnapshot
-    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
+    public init(snapshot: ChurchSnapshot) {
+        self.snapshot = snapshot
+    }
 
     public var body: some View {
         NavigationStack {
@@ -31,7 +33,9 @@ public struct HomeView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(item.title).font(.headline)
-                                if item.sample { SampleBadge() }
+                                if item.sample {
+                                    SampleBadge()
+                                }
                             }
                             Text(item.body)
                         }

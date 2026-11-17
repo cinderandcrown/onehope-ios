@@ -34,7 +34,9 @@ public struct GiveView: View {
                                 Text(gift.fundName)
                                 Text(Self.dollars(gift.amountCents))
                                 Text(gift.charged ? "Charged" : "Not charged").font(.footnote)
-                                if gift.sample { SampleBadge() }
+                                if gift.sample {
+                                    SampleBadge()
+                                }
                             }
                         }
                     }

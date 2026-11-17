@@ -16,9 +16,11 @@ final class ChurchLogicTests: XCTestCase {
         XCTAssertEqual(parser.string(from: window.service), "2026-11-22T16:30:00Z")
         XCTAssertEqual(parser.string(from: window.preService), "2026-11-22T16:00:00Z")
         let before = try XCTUnwrap(parser.date(from: "2026-11-22T15:00:00Z"))
-        XCTAssertEqual(parser.string(from: try XCTUnwrap(ServiceSchedule.nextSunday(from: before)).service), "2026-11-22T16:30:00Z")
+        let beforeWindow = try XCTUnwrap(ServiceSchedule.nextSunday(from: before))
+        XCTAssertEqual(parser.string(from: beforeWindow.service), "2026-11-22T16:30:00Z")
         let after = try XCTUnwrap(parser.date(from: "2026-11-22T17:00:00Z"))
-        XCTAssertEqual(parser.string(from: try XCTUnwrap(ServiceSchedule.nextSunday(from: after)).service), "2026-11-29T16:30:00Z")
+        let afterWindow = try XCTUnwrap(ServiceSchedule.nextSunday(from: after))
+        XCTAssertEqual(parser.string(from: afterWindow.service), "2026-11-29T16:30:00Z")
     }
 
     func testPickupRules() {
@@ -52,13 +54,16 @@ final class ChurchLogicTests: XCTestCase {
             if url.path == "/api/auth/login" {
                 return (200, Data("{\"token\":\"abc\"}".utf8))
             }
-            if url.path == "/api/home" { return (200, home) }
+            if url.path == "/api/home" {
+                return (200, home)
+            }
             if url.path == "/api/giving/mine" {
                 return (401, Data("{\"ok\":false,\"error\":\"step up\",\"code\":\"step_up_required\"}".utf8))
             }
             return (200, Data("{\"people\":[],\"groups\":[],\"prayers\":[],\"videos\":[],\"person\":{\"displayName\":\"Avery Sample\",\"email\":\"avery@sample.onehope\"}}".utf8))
         }
-        let client = ChurchClient(baseURL: try XCTUnwrap(URL(string: "http://127.0.0.1:8787")), transport: transport)
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8787"))
+        let client = ChurchClient(baseURL: baseURL, transport: transport)
         let token = try await client.login(email: "avery@sample.onehope", password: "hope-sample")
         XCTAssertEqual(token, "abc")
         let snapshot = try await client.loadMember(token: token)

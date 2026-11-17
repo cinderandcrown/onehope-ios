@@ -40,7 +40,10 @@ public struct SampleBadge: View {
 
 public struct PhotoCard: View {
     private let resource: String
-    public init(_ resource: String) { self.resource = resource }
+    public init(_ resource: String) {
+        self.resource = resource
+    }
+
     public var body: some View {
         photo
             .frame(maxWidth: .infinity)
@@ -75,7 +78,10 @@ public struct Wordmark: View {
 
 public struct EmptyHint: View {
     private let title: String
-    public init(_ title: String) { self.title = title }
+    public init(_ title: String) {
+        self.title = title
+    }
+
     public var body: some View {
         Text(title).font(.body).foregroundStyle(BrandColor.ink).frame(maxWidth: .infinity, alignment: .leading)
     }
