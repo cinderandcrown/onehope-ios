@@ -5,6 +5,9 @@ disabled_rules:
   - non_optional_string_data_conversion
 opt_in_rules:
   - empty_count
+  - force_unwrapping
+  - force_cast
+  - force_try
 force_cast: error
 force_try: error
 force_unwrapping: error
