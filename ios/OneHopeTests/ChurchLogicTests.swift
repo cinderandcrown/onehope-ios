@@ -60,7 +60,7 @@ final class ChurchLogicTests: XCTestCase {
             if url.path == "/api/giving/mine" {
                 return (401, Data("{\"ok\":false,\"error\":\"step up\",\"code\":\"step_up_required\"}".utf8))
             }
-            return (200, Data("{\"people\":[],\"groups\":[],\"prayers\":[],\"videos\":[],\"person\":{\"displayName\":\"Avery Sample\",\"email\":\"avery@sample.onehope\"}}".utf8))
+            return (200, Data("{\"people\":[],\"groups\":[],\"prayers\":[],\"videos\":[],\"person\":{\"displayName\":\"Avery Sample\",\"email\":\"avery@sample.onehope\"},\"kids\":[{\"id\":\"child-remy\",\"displayName\":\"Remy Sample\",\"classroom\":\"Preschool\",\"sample\":true}],\"assignments\":[],\"steps\":[{\"id\":\"baptism\",\"title\":\"Baptism\",\"status\":\"in-progress\"}]}".utf8))
         }
         let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8787"))
         let client = ChurchClient(baseURL: baseURL, transport: transport)
@@ -71,6 +71,9 @@ final class ChurchLogicTests: XCTestCase {
         XCTAssertEqual(snapshot.churchName, "One Hope")
         XCTAssertTrue(snapshot.needsStepUp)
         XCTAssertTrue(snapshot.gifts.isEmpty)
+        XCTAssertEqual(snapshot.kids.first?.displayName, "Remy Sample")
+        XCTAssertEqual(snapshot.pathway.first?.title, "Baptism")
+        XCTAssertTrue(snapshot.serving.isEmpty)
     }
 
     func testSpanishChrome() {

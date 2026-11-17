@@ -107,6 +107,7 @@ Run the manual **TestFlight** workflow. It decodes the key in the runner temp di
 - Passkeys. Staff MFA is TOTP. WebAuthn is not implemented.
 - Pixel snapshot baselines for iOS. UI tests assert the five tabs and attach screenshots; they do not compare against stored images.
 - The member app calls the HTTP API when `-apiBaseURL` or `API_BASE_URL` is set, and signs in as the published sample member. If the server does not answer, the tabs show a labeled on-device sample. CI starts the API on the Mac runner before the simulator tests.
+- Connect loads `/api/kids/mine`, `/api/pathways/mine`, and `/api/serving/mine`. The kids response is name and classroom only. Pickup on the phone is still a local practice check with the published sample code; the staff station is the real pickup.
 - String Catalog export. English and Spanish chrome strings are a typed table (`L10n` on iOS, `web/lib/i18n.ts` on the web).
 - Branch protection. Required checks are described in CONTRIBUTING.md. This agent cannot turn the rule on.
 - Making the GitHub repo public. This session's GitHub access cannot change repository visibility.

@@ -44,6 +44,9 @@ export const API_ROUTES = [
   ["POST", "/api/groups/{id}/join"],
   ["GET", "/api/prayers"],
   ["POST", "/api/prayers"],
+  ["GET", "/api/kids/mine"],
+  ["GET", "/api/serving/mine"],
+  ["GET", "/api/pathways/mine"],
   ["POST", "/api/kids/pickup"],
   ["POST", "/api/communications/push"],
   ["GET", "/api/modules"],
@@ -153,6 +156,9 @@ async function route(
   if (method === "GET" && path === "/api/prayers") return { prayers: store.listPrayers(token) };
   if (method === "POST" && path === "/api/prayers")
     return store.submitPrayer(need(), parse(prayerBodySchema, body));
+  if (method === "GET" && path === "/api/kids/mine") return { kids: store.myKids(need()) };
+  if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
+  if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());
   if (method === "POST" && path === "/api/kids/pickup")
     return store.pickup(need(), parse(pickupBodySchema, body));
   if (method === "POST" && path === "/api/communications/push")

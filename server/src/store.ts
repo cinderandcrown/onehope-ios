@@ -673,6 +673,11 @@ export class ChurchStore {
     return { id: prayer.id, approved: prayer.approved };
   }
 
+  myPathway(token: string) {
+    const actor = this.actor(token);
+    return { sample: true as const, ...this.pathwayView(actor.personId) };
+  }
+
   myKids(token: string) {
     const actor = this.actor(token);
     return [...this.children.values()]

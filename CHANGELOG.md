@@ -10,3 +10,4 @@
 - Postgres migrations and RLS tests.
 - GitHub Actions for iOS, the web app, and a manual TestFlight upload.
 - The iPhone tabs load from the shared API when a base URL is set, and keep a labeled sample if it is not.
+- Connect shows the signed-in household's classrooms, next steps, and serving assignments. Medical notes, allergy text, and security codes stay off that response.

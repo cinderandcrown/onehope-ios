@@ -65,6 +65,9 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var accountEmail: String
     public var gifts: [GiftLine]
     public var needsStepUp: Bool
+    public var kids: [KidLine]
+    public var serving: [ServingLine]
+    public var pathway: [PathwayStep]
 
     public static func bundled(offline: Bool = false) -> ChurchSnapshot {
         ChurchSnapshot(
@@ -85,7 +88,10 @@ public struct ChurchSnapshot: Equatable, Sendable {
             accountName: SampleChurch.viewer.displayName,
             accountEmail: SampleChurch.viewer.email,
             gifts: [GiftLine(id: "gift-local", fundName: "General", amountCents: 2500, charged: false, sample: true)],
-            needsStepUp: false
+            needsStepUp: false,
+            kids: [KidLine(id: "child-local", displayName: "Sample child", classroom: "Preschool", sample: true)],
+            serving: [],
+            pathway: [PathwayStep(id: "baptism", title: "Baptism", status: "In progress")]
         )
     }
 }
@@ -102,6 +108,26 @@ public struct PrayerLine: Equatable, Sendable, Identifiable {
     public let id: String
     public let body: String
     public let sample: Bool
+}
+
+public struct KidLine: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let displayName: String
+    public let classroom: String
+    public let sample: Bool
+}
+
+public struct ServingLine: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let position: String
+    public let status: String
+    public let sample: Bool
+}
+
+public struct PathwayStep: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let status: String
 }
 
 public struct GiftLine: Equatable, Sendable, Identifiable {
@@ -141,6 +167,9 @@ public struct ChurchClient: Sendable {
         let prayers: PrayersReply = try await send("/api/prayers", method: "GET", token: token, json: nil)
         let sermons: SermonsReply = try await send("/api/sermons", method: "GET", token: nil, json: nil)
         let me: MeReply = try await send("/api/me", method: "GET", token: token, json: nil)
+        let kids: KidsReply = try await send("/api/kids/mine", method: "GET", token: token, json: nil)
+        let serving: ServingReply = try await send("/api/serving/mine", method: "GET", token: token, json: nil)
+        let pathway: PathwayReply = try await send("/api/pathways/mine", method: "GET", token: token, json: nil)
         var gifts: [GiftLine] = []
         var needsStepUp = false
         do {
@@ -172,7 +201,10 @@ public struct ChurchClient: Sendable {
             accountName: me.person.displayName,
             accountEmail: me.person.email,
             gifts: gifts,
-            needsStepUp: needsStepUp
+            needsStepUp: needsStepUp,
+            kids: kids.kids.map { KidLine(id: $0.id, displayName: $0.displayName, classroom: $0.classroom, sample: $0.sample) },
+            serving: serving.assignments.map { ServingLine(id: $0.id, position: $0.position, status: $0.status, sample: $0.sample) },
+            pathway: pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) }
         )
     }
 
@@ -247,6 +279,24 @@ private struct SermonsReply: Decodable {
 private struct MeReply: Decodable {
     struct Person: Decodable { let displayName: String; let email: String }
     let person: Person
+}
+
+private struct KidsReply: Decodable {
+    struct Kid: Decodable { let id: String; let displayName: String; let classroom: String; let sample: Bool }
+
+    let kids: [Kid]
+}
+
+private struct ServingReply: Decodable {
+    struct Item: Decodable { let id: String; let position: String; let status: String; let sample: Bool }
+
+    let assignments: [Item]
+}
+
+private struct PathwayReply: Decodable {
+    struct Step: Decodable { let id: String; let title: String; let status: String }
+
+    let steps: [Step]
 }
 
 private struct GiftsReply: Decodable {

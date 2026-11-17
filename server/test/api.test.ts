@@ -75,6 +75,53 @@ test("health, card rejection, cross-site cookies, and push are enforced at the H
   );
 });
 
+test("a member reads their own classroom and next steps, not another household", async () => {
+  const handle = createApi({ store: new ChurchStore(loadConfig({})) });
+  const login = await handle(
+    new Request("http://localhost/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "avery@sample.onehope", password: "hope-sample" }),
+    }),
+  );
+  assert.equal(login.status, 200);
+  const session = (await login.json()) as { token: string };
+  const kids = await handle(
+    new Request("http://localhost/api/kids/mine", {
+      headers: { authorization: `Bearer ${session.token}` },
+    }),
+  );
+  const kidsText = await kids.text();
+  assert.equal(kids.status, 200);
+  assert.match(kidsText, /Remy Sample/);
+  assert.match(kidsText, /Preschool/);
+  assert.doesNotMatch(kidsText, /Quinn/);
+  assert.doesNotMatch(kidsText, /peanut/);
+  assert.doesNotMatch(kidsText, /4821/);
+  const pathway = await handle(
+    new Request("http://localhost/api/pathways/mine", {
+      headers: { authorization: `Bearer ${session.token}` },
+    }),
+  );
+  const steps = (await pathway.json()) as { steps: { id: string }[] };
+  assert.equal(pathway.status, 200);
+  assert.equal(
+    steps.steps.some((step) => step.id === "baptism"),
+    true,
+  );
+  const serving = await handle(
+    new Request("http://localhost/api/serving/mine", {
+      headers: { authorization: `Bearer ${session.token}` },
+    }),
+  );
+  const assignments = (await serving.json()) as { assignments: { personId: string }[] };
+  assert.equal(serving.status, 200);
+  assert.equal(
+    assignments.assignments.every((item) => item.personId === "person-avery"),
+    true,
+  );
+});
+
 test("sync retries then skips a completed idempotency key", async () => {
   const saved = memorySyncStore();
   let tries = 0;

@@ -53,6 +53,48 @@ public struct ConnectView: View {
                         }
                     }
                 }
+                Section("Next steps") {
+                    if snapshot.pathway.isEmpty {
+                        EmptyHint("No next steps on this account.")
+                    }
+                    ForEach(snapshot.pathway) { step in
+                        VStack(alignment: .leading) {
+                            Text(step.title)
+                            Text(step.status).font(.footnote)
+                            SampleBadge()
+                        }
+                    }
+                }
+                Section("Your kids") {
+                    if snapshot.kids.isEmpty {
+                        EmptyHint("No children on this household.")
+                    }
+                    ForEach(snapshot.kids) { child in
+                        VStack(alignment: .leading) {
+                            Text(child.displayName)
+                            Text(child.classroom).font(.footnote)
+                            if child.sample {
+                                SampleBadge()
+                            }
+                        }
+                    }
+                    Text("Allergies and security codes stay on the staff station.")
+                        .font(.footnote)
+                }
+                Section("Serving") {
+                    if snapshot.serving.isEmpty {
+                        EmptyHint("No assignment on this account.")
+                    }
+                    ForEach(snapshot.serving) { item in
+                        VStack(alignment: .leading) {
+                            Text(item.position)
+                            Text(item.status).font(.footnote)
+                            if item.sample {
+                                SampleBadge()
+                            }
+                        }
+                    }
+                }
                 Section("Kids check-in") {
                     TextField("Security code", text: $code).keyboardType(.numberPad)
                     Button("Check pickup") {
@@ -64,7 +106,7 @@ public struct ConnectView: View {
                     if let decision {
                         Text(decision.reason)
                     }
-                    Text("The station still requires two adults and a guardian who is not custody-restricted.")
+                    Text("This is a practice check on the phone. The staff station is the real pickup.")
                         .font(.footnote)
                 }
             }

@@ -353,6 +353,54 @@
         }
       }
     },
+    "/api/kids/mine": {
+      "get": {
+        "operationId": "get__api_kids_mine",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/serving/mine": {
+      "get": {
+        "operationId": "get__api_serving_mine",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/pathways/mine": {
+      "get": {
+        "operationId": "get__api_pathways_mine",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
     "/api/kids/pickup": {
       "post": {
         "operationId": "post__api_kids_pickup",
