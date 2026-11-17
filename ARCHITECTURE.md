@@ -12,7 +12,7 @@ flowchart LR
     Store[Demo store]
     SQL[Postgres migrations]
   end
-  Phone -->|offline sample today| Rules
+  Phone -->|HTTP when a base URL is set| API
   Web --> Store
   API --> Rules
   Rules --> Store

@@ -23,6 +23,24 @@ jobs:
           fi
           xcodebuild -version
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and start the API
+        run: |
+          npm ci
+          nohup node --import tsx server/src/main.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8787/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/api.log"
+          exit 1
+
       - name: SwiftLint and SwiftFormat
         run: |
           brew install swiftlint swiftformat

@@ -106,7 +106,7 @@ Run the manual **TestFlight** workflow. It decodes the key in the runner temp di
 - Live Planning Center, Stripe, Resend, Twilio, APNs, QuickBooks, PostHog, and Facebook. Adapters or notes exist; the side effect is not performed.
 - Passkeys. Staff MFA is TOTP. WebAuthn is not implemented.
 - Pixel snapshot baselines for iOS. UI tests assert the five tabs and attach screenshots; they do not compare against stored images.
-- Swift Package feature modules are real. The member app does not yet call the HTTP API; offline sample data is what the tabs show. The server is the authority when a client uses it. The Command Center does.
+- The member app calls the HTTP API when `-apiBaseURL` or `API_BASE_URL` is set, and signs in as the published sample member. If the server does not answer, the tabs show a labeled on-device sample. CI starts the API on the Mac runner before the simulator tests.
 - String Catalog export. English and Spanish chrome strings are a typed table (`L10n` on iOS, `web/lib/i18n.ts` on the web).
 - Branch protection. Required checks are described in CONTRIBUTING.md. This agent cannot turn the rule on.
 - Making the GitHub repo public. This session's GitHub access cannot change repository visibility.

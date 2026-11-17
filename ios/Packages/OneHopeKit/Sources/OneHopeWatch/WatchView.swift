@@ -3,7 +3,8 @@ import OneHopeDesign
 import SwiftUI
 
 public struct WatchView: View {
-    public init() {}
+    private let snapshot: ChurchSnapshot
+    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
 
     public var body: some View {
         NavigationStack {
@@ -11,13 +12,11 @@ public struct WatchView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     PhotoCard("video")
                     HStack {
-                        Text("A new season of growth").font(.title2)
-                        SampleBadge()
+                        Text(snapshot.sermonTitle).font(.title2)
+                        if snapshot.sermonSample { SampleBadge() }
                     }
-                    Text("Public sermons load from the YouTube RSS feed for @Weareonehope. This card is a sample until that feed returns.")
-                        .font(.body)
-                    Text("John 3:16, KJV")
-                        .font(.headline)
+                    Text(snapshot.sermonNote).font(.body)
+                    Text("John 3:16, KJV").font(.headline)
                     Text("For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.")
                         .font(.body)
                     VStack(alignment: .leading, spacing: 8) {

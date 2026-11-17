@@ -3,21 +3,28 @@ import OneHopeDesign
 import SwiftUI
 
 public struct ConnectView: View {
+    private let snapshot: ChurchSnapshot
     @State private var code = ""
     @State private var decision: PickupDecision?
 
-    public init() {}
+    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
 
     public var body: some View {
         NavigationStack {
             List {
                 Section("Groups") {
-                    Text("Weekday group")
-                    Text("Sample group you can join.").font(.footnote)
-                    SampleBadge()
+                    if snapshot.groups.isEmpty { EmptyHint("No groups yet.") }
+                    ForEach(snapshot.groups) { group in
+                        VStack(alignment: .leading) {
+                            Text(group.name)
+                            Text(group.summary).font(.footnote)
+                            Text(group.joined ? "Joined" : "Not joined").font(.footnote)
+                            if group.sample { SampleBadge() }
+                        }
+                    }
                 }
                 Section("Events") {
-                    ForEach(SampleChurch.events) { event in
+                    ForEach(snapshot.events) { event in
                         VStack(alignment: .leading) {
                             Text(event.title)
                             Text(event.detail).font(.footnote)
@@ -25,35 +32,25 @@ public struct ConnectView: View {
                         }
                     }
                 }
-                Section("Serving") {
-                    Text("Greeter · pending")
-                    Text("Accept or decline stays on your own assignment.").font(.footnote)
-                    SampleBadge()
-                }
                 Section("Prayer") {
-                    Text("Pray for our city.")
-                    SampleBadge()
+                    if snapshot.prayers.isEmpty { EmptyHint("No prayers you can see.") }
+                    ForEach(snapshot.prayers) { prayer in
+                        VStack(alignment: .leading) {
+                            Text(prayer.body)
+                            if prayer.sample { SampleBadge() }
+                        }
+                    }
                 }
                 Section("Kids check-in") {
-                    Text("Remy Sample · Preschool")
-                    TextField("Security code", text: $code)
-                        .keyboardType(.numberPad)
+                    TextField("Security code", text: $code).keyboardType(.numberPad)
                     Button("Check pickup") {
                         decision = PickupRules.evaluate(
-                            PickupInput(
-                                code: code,
-                                expectedCode: "4821",
-                                guardianAuthorized: true,
-                                custodyRestricted: false,
-                                adultsOnDuty: 2
-                            )
+                            PickupInput(code: code, expectedCode: "4821", guardianAuthorized: true, custodyRestricted: false, adultsOnDuty: 2)
                         )
                         Haptics.tap()
                     }
-                    if let decision {
-                        Text(decision.reason)
-                    }
-                    Text("Sample code 4821. A custody flag or a single adult blocks pickup.")
+                    if let decision { Text(decision.reason) }
+                    Text("The station still requires two adults and a guardian who is not custody-restricted.")
                         .font(.footnote)
                 }
             }

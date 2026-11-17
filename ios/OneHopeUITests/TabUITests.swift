@@ -3,7 +3,7 @@ import XCTest
 final class TabUITests: XCTestCase {
     func testMemberTabs() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["-uiTesting", "-apiBaseURL", "http://127.0.0.1:8787", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         let tabs = ["Home", "Watch", "Give", "Connect", "More"]
         for name in tabs {

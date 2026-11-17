@@ -38,6 +38,7 @@ export const API_ROUTES = [
   ["POST", "/api/giving/gifts"],
   ["GET", "/api/giving/mine"],
   ["GET", "/api/giving/all"],
+  ["GET", "/api/groups"],
   ["GET", "/api/groups/{id}/messages"],
   ["POST", "/api/groups/{id}/messages"],
   ["POST", "/api/groups/{id}/join"],
@@ -134,6 +135,7 @@ async function route(
     return { gift: await store.createGift(need(), parse(giftBodySchema, body)) };
   if (method === "GET" && path === "/api/giving/mine") return { gifts: store.myGifts(need()) };
   if (method === "GET" && path === "/api/giving/all") return { gifts: store.allGifts(need()) };
+  if (method === "GET" && path === "/api/groups") return { groups: store.listGroups(need()) };
   const messages = path.match(/^\/api\/groups\/([^/]+)\/messages$/);
   if (messages?.[1] && method === "GET")
     return { messages: store.listMessages(need(), decodeURIComponent(messages[1])) };

@@ -1,6 +1,13 @@
 import OneHopeCore
 import XCTest
 
+private struct FixtureTransport: HTTPTransport {
+    let respond: @Sendable (URL, String) -> (Int, Data)
+    func send(url: URL, method: String, body: Data?, bearer: String?) async throws -> (status: Int, body: Data) {
+        respond(url, method)
+    }
+}
+
 final class ChurchLogicTests: XCTestCase {
     func testNextSundayServiceInChicago() throws {
         let parser = ISO8601DateFormatter()
@@ -35,6 +42,30 @@ final class ChurchLogicTests: XCTestCase {
         XCTAssertFalse(result.charged)
         XCTAssertEqual(result.processor, "demo")
         XCTAssertTrue(result.sample)
+    }
+
+    func testClientReadsTheHomeContract() async throws {
+        let home = """
+        {"ok":true,"church":{"name":"One Hope","address":"1251 S. Sherman St.","leadPastors":["Derek Miller","Jen Miller"]},"countdown":{"service":"2026-11-22T16:30:00.000Z"},"announcements":[{"id":"a","title":"Sunday","body":"10:30","sample":false}],"events":[{"id":"e","title":"Sunday gathering","location":"Richardson","sample":false}],"sampleSermon":{"title":"Sample: title"}}
+        """.data(using: .utf8) ?? Data()
+        let transport = FixtureTransport { url, _ in
+            if url.path == "/api/auth/login" {
+                return (200, Data("{\"token\":\"abc\"}".utf8))
+            }
+            if url.path == "/api/home" { return (200, home) }
+            if url.path == "/api/giving/mine" {
+                return (401, Data("{\"ok\":false,\"error\":\"step up\",\"code\":\"step_up_required\"}".utf8))
+            }
+            return (200, Data("{\"people\":[],\"groups\":[],\"prayers\":[],\"videos\":[],\"person\":{\"displayName\":\"Avery Sample\",\"email\":\"avery@sample.onehope\"}}".utf8))
+        }
+        let client = ChurchClient(baseURL: try XCTUnwrap(URL(string: "http://127.0.0.1:8787")), transport: transport)
+        let token = try await client.login(email: "avery@sample.onehope", password: "hope-sample")
+        XCTAssertEqual(token, "abc")
+        let snapshot = try await client.loadMember(token: token)
+        XCTAssertTrue(snapshot.fromAPI)
+        XCTAssertEqual(snapshot.churchName, "One Hope")
+        XCTAssertTrue(snapshot.needsStepUp)
+        XCTAssertTrue(snapshot.gifts.isEmpty)
     }
 
     func testSpanishChrome() {

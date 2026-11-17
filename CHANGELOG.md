@@ -9,3 +9,4 @@
 - Shared server with household access rules, Tier 3 encryption, Master Admin two-person revoke, and demo integrations that do not charge or send.
 - Postgres migrations and RLS tests.
 - GitHub Actions for iOS, the web app, and a manual TestFlight upload.
+- The iPhone tabs load from the shared API when a base URL is set, and keep a labeled sample if it is not.

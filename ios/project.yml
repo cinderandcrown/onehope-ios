@@ -53,6 +53,11 @@ targets:
         DEVELOPMENT_TEAM: GDNRT9DJ58
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
+    info:
+      path: OneHope/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
   OneHopeTests:
     type: bundle.unit-test
     platform: iOS

@@ -3,43 +3,51 @@ import OneHopeDesign
 import SwiftUI
 
 public struct GiveView: View {
-    @State private var amount = "25"
-    @State private var recurring = false
-    @State private var confirmed = false
+    private let snapshot: ChurchSnapshot
+    private let onStepUp: (String) -> Void
+    @State private var password = ""
 
-    public init() {}
+    public init(snapshot: ChurchSnapshot, onStepUp: @escaping (String) -> Void) {
+        self.snapshot = snapshot
+        self.onStepUp = onStepUp
+    }
 
     public var body: some View {
-        let result = GivingRules.prepare(live: false)
-        return NavigationStack {
+        NavigationStack {
             Form {
-                Section("Gift") {
-                    TextField("Amount in dollars", text: $amount)
-                        .keyboardType(.decimalPad)
-                    Toggle("Monthly", isOn: $recurring)
+                Section {
                     Text("Demo mode. Apple Pay nonprofit approval is pending. This does not charge a card.")
                         .font(.footnote)
                 }
-                Section {
-                    Button("Review Apple Pay") {
-                        confirmed = true
-                        Haptics.tap()
+                if snapshot.needsStepUp {
+                    Section("Your giving") {
+                        Text("Confirm it is you before the amounts open.")
+                        SecureField("Password", text: $password)
+                        Button("Show my giving") { onStepUp(password) }
                     }
-                    .accessibilityHint("Opens a demo confirmation. No payment is sent.")
-                }
-                if confirmed {
-                    Section("Confirmation") {
-                        Text(result.charged ? "Charged" : "Not charged")
-                        Text("Demo processor")
-                        SampleBadge()
+                } else if snapshot.gifts.isEmpty {
+                    Section("History") { EmptyHint("No gifts on this account.") }
+                } else {
+                    Section("History") {
+                        ForEach(snapshot.gifts) { gift in
+                            VStack(alignment: .leading) {
+                                Text(gift.fundName)
+                                Text(Self.dollars(gift.amountCents))
+                                Text(gift.charged ? "Charged" : "Not charged").font(.footnote)
+                                if gift.sample { SampleBadge() }
+                            }
+                        }
                     }
-                }
-                Section("History") {
-                    LabeledContent("General", value: "$25.00")
-                    Text("Sample household gift. Charged: no.").font(.footnote)
                 }
             }
             .navigationTitle(L10n.text(.give))
         }
+    }
+
+    private static func dollars(_ cents: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        return formatter.string(from: NSNumber(value: Double(cents) / 100)) ?? "$0.00"
     }
 }

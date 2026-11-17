@@ -5,6 +5,8 @@ public enum SampleChurch {
     public static let address = "1251 S. Sherman St., Ste. 112, Richardson, TX 75081"
     public static let pastors = ["Derek Miller", "Jen Miller"]
     public static let youtubeHandle = "@Weareonehope"
+    public static let sampleMemberEmail = "avery@sample.onehope"
+    public static let sampleMemberPassword = "hope-sample"
     public static let mapsURL = URL(string: "https://maps.apple.com/?address=1251%20S.%20Sherman%20St.%20Ste.%20112,%20Richardson,%20TX%2075081")
 
     public struct Announcement: Identifiable, Equatable, Sendable {

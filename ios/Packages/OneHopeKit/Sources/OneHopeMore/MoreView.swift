@@ -3,28 +3,21 @@ import OneHopeDesign
 import SwiftUI
 
 public struct MoreView: View {
+    private let snapshot: ChurchSnapshot
     @AppStorage("onehope.notifications") private var notifications = true
 
-    public init() {}
-
-    private var directory: [DirectoryPerson] {
-        DirectoryProjection.project(viewerId: SampleChurch.viewer.id, people: SampleChurch.directory)
-    }
+    public init(snapshot: ChurchSnapshot) { self.snapshot = snapshot }
 
     public var body: some View {
         NavigationStack {
             List {
                 Section("Account") {
-                    Text(SampleChurch.viewer.displayName)
-                    Text(SampleChurch.viewer.email).font(.footnote)
-                    SampleBadge()
-                }
-                Section("Household") {
-                    Text("Avery Sample and Blake Sample")
-                    Text("You see your own household. Another household stays hidden.").font(.footnote)
+                    Text(snapshot.accountName)
+                    Text(snapshot.accountEmail).font(.footnote)
+                    if !snapshot.fromAPI { SampleBadge() }
                 }
                 Section("Directory") {
-                    ForEach(directory) { person in
+                    ForEach(snapshot.directory) { person in
                         VStack(alignment: .leading) {
                             Text(person.displayName)
                             Text(person.email.isEmpty ? "Email hidden" : person.email).font(.footnote)
@@ -33,9 +26,9 @@ public struct MoreView: View {
                     }
                 }
                 Section("About") {
-                    Text(SampleChurch.name)
-                    Text(SampleChurch.address)
-                    Text("Lead pastors \(SampleChurch.pastors.joined(separator: " and ")).")
+                    Text(snapshot.churchName)
+                    Text(snapshot.address)
+                    Text("Lead pastors \(snapshot.pastors.joined(separator: " and ")).")
                     if let url = SampleChurch.mapsURL {
                         Link("Open in Maps", destination: url)
                     }

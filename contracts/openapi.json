@@ -267,6 +267,16 @@
         }
       }
     },
+    "/api/groups": {
+      "get": {
+        "operationId": "get__api_groups",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
     "/api/groups/{id}/messages": {
       "get": {
         "operationId": "get__api_groups_id_messages",
