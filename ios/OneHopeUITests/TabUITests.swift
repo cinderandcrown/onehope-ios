@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class TabUITests: XCTestCase {
     func testMemberTabs() {
         let app = XCUIApplication()
