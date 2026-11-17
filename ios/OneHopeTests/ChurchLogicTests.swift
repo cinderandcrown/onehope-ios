@@ -45,9 +45,9 @@ final class ChurchLogicTests: XCTestCase {
     }
 
     func testClientReadsTheHomeContract() async throws {
-        let home = """
+        let home = Data("""
         {"ok":true,"church":{"name":"One Hope","address":"1251 S. Sherman St.","leadPastors":["Derek Miller","Jen Miller"]},"countdown":{"service":"2026-11-22T16:30:00.000Z"},"announcements":[{"id":"a","title":"Sunday","body":"10:30","sample":false}],"events":[{"id":"e","title":"Sunday gathering","location":"Richardson","sample":false}],"sampleSermon":{"title":"Sample: title"}}
-        """.data(using: .utf8) ?? Data()
+        """.utf8)
         let transport = FixtureTransport { url, _ in
             if url.path == "/api/auth/login" {
                 return (200, Data("{\"token\":\"abc\"}".utf8))
