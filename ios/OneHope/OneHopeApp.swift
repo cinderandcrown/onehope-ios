@@ -38,7 +38,7 @@ struct RootView: View {
                         await perform(action)
                     }
                     .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
-                    MoreView(snapshot: snapshot, onRefresh: load, onSignOut: signOut) { emailPublic, phonePublic, listed in
+                    MoreView(snapshot: snapshot, onRefresh: load, onSignOut: { signOut() }) { emailPublic, phonePublic, listed in
                         await updatePrivacy(emailPublic: emailPublic, phonePublic: phonePublic, listed: listed)
                     } onDelete: { password in
                         await deleteAccount(password)
