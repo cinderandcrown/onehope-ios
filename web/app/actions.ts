@@ -1,6 +1,6 @@
 "use server";
 
-import { AccessError, getDemoStore } from "@onehope/server";
+import { AccessError, withStore } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -17,7 +17,9 @@ async function setSession(token: string) {
 }
 
 export async function previewSampleStaff() {
-  const session = getDemoStore().loginSampleStaff({ ip: "command-center", userAgent: "sample-preview" });
+  const session = await withStore((store) =>
+    store.loginSampleStaff({ ip: "command-center", userAgent: "sample-preview" }),
+  );
   await setSession(session.token);
   redirect("/overview");
 }
@@ -27,14 +29,16 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const code = String(formData.get("code") ?? "");
   try {
-    const store = getDemoStore();
-    const session = store.login({ email, password, ip: "command-center", userAgent: "staff-form" });
-    if (session.mfaRequired) {
-      if (!/^\d{6}$/.test(code)) redirect("/login?error=mfa");
-      store.verifyMfa(session.token, code);
-      store.stepUp(session.token, { code });
-    }
-    await setSession(session.token);
+    const token = await withStore((store) => {
+      const session = store.login({ email, password, ip: "command-center", userAgent: "staff-form" });
+      if (session.mfaRequired) {
+        if (!/^\d{6}$/.test(code)) throw new AccessError("mfa_required", "Enter the 6-digit code.");
+        store.verifyMfa(session.token, code);
+        store.stepUp(session.token, { code });
+      }
+      return session.token;
+    });
+    await setSession(token);
   } catch (error) {
     if (error instanceof AccessError) redirect("/login?error=1");
     throw error;
@@ -45,7 +49,7 @@ export async function signIn(formData: FormData) {
 export async function signOut() {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;
-  if (token) getDemoStore().logout(token);
+  if (token) await withStore((store) => store.logout(token));
   jar.delete("onehope_session");
   redirect("/login");
 }
@@ -65,6 +69,6 @@ export async function savePush(formData: FormData) {
   const segment = formData.get("segment");
   if (segment !== "members" && segment !== "volunteers" && segment !== "parents") redirect("/push?error=1");
   if (!title || !body) redirect("/push?error=1");
-  getDemoStore().sendPush(token, { title, body, segment });
+  await withStore((store) => store.sendPush(token, { title, body, segment }));
   redirect("/push?saved=1");
 }

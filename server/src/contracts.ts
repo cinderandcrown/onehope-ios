@@ -138,6 +138,7 @@ export const healthSchema = z
     givingLive: z.boolean(),
     sendsEnabled: z.literal(false),
     church: z.literal("One Hope"),
+    persistence: z.enum(["memory", "postgres"]),
   })
   .strict();
 

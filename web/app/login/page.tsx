@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import { copy, isLanguage } from "@/lib/i18n";
 import { previewSampleStaff, signIn } from "@/app/actions";
@@ -22,6 +23,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </button>
         </form>
         <p className="muted">{text.previewNote}</p>
+        <p className="muted">
+          <Link href="/member">Open the member demo</Link>. It can be added to a phone home screen.
+        </p>
         <form className="form" action={signIn}>
           <label>
             {text.email}

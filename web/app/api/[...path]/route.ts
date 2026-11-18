@@ -1,0 +1,10 @@
+import { createApi, withStore } from "@onehope/server";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+async function handle(request: Request): Promise<Response> {
+  return withStore((store) => createApi({ store })(request));
+}
+
+export { handle as GET, handle as POST };

@@ -1,6 +1,6 @@
 // Generated from server/migrations by server/scripts/generate-table-types.mjs. Do not edit.
 
-export const tableNames = ["households","people","gifts","kids","care_notes","care_note_shares","prayers","background_checks","audit_log","retention_settings","sync_cursors"] as const;
+export const tableNames = ["households","people","gifts","kids","care_notes","care_note_shares","prayers","background_checks","audit_log","retention_settings","sync_cursors","demo_runtime"] as const;
 
 export type TableName = (typeof tableNames)[number];
 
@@ -82,5 +82,11 @@ export type SyncCursorsRow = {
   job_name: string;
   status: string;
   attempts: number;
+  updated_at: string;
+};
+
+export type DemoRuntimeRow = {
+  id: string;
+  payload: string;
   updated_at: string;
 };

@@ -90,6 +90,75 @@ type Proposal = ProposalBody & {
   executed: boolean;
 };
 
+type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret: string | null };
+
+export type StoreDocument = {
+  version: 1;
+  people: StoredPerson[];
+  gifts: GiftRow[];
+  children: ChildRow[];
+  sessions: Session[];
+  auditLog: AuditEntry[];
+  alerts: { id: string; personId: string; at: number; kind: string; detail: string }[];
+  proposals: Proposal[];
+  secrets: { provider: string; ciphertext: string; last4: string }[];
+  station: string[];
+  flags: Record<ModuleId, boolean>;
+  groups: { id: string; name: string; summary: string; sample: boolean; memberIds: string[] }[];
+  messages: { id: string; groupId: string; authorId: string; body: string; sample: boolean }[];
+  events: {
+    id: string;
+    title: string;
+    start: number;
+    end: number;
+    location: string;
+    description: string;
+    capacity: number | null;
+    sample: boolean;
+  }[];
+  registrations: { id: string; eventId: string; personId: string; status: "registered" | "waitlist" }[];
+  announcements: { id: string; title: string; body: string; sample: boolean }[];
+  prayers: {
+    id: string;
+    authorId: string;
+    body: string;
+    visibility: "public" | "private";
+    approved: boolean;
+    sample: boolean;
+  }[];
+  notes: {
+    id: string;
+    subjectPersonId: string;
+    authorId: string;
+    ciphertext: string;
+    sharedWith: string[];
+    sample: boolean;
+  }[];
+  checks: { personId: string; status: string; ciphertext: string; sample: boolean }[];
+  schedule: {
+    id: string;
+    personId: string;
+    position: string;
+    status: "pending" | "accepted" | "declined";
+    sample: boolean;
+  }[];
+  volunteers: { personId: string; positionId: string; blockouts: { start: number; end: number }[] }[];
+  rooms: { id: string; name: string; campus: string }[];
+  bookings: Booking[];
+  expenses: {
+    id: string;
+    personId: string;
+    memo: string;
+    amountCents: number;
+    state: "draft" | "submitted" | "approved" | "denied";
+    sample: boolean;
+  }[];
+  pathways: { personId: string; steps: { id: string; title: string; status: string }[] }[];
+  visitors: { id: string; name: string; state: string; sample: boolean }[];
+  requests: { id: string; kind: string; personId: string; ciphertext: string; sample: boolean }[];
+  drafts: { id: string; title: string; segment: string; sample: boolean }[];
+};
+
 export type StoreOptions = {
   now?: () => number;
   fetchImpl?: typeof fetch;
@@ -255,6 +324,7 @@ export class ChurchStore {
   }
 
   status(version: string) {
+    const database = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
     return {
       service: "onehope" as const,
       version,
@@ -263,6 +333,7 @@ export class ChurchStore {
       givingLive: canChargeLive(this.config),
       sendsEnabled: false as const,
       church: "One Hope" as const,
+      persistence: database.length > 0 ? ("postgres" as const) : ("memory" as const),
     };
   }
 
@@ -1551,7 +1622,13 @@ export class ChurchStore {
       row: Omit<ChildRow, "ciphertext"> & { allergy: string; medical: string; code: string },
     ) => {
       this.children.set(row.id, {
-        ...row,
+        id: row.id,
+        householdId: row.householdId,
+        displayName: row.displayName,
+        classroom: row.classroom,
+        guardianIds: row.guardianIds,
+        restrictedPersonIds: row.restrictedPersonIds,
+        sample: row.sample,
         ciphertext: encryptString(
           JSON.stringify({ allergy: row.allergy, medical: row.medical, code: row.code }),
           this.key,
@@ -1740,6 +1817,101 @@ export class ChurchStore {
       sample: true,
     });
   }
+
+  toDocument(): StoreDocument {
+    return {
+      version: 1,
+      people: [...this.people.values()].map((person) => ({
+        ...person,
+        totpSecret: person.totpSecret ? person.totpSecret.toString("base64") : null,
+      })),
+      gifts: [...this.gifts.values()],
+      children: [...this.children.values()],
+      sessions: [...this.sessions.values()],
+      auditLog: this.auditLog.map((entry) => ({ ...entry })),
+      alerts: this.alerts.map((alert) => ({ ...alert })),
+      proposals: [...this.proposals.values()].map((proposal) => ({
+        ...proposal,
+        approvals: [...proposal.approvals],
+      })),
+      secrets: [...this.secrets.entries()].map(([provider, secret]) => ({ provider, ...secret })),
+      station: [...this.station],
+      flags: { ...this.flags },
+      groups: this.groups.map((group) => ({ ...group, memberIds: [...group.memberIds] })),
+      messages: this.messages.map((message) => ({ ...message })),
+      events: this.events.map((event) => ({ ...event })),
+      registrations: this.registrations.map((registration) => ({ ...registration })),
+      announcements: this.announcements.map((item) => ({ ...item })),
+      prayers: this.prayers.map((prayer) => ({ ...prayer })),
+      notes: this.notes.map((note) => ({ ...note, sharedWith: [...note.sharedWith] })),
+      checks: [...this.checks.values()].map((check) => ({ ...check })),
+      schedule: this.schedule.map((item) => ({ ...item })),
+      volunteers: this.volunteers.map((volunteer) => ({
+        ...volunteer,
+        blockouts: volunteer.blockouts.map((block) => ({ ...block })),
+      })),
+      rooms: this.rooms.map((room) => ({ ...room })),
+      bookings: this.bookings.map((booking) => ({ ...booking })),
+      expenses: this.expenses.map((expense) => ({ ...expense })),
+      pathways: [...this.pathways.entries()].map(([personId, steps]) => ({
+        personId,
+        steps: steps.map((step) => ({ ...step })),
+      })),
+      visitors: this.visitors.map((visitor) => ({ ...visitor })),
+      requests: this.requests.map((request) => ({ ...request })),
+      drafts: this.drafts.map((draft) => ({ ...draft })),
+    };
+  }
+
+  installDocument(document: StoreDocument): void {
+    if (document.version !== 1) throw new Error("This demo snapshot version is not supported.");
+    this.people.clear();
+    for (const person of document.people) {
+      this.people.set(person.id, {
+        ...person,
+        totpSecret: person.totpSecret ? Buffer.from(person.totpSecret, "base64") : null,
+      });
+    }
+    replaceMap(this.gifts, document.gifts);
+    replaceMap(this.children, document.children);
+    this.sessions.clear();
+    for (const session of document.sessions) this.sessions.set(session.token, session);
+    this.auditLog.splice(0, this.auditLog.length, ...document.auditLog);
+    this.alerts.splice(0, this.alerts.length, ...document.alerts);
+    this.proposals.clear();
+    for (const proposal of document.proposals) this.proposals.set(proposal.id, proposal);
+    this.secrets.clear();
+    for (const secret of document.secrets) {
+      this.secrets.set(secret.provider, { ciphertext: secret.ciphertext, last4: secret.last4 });
+    }
+    this.station.clear();
+    for (const personId of document.station) this.station.add(personId);
+    for (const id of MODULES) this.flags[id] = document.flags[id] ?? true;
+    this.groups.splice(0, this.groups.length, ...document.groups);
+    this.messages.splice(0, this.messages.length, ...document.messages);
+    this.events.splice(0, this.events.length, ...document.events);
+    this.registrations.splice(0, this.registrations.length, ...document.registrations);
+    this.announcements.splice(0, this.announcements.length, ...document.announcements);
+    this.prayers.splice(0, this.prayers.length, ...document.prayers);
+    this.notes.splice(0, this.notes.length, ...document.notes);
+    this.checks.clear();
+    for (const check of document.checks) this.checks.set(check.personId, check);
+    this.schedule.splice(0, this.schedule.length, ...document.schedule);
+    this.volunteers.splice(0, this.volunteers.length, ...document.volunteers);
+    this.rooms.splice(0, this.rooms.length, ...document.rooms);
+    this.bookings.splice(0, this.bookings.length, ...document.bookings);
+    this.expenses.splice(0, this.expenses.length, ...document.expenses);
+    this.pathways.clear();
+    for (const pathway of document.pathways) this.pathways.set(pathway.personId, pathway.steps);
+    this.visitors.splice(0, this.visitors.length, ...document.visitors);
+    this.requests.splice(0, this.requests.length, ...document.requests);
+    this.drafts.splice(0, this.drafts.length, ...document.drafts);
+  }
+}
+
+function replaceMap<T extends { id: string }>(target: Map<string, T>, rows: T[]) {
+  target.clear();
+  for (const row of rows) target.set(row.id, row);
 }
 
 function textField(value: unknown, key: string): string {

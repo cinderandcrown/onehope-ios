@@ -102,7 +102,7 @@ Run the manual **TestFlight** workflow. It decodes the key in the runner temp di
 
 ## What is scaffolded
 
-- A provisioned Postgres database. The SQL is in `server/migrations` and is executed in CI with PGlite. Production refuses the in-memory store (`ONEHOPE_ENV=production`) and there is no hosted database in this repo yet.
+- A hosted database is optional. Set `DATABASE_URL` (see `docs/deploy.md`) and the demo snapshot is stored in Postgres. CI leaves that variable empty and uses the in-memory store. `ONEHOPE_ENV=production` still refuses to boot. The Lead Pastor seat stays empty until `MASTER_ADMIN_SECONDARY_EMAIL` is set in the host, not in git.
 - Live Planning Center, Stripe, Resend, Twilio, APNs, QuickBooks, PostHog, and Facebook. Adapters or notes exist; the side effect is not performed.
 - Passkeys. Staff MFA is TOTP. WebAuthn is not implemented.
 - Pixel snapshot baselines for iOS. UI tests assert the five tabs and attach screenshots; they do not compare against stored images.

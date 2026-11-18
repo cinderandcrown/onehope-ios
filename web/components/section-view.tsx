@@ -2,7 +2,14 @@ import Image from "next/image";
 
 import { savePush } from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
-import { AccessError, CAPABILITIES, getDemoStore, labelRole, permissionMatrix } from "@onehope/server";
+import {
+  AccessError,
+  CAPABILITIES,
+  labelRole,
+  permissionMatrix,
+  withStore,
+  type ChurchStore,
+} from "@onehope/server";
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -24,8 +31,7 @@ function Locked({ title }: { title: string }) {
   );
 }
 
-function giftsOf(token: string) {
-  const store = getDemoStore();
+function giftsOf(store: ChurchStore, token: string) {
   try {
     return { locked: false as const, gifts: store.allGifts(token) };
   } catch (error) {
@@ -36,8 +42,11 @@ function giftsOf(token: string) {
   }
 }
 
-export function SectionView({ section, token }: { section: SectionId; token: string }) {
-  const store = getDemoStore();
+export async function SectionView({ section, token }: { section: SectionId; token: string }) {
+  return withStore((store) => renderSection(store, section, token));
+}
+
+function renderSection(store: ChurchStore, section: SectionId, token: string) {
   switch (section) {
     case "overview": {
       const home = store.publicHome();
@@ -376,7 +385,7 @@ export function SectionView({ section, token }: { section: SectionId; token: str
       );
     }
     case "giving": {
-      const result = giftsOf(token);
+      const result = giftsOf(store, token);
       return (
         <section>
           <h1>Giving</h1>

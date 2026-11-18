@@ -291,6 +291,36 @@ pre {
     background-position: -100% 0;
   }
 }
+.member {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 6rem;
+}
+.member-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 0.25rem;
+  justify-content: space-around;
+  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+  background: var(--card);
+  border-top: 1px solid var(--line);
+}
+.member-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.55rem 0.2rem;
+  border-radius: 999px;
+}
+.member-tabs button[aria-selected="true"] {
+  background: var(--terracotta-soft);
+  color: #1c1b1b;
+}
 @media (max-width: 860px) {
   .shell,
   .login,

@@ -11,3 +11,4 @@
 - GitHub Actions for iOS, the web app, and a manual TestFlight upload.
 - The iPhone tabs load from the shared API when a base URL is set, and keep a labeled sample if it is not.
 - Connect shows the signed-in household's classrooms, next steps, and serving assignments. Medical notes, allergy text, and security codes stay off that response.
+- The staff site, `/member` (installable on a phone home screen), and `/api` share one store. With `DATABASE_URL` or `POSTGRES_URL` that store is a Postgres snapshot seeded with labeled demo rows. See `docs/deploy.md`.

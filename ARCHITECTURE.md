@@ -5,6 +5,7 @@ flowchart LR
   subgraph clients
     Phone[iOS app]
     Web[Staff Command Center]
+    Member[Member page]
   end
   subgraph server [server package]
     API[HTTP API]
@@ -14,12 +15,14 @@ flowchart LR
   end
   Phone -->|HTTP when a base URL is set| API
   Web --> Store
+  Member --> Store
   API --> Rules
   Rules --> Store
-  SQL -.->|same rules, tested in PGlite| Rules
+  Store -->|snapshot when DATABASE_URL is set| SQL
+  SQL -.->|RLS tested in PGlite| Rules
 ```
 
-The Command Center and the HTTP API share `ChurchStore`. The iPhone tabs currently render the offline sample in `OneHopeCore` so the app launches without a server. The rules those screens use for directory projection, pickup, service time, and demo giving are the same decisions the server tests. Wiring the phone to `API_BASE_URL` is the next step, not a second data model.
+The Command Center, the member page, and the HTTP API share `ChurchStore`. With `DATABASE_URL` or `POSTGRES_URL`, each request loads and saves that store in Postgres (`demo_runtime`). Without it, the process keeps one in-memory copy, which is what CI uses. The iPhone app calls the API when `-apiBaseURL` or `API_BASE_URL` is set and otherwise shows a labeled on-device sample.
 
 ## iOS modules
 
@@ -35,7 +38,7 @@ Next.js App Router, server components, server actions. Request bodies that hit t
 
 ## Data
 
-`server/migrations/0001_init.sql` is the RLS schema. `0002_retention.sql` adds retention and sync cursor tables. `migrate()` records versions and does not reapply them. `server/scripts/generate-table-types.mjs --check` fails if `server/src/generated/tables.ts` drifts.
+`server/migrations/0001_init.sql` is the RLS schema. `0002_retention.sql` adds retention and sync cursor tables. `0003_demo_runtime.sql` stores the labeled demo snapshot. `migrate()` records versions and does not reapply them. `server/scripts/generate-table-types.mjs --check` fails if `server/src/generated/tables.ts` drifts. `server/scripts/seed.ts` applies migrations and the labeled demo when a database URL is present.
 
 Sync jobs take an idempotency key, retry, and skip a key that already succeeded. The runner is in memory. The `sync_cursors` table is the shape a Postgres runner would use. It is not connected yet.
 

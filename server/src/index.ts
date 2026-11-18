@@ -1,13 +1,20 @@
 import { ChurchStore } from "./store";
 
 export { createApi, API_ROUTES } from "./api";
+export { loadSermons } from "./adapters";
 export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
 export { loadConfig } from "./config";
 export * from "./contracts";
 export * from "./domain";
 export { createLogger, redact, noopReporter } from "./logger";
-export { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "./sample-accounts";
+export {
+  SAMPLE_MEMBER_EMAIL,
+  SAMPLE_PASSWORD,
+  SAMPLE_PASTOR_EMAIL,
+  SAMPLE_TOTP_BASE32,
+} from "./sample-accounts";
 export { ChurchStore } from "./store";
+export { databaseUrl, withStore } from "./persist";
 export { memorySyncStore, runSync } from "./sync";
 export { totpCode, decodeBase32 } from "./totp";
 export { VERSION } from "./version";
