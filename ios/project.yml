@@ -46,6 +46,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: One Hope
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_NSCameraUsageDescription: One Hope uses the camera to scan a kids check-in code.
         INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription: One Hope adds events you choose to your calendar.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
