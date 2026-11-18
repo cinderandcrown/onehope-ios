@@ -1,0 +1,61 @@
+# TestFlight for the One Hope member app.
+# Start this from the Codemagic UI after the Apple setup in the comments below.
+# The GitHub Actions workflows do not read this file.
+workflows:
+  ios-testflight:
+    name: iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      # Team integration name. Create it in Codemagic under
+      # Team integrations > Developer Portal, and upload the App Store Connect
+      # API key there. Do not put the key, the .p8, or the issuer id in git.
+      app_store_connect: onehope-app-store-connect
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.cinderandcrown.onehope
+      vars:
+        BUNDLE_ID: com.cinderandcrown.onehope
+        XCODE_PROJECT: ios/OneHope.xcodeproj
+        XCODE_SCHEME: OneHope
+      xcode: latest
+    # Start this from the Codemagic UI. Pushes do not spend a Mac build
+    # until the App Store Connect integration and the app record exist.
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "*"
+          include: false
+    scripts:
+      - name: Generate the Xcode project
+        script: |
+          brew install xcodegen
+          cd ios
+          xcodegen generate
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --custom-export-options='{"testFlightInternalTestingOnly": true}'
+      - name: Increment the build number
+        script: |
+          cd ios
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID")
+          agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
+      - name: Build the ipa
+        script: |
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - One Hope Internal

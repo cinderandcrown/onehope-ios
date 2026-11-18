@@ -1,0 +1,3 @@
+// Debug and the GitHub simulator job leave this empty.
+// The app then shows the labeled sample unless -apiBaseURL is passed.
+API_BASE_URL =

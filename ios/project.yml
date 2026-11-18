@@ -53,6 +53,10 @@ targets:
         DEVELOPMENT_TEAM: GDNRT9DJ58
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
+        VERSIONING_SYSTEM: apple-generic
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
     info:
       path: OneHope/Info.plist
       properties:

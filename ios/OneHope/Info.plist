@@ -3,7 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>API_BASE_URL</key>
-	<string>https://onehope-beryl.vercel.app</string>
+	<string>$(API_BASE_URL)</string>
+	<key>CFBundleDisplayName</key>
+	<string>One Hope</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>One Hope adds events you choose to your calendar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>One Hope uses the camera to scan a kids check-in code.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
