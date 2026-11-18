@@ -60,11 +60,10 @@ struct RootView: View {
     private func authenticate(email: String, password: String, name: String?) async -> String {
         guard let client else { return "The church server is not configured on this build." }
         do {
-            let session: String
-            if let name, !name.isEmpty {
-                session = try await client.signup(email: email, password: password, displayName: name)
+            let session = if let name, !name.isEmpty {
+                try await client.signup(email: email, password: password, displayName: name)
             } else {
-                session = try await client.login(email: email, password: password)
+                try await client.login(email: email, password: password)
             }
             SessionKeychain.save(session)
             token = session
@@ -187,7 +186,11 @@ struct AccountGate: View {
             .padding()
         }
         .background(BrandColor.paper)
-        .onAppear { if !error.isEmpty { message = error } }
+        .onAppear {
+            if !error.isEmpty {
+                message = error
+            }
+        }
     }
 }
 

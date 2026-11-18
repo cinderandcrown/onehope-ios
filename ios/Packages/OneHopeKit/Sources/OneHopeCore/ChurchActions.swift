@@ -14,8 +14,8 @@ private struct PickupBody: Encodable { let childId: String; let code: String }
 private struct ReasonReply: Decodable { let reason: String }
 private struct EmptyReply: Decodable {}
 
-extension ChurchClient {
-    public func signup(email: String, password: String, displayName: String) async throws -> String {
+public extension ChurchClient {
+    func signup(email: String, password: String, displayName: String) async throws -> String {
         struct Body: Encodable { let email: String; let password: String; let displayName: String }
         let reply: TokenReply = try await send(
             "/api/auth/signup",
@@ -26,15 +26,15 @@ extension ChurchClient {
         return reply.token
     }
 
-    public func logout(token: String) async {
+    func logout(token: String) async {
         let _: EmptyReply? = try? await send("/api/auth/logout", method: "POST", token: token, json: JSONEncoder().encode(EmptyBody()))
     }
 
-    public func join(token: String, groupId: String) async throws {
+    func join(token: String, groupId: String) async throws {
         let _: EmptyReply = try await send("/api/groups/\(groupId)/join", method: "POST", token: token, json: Data("{}".utf8))
     }
 
-    public func postMessage(token: String, groupId: String, body: String) async throws {
+    func postMessage(token: String, groupId: String, body: String) async throws {
         let _: EmptyReply = try await send(
             "/api/groups/\(groupId)/messages",
             method: "POST",
@@ -43,11 +43,11 @@ extension ChurchClient {
         )
     }
 
-    public func register(token: String, eventId: String) async throws {
+    func register(token: String, eventId: String) async throws {
         let _: EmptyReply = try await send("/api/events/\(eventId)/register", method: "POST", token: token, json: Data("{}".utf8))
     }
 
-    public func submitPrayer(token: String, body: String) async throws {
+    func submitPrayer(token: String, body: String) async throws {
         let _: EmptyReply = try await send(
             "/api/prayers",
             method: "POST",
@@ -56,7 +56,7 @@ extension ChurchClient {
         )
     }
 
-    public func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool) async throws {
+    func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool) async throws {
         let _: EmptyReply = try await send(
             "/api/me",
             method: "POST",
@@ -65,7 +65,7 @@ extension ChurchClient {
         )
     }
 
-    public func addChild(token: String, displayName: String, classroom: String) async throws -> String {
+    func addChild(token: String, displayName: String, classroom: String) async throws -> String {
         let reply: ChildReply = try await send(
             "/api/household/children",
             method: "POST",
@@ -75,7 +75,7 @@ extension ChurchClient {
         return reply.child.id
     }
 
-    public func checkIn(token: String, childId: String) async throws -> String {
+    func checkIn(token: String, childId: String) async throws -> String {
         let reply: CodeReply = try await send(
             "/api/kids/check-in",
             method: "POST",
@@ -85,7 +85,7 @@ extension ChurchClient {
         return reply.code
     }
 
-    public func householdPickup(token: String, childId: String, code: String) async throws -> String {
+    func householdPickup(token: String, childId: String, code: String) async throws -> String {
         let reply: ReasonReply = try await send(
             "/api/kids/household-pickup",
             method: "POST",
