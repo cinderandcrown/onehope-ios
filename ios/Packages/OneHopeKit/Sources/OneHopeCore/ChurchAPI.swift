@@ -185,67 +185,6 @@ public struct ChurchClient: Sendable {
         return reply.token
     }
 
-    public func signup(email: String, password: String, displayName: String) async throws -> String {
-        struct Body: Encodable { let email: String; let password: String; let displayName: String }
-        struct Reply: Decodable { let token: String }
-        let reply: Reply = try await send(
-            "/api/auth/signup",
-            method: "POST",
-            token: nil,
-            json: JSONEncoder().encode(Body(email: email, password: password, displayName: displayName))
-        )
-        return reply.token
-    }
-
-    public func logout(token: String) async {
-        struct Body: Encodable {}
-        let _: EmptyReply? = try? await send("/api/auth/logout", method: "POST", token: token, json: JSONEncoder().encode(Body()))
-    }
-
-    public func join(token: String, groupId: String) async throws {
-        let _: EmptyReply = try await send("/api/groups/\(groupId)/join", method: "POST", token: token, json: Data("{}".utf8))
-    }
-
-    public func postMessage(token: String, groupId: String, body: String) async throws {
-        struct Body: Encodable { let body: String }
-        let _: EmptyReply = try await send("/api/groups/\(groupId)/messages", method: "POST", token: token, json: JSONEncoder().encode(Body(body: body)))
-    }
-
-    public func register(token: String, eventId: String) async throws {
-        let _: EmptyReply = try await send("/api/events/\(eventId)/register", method: "POST", token: token, json: Data("{}".utf8))
-    }
-
-    public func submitPrayer(token: String, body: String) async throws {
-        struct Body: Encodable { let body: String; let visibility: String }
-        let _: EmptyReply = try await send("/api/prayers", method: "POST", token: token, json: JSONEncoder().encode(Body(body: body, visibility: "public")))
-    }
-
-    public func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool) async throws {
-        struct Body: Encodable { let emailPublic: Bool; let phonePublic: Bool }
-        let _: EmptyReply = try await send("/api/me", method: "POST", token: token, json: JSONEncoder().encode(Body(emailPublic: emailPublic, phonePublic: phonePublic)))
-    }
-
-    public func addChild(token: String, displayName: String, classroom: String) async throws -> String {
-        struct Body: Encodable { let displayName: String; let classroom: String }
-        struct Reply: Decodable { struct Child: Decodable { let id: String }; let child: Child }
-        let reply: Reply = try await send("/api/household/children", method: "POST", token: token, json: JSONEncoder().encode(Body(displayName: displayName, classroom: classroom)))
-        return reply.child.id
-    }
-
-    public func checkIn(token: String, childId: String) async throws -> String {
-        struct Body: Encodable { let childId: String }
-        struct Reply: Decodable { let code: String }
-        let reply: Reply = try await send("/api/kids/check-in", method: "POST", token: token, json: JSONEncoder().encode(Body(childId: childId)))
-        return reply.code
-    }
-
-    public func householdPickup(token: String, childId: String, code: String) async throws -> String {
-        struct Body: Encodable { let childId: String; let code: String }
-        struct Reply: Decodable { let reason: String }
-        let reply: Reply = try await send("/api/kids/household-pickup", method: "POST", token: token, json: JSONEncoder().encode(Body(childId: childId, code: code)))
-        return reply.reason
-    }
-
     public func stepUp(token: String, password: String) async throws {
         struct Body: Encodable { let password: String }
         struct Reply: Decodable { let stepUpUntil: Int }
@@ -304,7 +243,7 @@ public struct ChurchClient: Sendable {
         )
     }
 
-    private func send<Response: Decodable>(
+    func send<Response: Decodable>(
         _ path: String,
         method: String,
         token: String?,
@@ -377,8 +316,6 @@ private struct FundsReply: Decodable {
     let funds: [Fund]
     let open: Bool
 }
-
-private struct EmptyReply: Decodable {}
 
 private struct MeReply: Decodable {
     struct Person: Decodable { let displayName: String; let email: String }
