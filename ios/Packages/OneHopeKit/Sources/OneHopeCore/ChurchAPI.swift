@@ -316,6 +316,7 @@ struct MeReply: Decodable {
         let phonePublic: Bool?
         let listedInDirectory: Bool?
     }
+
     let person: Person
 }
 

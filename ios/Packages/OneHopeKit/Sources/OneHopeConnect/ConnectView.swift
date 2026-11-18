@@ -96,7 +96,7 @@ public struct ConnectView: View {
                     ForEach(snapshot.prayers) { prayer in
                         VStack(alignment: .leading) {
                             Text(prayer.body)
-                            if prayer.mine && !prayer.approved {
+                            if prayer.mine, !prayer.approved {
                                 Text("Waiting for pastor approval").font(.footnote)
                             }
                         }
@@ -152,8 +152,8 @@ public struct ConnectView: View {
             let item = EKEvent(eventStore: store)
             item.title = event.title
             item.location = event.detail
-        item.startDate = event.start ?? Date()
-        item.endDate = event.end ?? (event.start ?? Date()).addingTimeInterval(90 * 60)
+            item.startDate = event.start ?? Date()
+            item.endDate = event.end ?? (event.start ?? Date()).addingTimeInterval(90 * 60)
             item.calendar = store.defaultCalendarForNewEvents
             try? store.save(item, span: .thisEvent)
         }
