@@ -4,10 +4,12 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+import { deleteMember } from "@/app/member/actions";
+
 type Tab = "Home" | "Watch" | "Give" | "Connect" | "More";
 
 export type MemberVideo = { id: string; title: string; thumbnail: string | null };
-export type MemberEvent = { id: string; title: string; detail: string; start: number; end: number };
+export type MemberEvent = { id: string; title: string; detail: string; start: number; end: number; registered: boolean };
 
 export type MemberDemo = {
   churchName: string;
@@ -48,7 +50,16 @@ export function MemberTabs({ demo }: { demo: MemberDemo }) {
       {tab === "More" ? <More demo={demo} onNotice={setNotice} /> : null}
       <nav className="member-tabs" aria-label="Member sections" role="tablist">
         {TABS.map((name) => (
-          <button key={name} type="button" role="tab" aria-selected={tab === name} onClick={() => setTab(name)}>
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={tab === name}
+            onClick={() => {
+              setNotice("");
+              setTab(name);
+            }}
+          >
             {name}
           </button>
         ))}
@@ -207,9 +218,10 @@ function Connect({ demo, onNotice }: { demo: MemberDemo; onNotice: (message: str
             <button
               type="button"
               className="button"
+              disabled={event.registered}
               onClick={() => void act(`/api/events/${event.id}/register`, {}, "You're registered.")}
             >
-              Register
+              {event.registered ? "Registered" : "Register"}
             </button>
             <a href={`/api/events/${event.id}/ics`}>Add to calendar</a>
           </article>
@@ -312,42 +324,20 @@ function Connect({ demo, onNotice }: { demo: MemberDemo; onNotice: (message: str
   );
 }
 
-function DeleteAccount({ onNotice }: { onNotice: (message: string) => void }) {
-  const router = useRouter();
-  const [password, setPassword] = useState("");
+function DeleteAccount() {
   return (
     <form
       className="form"
+      action={deleteMember}
       onSubmit={(event) => {
-        event.preventDefault();
-        void (async () => {
-          const step = await fetch("/api/auth/step-up", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ password }),
-          });
-          if (!step.ok) {
-            const data = (await step.json().catch(() => ({}))) as { error?: string };
-            onNotice(data.error || "That password doesn't match.");
-            return;
-          }
-          const response = await fetch("/api/account/delete", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: "{}",
-          });
-          if (!response.ok) {
-            const data = (await response.json().catch(() => ({}))) as { error?: string };
-            onNotice(data.error || "The account was not deleted.");
-            return;
-          }
-          router.push("/member/start");
-        })();
+        if (!window.confirm("Delete your account? This removes your prayers, registrations, and children.")) {
+          event.preventDefault();
+        }
       }}
     >
       <label>
         Password to delete
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        <input name="password" type="password" autoComplete="current-password" required />
       </label>
       <button className="button" type="submit">
         Delete my account
@@ -367,7 +357,7 @@ function More({ demo, onNotice }: { demo: MemberDemo; onNotice: (message: string
         <h2>Account</h2>
         <p>{demo.accountName}</p>
         <p>{demo.accountEmail}</p>
-        <DeleteAccount onNotice={onNotice} />
+        <DeleteAccount />
       </article>
       <section>
         <h2>Directory</h2>

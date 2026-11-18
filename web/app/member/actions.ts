@@ -47,10 +47,28 @@ export async function signUpMember(formData: FormData) {
     await setMember(token);
   } catch (error) {
     const message = accessMessage(error);
-    if (message) redirect(message.includes("already exists") ? "/member?error=exists" : "/member?error=signup");
+    if (message) redirect("/member?error=signup");
     throw error;
   }
   redirect("/member");
+}
+
+export async function deleteMember(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_member")?.value;
+  const password = String(formData.get("password") ?? "");
+  if (!token) redirect("/member");
+  try {
+    await withStore((store) => {
+      store.stepUp(token, { password });
+      store.deleteSelf(token);
+    });
+  } catch (error) {
+    if (accessMessage(error)) redirect("/member?error=password");
+    throw error;
+  }
+  jar.delete("onehope_member");
+  redirect("/member?deleted=1");
 }
 
 export async function signOutMember() {

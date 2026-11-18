@@ -13,6 +13,7 @@ public struct MoreView: View {
     @State private var listed: Bool
     @State private var password = ""
     @State private var notice = ""
+    @State private var confirmDelete = false
 
     public init(
         snapshot: ChurchSnapshot,
@@ -44,7 +45,7 @@ public struct MoreView: View {
                         .accessibilityIdentifier("sign-out")
                     SecureField("Password to delete", text: $password)
                     Button("Delete my account", role: .destructive) {
-                        Task { notice = await onDelete(password) }
+                        confirmDelete = true
                     }
                 }
                 Section("Directory") {
@@ -76,6 +77,14 @@ public struct MoreView: View {
             }
             .refreshable { await onRefresh() }
             .navigationTitle(L10n.text(.more))
+            .alert("Delete your account?", isPresented: $confirmDelete) {
+                Button("Delete", role: .destructive) {
+                    Task { notice = await onDelete(password) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes your prayers, registrations, and children.")
+            }
             .onChange(of: snapshot.emailPublic) { _, value in emailPublic = value }
             .onChange(of: snapshot.phonePublic) { _, value in phonePublic = value }
             .onChange(of: snapshot.listedInDirectory) { _, value in listed = value }

@@ -6,5 +6,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const jar = await cookies();
   jar.delete("onehope_member");
-  return NextResponse.redirect(new URL("/member", request.url));
+  const next = new URL("/member", request.url);
+  if (new URL(request.url).searchParams.get("deleted") === "1") next.searchParams.set("deleted", "1");
+  return NextResponse.redirect(next);
 }

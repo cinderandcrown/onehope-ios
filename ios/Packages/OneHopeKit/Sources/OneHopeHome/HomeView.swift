@@ -29,6 +29,23 @@ public struct HomeView: View {
                     }
                     Text("Come early for donuts and coffee. Gathering at 10:30.")
                     Text("Lead pastors \(snapshot.pastors.joined(separator: " and ")).")
+                    if !snapshot.events.isEmpty {
+                        Text("Upcoming").font(.headline)
+                    }
+                    ForEach(snapshot.events) { event in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(event.title).font(.headline)
+                            Text(event.detail)
+                            if let start = event.start {
+                                Text(start.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.footnote)
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(BrandColor.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                    }
                     ForEach(snapshot.announcements) { item in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.title).font(.headline)

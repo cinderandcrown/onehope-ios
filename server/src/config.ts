@@ -24,6 +24,11 @@ export type AppConfig = {
   planningCenterClientSecret: string;
 };
 
+/** Only for reading snapshots written before a configured key. New writes use FIELD_ENCRYPTION_KEY. */
+export function demoFieldKey(): Buffer {
+  return scryptSync("onehope-demo-not-for-production", "onehope-demo-salt", 32);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const mode = env.ONEHOPE_ENV === "production" ? "production" : "demo";
   const rawKey = env.FIELD_ENCRYPTION_KEY ?? "";
@@ -39,7 +44,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     fieldEncryptionMode = "configured";
   } else {
-    fieldEncryptionKey = scryptSync("onehope-demo-not-for-production", "onehope-demo-salt", 32);
+    fieldEncryptionKey = demoFieldKey();
     fieldEncryptionMode = "demo";
   }
   return {

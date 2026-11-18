@@ -15,9 +15,6 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-function Badge({ sample: _sample }: { sample?: boolean }) {
-  return null;
-}
 
 function Locked({ title }: { title: string }) {
   return (
@@ -85,12 +82,12 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <h2>Modules</h2>
               <p>{store.modules().filter((item) => item.enabled).length} on for this church.</p>
             </article>
-            <article className="card">
-              <h2>Latest message</h2>
-              <p>
-                <Badge sample /> {home.sampleSermon.title}
-              </p>
-            </article>
+            {home.sampleSermon.title ? (
+              <article className="card">
+                <h2>Latest message</h2>
+                <p>{home.sampleSermon.title}</p>
+              </article>
+            ) : null}
           </div>
         </>
       );
@@ -132,7 +129,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {rows.map((person) => (
             <article className="card" key={person.personId}>
               <h2>
-                {person.displayName} <Badge sample />
+                {person.displayName}
               </h2>
               <p>{person.steps.map((step) => `${step.title}: ${step.status}`).join(" · ")}</p>
             </article>
@@ -150,7 +147,6 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           ) : (
             care.notes.map((note) => (
               <article className="card" key={note.id}>
-                <Badge sample />
                 <p>{note.body}</p>
               </article>
             ))
@@ -162,7 +158,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <h2>Follow-up</h2>
               {care.queue.visitors.map((visitor) => (
                 <p key={visitor.id}>
-                  {visitor.name} · {visitor.state} <Badge sample={visitor.sample} />
+                  {visitor.name} · {visitor.state}
                 </p>
               ))}
               {care.queue.requests.map((request) => (
@@ -189,7 +185,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {store.listGroups(token).map((group) => (
             <article className="card" key={group.id}>
               <h2>
-                {group.name} <Badge sample={group.sample} />
+                {group.name}
               </h2>
               <p>{group.summary}</p>
               <p>{group.joined ? "Joined" : "Not joined"}</p>
@@ -212,7 +208,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {store.publicHome().events.map((event) => (
             <article className="card" key={event.id}>
               <h2>
-                {event.title} <Badge sample={event.sample} />
+                {event.title}
               </h2>
               <p>{event.location}</p>
               <p>{event.capacity === null ? "Open" : `Capacity ${event.capacity}`}</p>
@@ -242,7 +238,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               {roster.map((child) => (
                 <tr key={child.id}>
                   <td>
-                    {child.displayName} <Badge sample={child.sample} />
+                    {child.displayName}
                   </td>
                   <td>{child.classroom}</td>
                 </tr>
@@ -269,7 +265,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <article className="card" key={row.id}>
                 <h2>{row.position}</h2>
                 <p>
-                  {row.displayName} · {row.status} <Badge sample={row.sample} />
+                  {row.displayName} · {row.status}
                 </p>
               </article>
             ))
@@ -280,7 +276,6 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               .suggestSchedule()
               .assignments.map((item) => item.personId)
               .join(", ") || "none"}{" "}
-            <Badge sample />
           </p>
         </section>
       );
@@ -293,7 +288,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {plan ? (
             <article className="card">
               <h2>
-                {plan.title} <Badge sample />
+                {plan.title}
               </h2>
               <p>{plan.items.join(" · ")}</p>
               <p>
@@ -325,7 +320,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             <article className="card" key={lesson.id}>
               <h2>{lesson.title}</h2>
               <p>
-                {lesson.ages} <Badge sample />
+                {lesson.ages}
               </p>
             </article>
           ))}
@@ -421,7 +416,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                 {result.gifts.map((gift) => (
                   <tr key={gift.id}>
                     <td>
-                      {gift.fundName} <Badge sample={gift.sample} />
+                      {gift.fundName}
                     </td>
                     <td>{money(gift.amountCents)}</td>
                     <td>{gift.charged ? "Yes" : "No"}</td>
@@ -445,22 +440,18 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <article className="card">
                 <h2>Visitors</h2>
                 <p className="stat">{finance.funnel.visitors}</p>
-                <Badge sample />
               </article>
               <article className="card">
                 <h2>Members</h2>
                 <p className="stat">{finance.funnel.members}</p>
-                <Badge sample />
               </article>
               <article className="card">
                 <h2>Givers</h2>
                 <p className="stat">{finance.funnel.givers}</p>
-                <Badge sample />
               </article>
               <article className="card">
                 <h2>Servers</h2>
                 <p className="stat">{finance.funnel.servers}</p>
-                <Badge sample />
               </article>
             </div>
           )}
@@ -478,7 +469,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             finance.budgets.map((budget) => (
               <article className="card" key={budget.id}>
                 <h2>
-                  {budget.name} <Badge sample />
+                  {budget.name}
                 </h2>
                 <p>
                   Budget {money(budget.budgetCents)} · Actual {money(budget.actualCents)}
@@ -504,14 +495,14 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             <article className="card" key={partner.id}>
               <h2>{partner.name}</h2>
               <p>
-                {partner.summary} <Badge sample={partner.sample} />
+                {partner.summary}
               </p>
             </article>
           ))}
           {missions.trips.map((trip) => (
             <article className="card" key={trip.id}>
               <h2>
-                {trip.name} <Badge sample />
+                {trip.name}
               </h2>
               <p>
                 Raised {money(trip.raisedCents)} of {money(trip.goalCents)}
@@ -530,12 +521,12 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             <h1>Media</h1>
             {media.series.map((series) => (
               <p key={series.id}>
-                {series.title} <Badge sample />
+                {series.title}
               </p>
             ))}
             {media.chat.map((line) => (
               <p key={line.id}>
-                {line.body} <Badge sample />
+                {line.body}
               </p>
             ))}
             <p>
@@ -694,7 +685,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             ) : (
               attendance.headcounts.map((row) => (
                 <p key={row.id}>
-                  {row.label}: {row.count} <Badge sample />
+                  {row.label}: {row.count}
                 </p>
               ))
             );

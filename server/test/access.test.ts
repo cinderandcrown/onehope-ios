@@ -241,10 +241,9 @@ test("sample shortcut is labeled and refused in production", () => {
   assert.equal(preview.sample, true);
   assert.equal(store.me(preview.token).sample, true);
   const key = Buffer.alloc(32, 3).toString("base64");
-  assert.throws(() => ChurchStore.demo({ ONEHOPE_ENV: "production", FIELD_ENCRYPTION_KEY: key }));
-  const production = new ChurchStore(loadConfig({ ONEHOPE_ENV: "production", FIELD_ENCRYPTION_KEY: key }), {
-    memoryForTests: true,
-  });
+  const production = ChurchStore.demo({ ONEHOPE_ENV: "production", FIELD_ENCRYPTION_KEY: key });
+  assert.equal(production.status("1").env, "production");
+  assert.equal(production.status("1").fieldEncryption, "configured");
   assert.throws(
     () => production.loginSampleStaff({ ip: "192.0.2.9", userAgent: "preview" }),
     (error: AccessError) => error.code === "forbidden",

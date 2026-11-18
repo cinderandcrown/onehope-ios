@@ -10,6 +10,9 @@ test("a member can sign in, act, and see a clear password error", async ({ page 
     },
   });
   expect(takeover.status()).toBe(400);
+  expect(await takeover.text()).not.toContain("already exists");
+  const seats = await page.request.get("/api/security/seats");
+  expect(seats.status()).toBe(401);
   const stamp = Date.now();
   const email = `member${stamp}@onehope.test`;
   await page.goto("/member");
@@ -38,7 +41,11 @@ test("a member can sign in, act, and see a clear password error", async ({ page 
   await expect(page.getByText("Your note was sent.")).toBeVisible();
   await page.getByRole("button", { name: "Register" }).first().click();
   await expect(page.getByText("You're registered.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Registered" }).first()).toBeVisible();
   const href = await page.getByRole("link", { name: "Add to calendar" }).first().getAttribute("href");
+  await page.getByRole("tab", { name: "Home" }).click();
+  await expect(page.getByText("You're registered.")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Connect" }).click();
   const ics = await page.request.get(href ?? "");
   expect(ics.headers()["content-type"]).toContain("text/calendar");
   expect(await ics.text()).toContain("BEGIN:VCALENDAR");

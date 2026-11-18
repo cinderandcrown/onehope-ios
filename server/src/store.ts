@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
+
 import type { AppConfig } from "./config";
-import { loadConfig } from "./config";
+import { demoFieldKey, loadConfig } from "./config";
 import type { GiftView, PersonView, PickupBody, ProposalBody, PushBody, RoleChangeBody } from "./contracts";
 import { decryptString, encryptString, hashPassword, newId, verifyPassword } from "./crypto";
 import {
@@ -157,6 +159,7 @@ export type StoreDocument = {
   visitors: { id: string; name: string; state: string; sample: boolean }[];
   requests: { id: string; kind: string; personId: string; ciphertext: string; sample: boolean }[];
   drafts: { id: string; title: string; segment: string; sample: boolean }[];
+  invites?: { tokenHash: string; email: string; expires: number }[];
 };
 
 export type StoreOptions = {
@@ -293,8 +296,8 @@ export class ChurchStore {
   }
 
   constructor(config: AppConfig, options: StoreOptions = {}) {
-    if (config.env === "production" && !options.memoryForTests) {
-      throw new Error("Refusing to boot the in-memory demo store in production.");
+    if (config.env === "production" && config.fieldEncryptionMode !== "configured" && !options.memoryForTests) {
+      throw new Error("Refusing to boot without a configured encryption key in production.");
     }
     if (config.env === "production" && (options.passwordOverrides || options.totpOverrides)) {
       throw new Error("Credential overrides are refused in production.");
@@ -336,13 +339,19 @@ export class ChurchStore {
     return {
       service: "onehope" as const,
       version,
-      env: this.fixture ? this.config.env : ("production" as const),
+      env: this.config.env,
       fieldEncryption: this.config.fieldEncryptionMode,
       givingLive: canChargeLive(this.config),
       sendsEnabled: false as const,
       church: "One Hope" as const,
       persistence: database.length > 0 ? ("postgres" as const) : ("memory" as const),
     };
+  }
+
+  seatsFor(token: string) {
+    const actor = this.actor(token);
+    if (!isStaff(actor.role)) throw new AccessError("forbidden", "That is for staff.");
+    return this.seats();
   }
 
   seats() {
@@ -402,7 +411,9 @@ export class ChurchStore {
     const displayName = input.displayName.trim();
     if (!email || !displayName) throw new AccessError("invalid", "Name and email are required.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
-    if (this.byEmail(email)) throw new AccessError("invalid", "An account with that email already exists.");
+    if (this.byEmail(email)) {
+      throw new AccessError("invalid", "We couldn't create that account. Check the name, email, and password.");
+    }
     const id = newId("person");
     const person = this.makePerson({
       id,
@@ -428,13 +439,13 @@ export class ChurchStore {
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     const inviteToken = newId("invite");
-    this.invites.set(inviteToken, { email: cleaned, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
+    this.invites.set(hashInvite(inviteToken), { email: cleaned, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
     return { email: cleaned, inviteToken };
   }
 
   claimInvite(input: { email: string; inviteToken: string; password: string; ip: string; userAgent: string }) {
     const email = input.email.trim().toLowerCase();
-    const invite = this.invites.get(input.inviteToken);
+    const invite = this.invites.get(hashInvite(input.inviteToken));
     if (!invite || invite.email !== email || invite.expires < this.now()) {
       throw new AccessError("unauthenticated", "That invite is not valid.");
     }
@@ -443,7 +454,7 @@ export class ChurchStore {
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
     person.passwordHash = hashPassword(input.password);
-    this.invites.delete(input.inviteToken);
+    this.invites.delete(hashInvite(input.inviteToken));
     return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
   }
 
@@ -1310,19 +1321,7 @@ export class ChurchStore {
     const actor = this.actor(token);
     authorize(actor, "view_household_tier3", this.now());
     const person = this.requirePerson(actor.personId);
-    const others = [...this.people.values()].filter(
-      (item) => item.id !== person.id && sameHousehold(actor, item.householdId) && !item.deleted,
-    );
-    if (others.length === 0 && actor.householdId) {
-      for (const [id, gift] of this.gifts) if (gift.householdId === actor.householdId) this.gifts.delete(id);
-      for (const [id, child] of this.children)
-        if (child.householdId === actor.householdId) this.children.delete(id);
-    }
-    this.prayers.splice(
-      0,
-      this.prayers.length,
-      ...this.prayers.filter((prayer) => prayer.authorId !== person.id),
-    );
+    this.eraseOwnedData(person.id, person.householdId);
     person.deleted = true;
     person.email = "";
     person.phone = "";
@@ -1334,6 +1333,14 @@ export class ChurchStore {
       if (session.personId === person.id) this.sessions.delete(tokenKey);
     this.record(actor, "write", "person_delete", person.id, 3);
     return { deleted: true as const };
+  }
+
+  listEvents(token: string) {
+    const actor = this.actor(token);
+    return this.events.map((event) => ({
+      ...this.eventView(event),
+      registered: this.registrations.some((row) => row.eventId === event.id && row.personId === actor.personId),
+    }));
   }
 
   storedGiftCiphertext(id: string) {
@@ -2114,6 +2121,7 @@ export class ChurchStore {
       visitors: this.visitors.map((visitor) => ({ ...visitor })),
       requests: this.requests.map((request) => ({ ...request })),
       drafts: this.drafts.map((draft) => ({ ...draft })),
+      invites: [...this.invites.entries()].map(([tokenHash, invite]) => ({ tokenHash, ...invite })),
     };
   }
 
@@ -2160,34 +2168,70 @@ export class ChurchStore {
     this.visitors.splice(0, this.visitors.length, ...document.visitors);
     this.requests.splice(0, this.requests.length, ...document.requests);
     this.drafts.splice(0, this.drafts.length, ...document.drafts);
+    this.invites.clear();
+    for (const invite of document.invites ?? []) {
+      this.invites.set(invite.tokenHash, { email: invite.email, expires: invite.expires });
+    }
+    this.rekeyStoredSecrets();
+    this.scrubFormerMembers();
     if (this.fixture) this.ensureDemoSessions();
     else this.dropFixtureContent();
     this.applyBootPassword();
   }
 
-  private purgeQaRecords() {
-    const emails = new Set(["qa+web1794986696159@example.com", "qa+api1794986642@example.com"]);
+  private rekeyStoredSecrets() {
+    const current = this.key;
+    const previous = demoFieldKey();
+    const rotate = (value: string) => reencrypt(value, current, previous);
+    for (const gift of this.gifts.values()) gift.ciphertext = rotate(gift.ciphertext);
+    for (const child of this.children.values()) child.ciphertext = rotate(child.ciphertext);
+    for (const note of this.notes) note.ciphertext = rotate(note.ciphertext);
+    for (const check of this.checks.values()) check.ciphertext = rotate(check.ciphertext);
+    for (const secret of this.secrets.values()) secret.ciphertext = rotate(secret.ciphertext);
+    for (const request of this.requests) request.ciphertext = rotate(request.ciphertext);
+  }
+
+  private scrubFormerMembers() {
     for (const person of [...this.people.values()]) {
-      if (!emails.has(person.email.toLowerCase())) continue;
-      const household = person.householdId;
-      this.people.delete(person.id);
-      this.messages.splice(0, this.messages.length, ...this.messages.filter((row) => row.authorId !== person.id));
-      this.registrations.splice(
-        0,
-        this.registrations.length,
-        ...this.registrations.filter((row) => row.personId !== person.id),
-      );
-      this.prayers.splice(0, this.prayers.length, ...this.prayers.filter((row) => row.authorId !== person.id));
-      if (household) {
-        for (const [id, child] of [...this.children.entries()]) {
-          if (child.householdId === household) this.children.delete(id);
-        }
+      if (!person.deleted && person.displayName !== "Former member") continue;
+      this.eraseOwnedData(person.id, person.householdId);
+    }
+  }
+
+  private eraseOwnedData(personId: string, householdId: string | null) {
+    const others = [...this.people.values()].filter(
+      (item) => item.id !== personId && householdId !== null && item.householdId === householdId && !item.deleted,
+    );
+    this.prayers.splice(0, this.prayers.length, ...this.prayers.filter((row) => row.authorId !== personId));
+    this.registrations.splice(0, this.registrations.length, ...this.registrations.filter((row) => row.personId !== personId));
+    this.messages.splice(0, this.messages.length, ...this.messages.filter((row) => row.authorId !== personId));
+    this.notes.splice(
+      0,
+      this.notes.length,
+      ...this.notes.filter((row) => row.authorId !== personId && row.subjectPersonId !== personId),
+    );
+    this.schedule.splice(0, this.schedule.length, ...this.schedule.filter((row) => row.personId !== personId));
+    this.volunteers.splice(0, this.volunteers.length, ...this.volunteers.filter((row) => row.personId !== personId));
+    this.requests.splice(0, this.requests.length, ...this.requests.filter((row) => row.personId !== personId));
+    this.checks.delete(personId);
+    this.pathways.delete(personId);
+    for (const group of this.groups) group.memberIds = group.memberIds.filter((id) => id !== personId);
+    const last = others.length === 0 && Boolean(householdId);
+    for (const [id, child] of [...this.children.entries()]) {
+      if (householdId && child.householdId === householdId && last) {
+        this.children.delete(id);
+        continue;
       }
-      for (const [tokenKey, session] of this.sessions) {
-        if (session.personId === person.id) this.sessions.delete(tokenKey);
+      if (!child.guardianIds.includes(personId)) continue;
+      const remaining = child.guardianIds.filter((id) => id !== personId);
+      if (remaining.length === 0) this.children.delete(id);
+      else child.guardianIds = remaining;
+    }
+    if (last && householdId) {
+      for (const [id, gift] of [...this.gifts.entries()]) {
+        if (gift.householdId === householdId) this.gifts.delete(id);
       }
     }
-    this.children.delete("child_a5c55db10195dc81a4");
   }
 
   private applyBootPassword() {
@@ -2198,7 +2242,6 @@ export class ChurchStore {
   }
 
   private dropFixtureContent() {
-    this.purgeQaRecords();
     for (const person of [...this.people.values()]) {
       if (person.sample || person.email.endsWith("@sample.onehope")) this.people.delete(person.id);
     }
@@ -2252,6 +2295,24 @@ export class ChurchStore {
         userAgent: "staff-demo",
         sample: true,
       });
+    }
+  }
+}
+
+function hashInvite(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function reencrypt(value: string, current: Buffer, previous: Buffer): string {
+  if (!value || current.equals(previous)) return value;
+  try {
+    decryptString(value, current);
+    return value;
+  } catch {
+    try {
+      return encryptString(decryptString(value, previous), current);
+    } catch {
+      return value;
     }
   }
 }

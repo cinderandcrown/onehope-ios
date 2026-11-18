@@ -834,6 +834,22 @@
           }
         }
       }
+    },
+    "/api/events/mine": {
+      "get": {
+        "operationId": "get__api_events_mine",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
     }
   }
 }

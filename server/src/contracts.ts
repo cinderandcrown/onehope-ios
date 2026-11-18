@@ -34,7 +34,7 @@ export const profileBodySchema = z
 export const childBodySchema = z
   .object({
     displayName: z.string().trim().min(1).max(80),
-    classroom: z.string().trim().min(1).max(40),
+    classroom: z.enum(["Nursery", "Preschool", "Elementary"]),
   })
   .strict();
 

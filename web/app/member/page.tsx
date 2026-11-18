@@ -7,11 +7,15 @@ import { loadConfig, loadSermons, withStore } from "@onehope/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function MemberPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function MemberPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; deleted?: string }>;
+}) {
   const params = await searchParams;
   const jar = await cookies();
   const token = jar.get("onehope_member")?.value;
-  if (!token) return <MemberAuth error={params.error} />;
+  if (!token) return <MemberAuth error={params.deleted === "1" ? "deleted" : params.error} />;
   const config = loadConfig(process.env);
   const videos = await loadSermons(fetch, config.youtubeChannelId);
   let demo: MemberDemo;
@@ -30,12 +34,13 @@ export default async function MemberPage({ searchParams }: { searchParams: Promi
           minute: "2-digit",
         }).format(new Date(home.countdown.service)),
         announcements: home.announcements,
-        events: home.events.map((event) => ({
+        events: store.listEvents(token).map((event) => ({
           id: event.id,
           title: event.title,
           detail: event.location,
           start: event.start,
           end: event.end,
+          registered: event.registered,
         })),
         videos: videos.map((video) => ({ id: video.id, title: video.title, thumbnail: video.thumbnail })),
         groups: store.listGroups(token).map((group) => ({
@@ -97,8 +102,8 @@ function MemberAuth({ error }: { error?: string }) {
   const message =
     error === "password"
       ? "That email and password don't match."
-      : error === "exists"
-        ? "An account with that email already exists."
+      : error === "deleted"
+        ? "Your account was deleted."
         : error
           ? "We couldn't create that account. Check the name, email, and password."
           : "";

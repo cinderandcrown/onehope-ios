@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createApi } from "../src/api.ts";
 import { loadConfig } from "../src/config.ts";
+import { decryptString } from "../src/crypto.ts";
 import { ChurchStore } from "../src/store.ts";
 
 test("the public church has real gathering facts and accounts only after sign-up", async () => {
@@ -77,14 +78,15 @@ test("the public church has real gathering facts and accounts only after sign-up
   );
   assert.equal(stolen.status, 401);
   const health = await handle(new Request("http://localhost/api/health"));
-  const status = (await health.json()) as { env: string };
-  assert.equal(status.env, "production");
+  const status = (await health.json()) as { env: string; fieldEncryption: string };
+  assert.equal(status.env, "demo");
+  assert.equal(status.fieldEncryption, "demo");
   const calendar = await handle(new Request("http://localhost/api/events/event-sunday/ics"));
   assert.equal(calendar.headers.get("content-type"), "text/calendar; charset=utf-8");
   assert.match(await calendar.text(), /BEGIN:VCALENDAR/);
 });
 
-test("an existing seat can be claimed only with an invite", () => {
+test("an existing seat can be claimed only with an invite", async () => {
   const store = new ChurchStore(loadConfig({}));
   const pastor = store.loginSampleStaff({ ip: "t", userAgent: "t" });
   assert.throws(() =>
@@ -97,7 +99,9 @@ test("an existing seat can be claimed only with an invite", () => {
     }),
   );
   const issued = store.issueInvite(pastor.token, "nicholas.will@cinderandcrown.com");
-  const claimed = store.claimInvite({
+  const restored = new ChurchStore(loadConfig({}));
+  restored.installDocument(store.toDocument());
+  const claimed = restored.claimInvite({
     email: issued.email,
     inviteToken: issued.inviteToken,
     password: "gathering",
@@ -105,8 +109,10 @@ test("an existing seat can be claimed only with an invite", () => {
     userAgent: "t",
   });
   assert.equal(claimed.person.role, "master_admin");
+  const spent = new ChurchStore(loadConfig({}));
+  spent.installDocument(restored.toDocument());
   assert.throws(() =>
-    store.claimInvite({
+    spent.claimInvite({
       email: issued.email,
       inviteToken: issued.inviteToken,
       password: "gathering",
@@ -114,4 +120,54 @@ test("an existing seat can be claimed only with an invite", () => {
       userAgent: "t",
     }),
   );
+  const takeover = await createApi({ store: new ChurchStore(loadConfig({}), { fixture: false }) })(
+    new Request("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "nicholas.will@cinderandcrown.com",
+        password: "gathering",
+        displayName: "Not Nicholas",
+      }),
+    }),
+  );
+  const body = (await takeover.json()) as { error: string };
+  assert.equal(takeover.status, 400);
+  assert.doesNotMatch(body.error, /already exists/i);
+});
+
+test("a configured key re-reads fields saved with the demo key", () => {
+  const source = new ChurchStore(loadConfig({}));
+  const cipher = source.storedGiftCiphertext("gift-avery");
+  assert.ok(cipher);
+  const key = Buffer.alloc(32, 9);
+  const next = new ChurchStore(loadConfig({ FIELD_ENCRYPTION_KEY: key.toString("base64") }), { fixture: true });
+  next.installDocument(source.toDocument());
+  const rotated = next.storedGiftCiphertext("gift-avery");
+  assert.notEqual(rotated, cipher);
+  assert.match(decryptString(rotated, key), /2500|general|amountCents/);
+});
+
+test("seats stay behind staff sign-in and deletion removes owned rows", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const handle = createApi({ store });
+  const open = await handle(new Request("http://localhost/api/security/seats"));
+  assert.equal(open.status, 401);
+  const member = store.login({
+    email: "avery@sample.onehope",
+    password: "hope-sample",
+    ip: "t",
+    userAgent: "t",
+  });
+  store.register(member.token, store.publicHome().events[0]?.id ?? "");
+  store.joinGroup(member.token, store.listGroups(member.token)[0]?.id ?? "");
+  store.stepUp(member.token, { password: "hope-sample" });
+  store.deleteSelf(member.token);
+  const doc = store.toDocument();
+  assert.equal(doc.registrations.some((row) => row.personId === "person-avery"), false);
+  assert.equal(doc.notes.some((row) => row.subjectPersonId === "person-avery" || row.authorId === "person-avery"), false);
+  assert.equal(doc.groups.some((group) => group.memberIds.includes("person-avery")), false);
+  const copy = new ChurchStore(loadConfig({}));
+  copy.installDocument(doc);
+  assert.equal(copy.toDocument().prayers.some((row) => row.authorId === "person-avery"), false);
 });

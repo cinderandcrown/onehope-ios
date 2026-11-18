@@ -48,6 +48,7 @@ export const API_ROUTES = [
   ["GET", "/api/home"],
   ["GET", "/api/sermons"],
   ["GET", "/api/events/{id}/ics"],
+  ["GET", "/api/events/mine"],
   ["POST", "/api/events/{id}/register"],
   ["GET", "/api/directory"],
   ["GET", "/api/giving/funds"],
@@ -221,6 +222,7 @@ async function route(
     return { child: store.addChild(need(), parse(childBodySchema, body)) };
   if (method === "POST" && path === "/api/announcements")
     return { announcement: store.createAnnouncement(need(), parse(announcementBodySchema, body)) };
+  if (method === "GET" && path === "/api/events/mine") return { events: store.listEvents(need()) };
   if (method === "POST" && path === "/api/events")
     return { event: store.createEvent(need(), parse(eventBodySchema, body)) };
   if (method === "POST" && path === "/api/groups" && method === "POST")
@@ -234,7 +236,7 @@ async function route(
   if (method === "POST" && path === "/api/communications/push")
     return store.sendPush(need(), parse(pushBodySchema, body));
   if (method === "GET" && path === "/api/modules") return { modules: store.modules() };
-  if (method === "GET" && path === "/api/security/seats") return { seats: store.seats() };
+  if (method === "GET" && path === "/api/security/seats") return { seats: store.seatsFor(need()) };
   if (method === "POST" && path === "/api/security/invites") {
     return store.issueInvite(need(), parse(inviteBodySchema, body).email);
   }

@@ -68,6 +68,7 @@ struct RootView: View {
                 try await client.login(email: email, password: password)
             }
             SessionKeychain.save(session)
+            UserDefaults.standard.removeObject(forKey: "onehope.accountDeleted")
             token = session
             authError = ""
             return ""
@@ -81,7 +82,7 @@ struct RootView: View {
         do {
             snapshot = try await client.loadMember(token: token)
         } catch let error as ChurchAPIError where error.status == 401 {
-            signOut()
+            signOut(message: "Please sign in again.")
         } catch {
             if snapshot.accountEmail.isEmpty {
                 snapshot = ChurchSnapshot.bundled(offline: true)
@@ -138,7 +139,8 @@ struct RootView: View {
         do {
             try await client.stepUp(token: token, password: password)
             try await client.deleteAccount(token: token)
-            signOut()
+            UserDefaults.standard.set(true, forKey: "onehope.accountDeleted")
+            signOut(message: "Your account was deleted.")
             return "Your account was deleted."
         } catch {
             return friendly(error)
@@ -151,15 +153,21 @@ struct RootView: View {
         if blocked.contains(where: { error.message.localizedCaseInsensitiveContains($0) }) {
             return "Please check what you entered and try again."
         }
+        if error.code == "session_expired" || error.message.localizedCaseInsensitiveContains("sign in again") {
+            return "Please sign in again."
+        }
         if error.code == "unauthenticated" {
             return "That email and password don't match."
         }
         return error.message
     }
 
-    private func signOut() {
+    private func signOut(message: String = "") {
         let current = token
         token = nil
+        if !message.isEmpty {
+            authError = message
+        }
         SessionKeychain.clear()
         snapshot = ChurchSnapshot.bundled()
         if let client, let current {
@@ -217,7 +225,9 @@ struct AccountGate: View {
         }
         .background(BrandColor.paper)
         .onAppear {
-            if !error.isEmpty {
+            if UserDefaults.standard.bool(forKey: "onehope.accountDeleted") {
+                message = "Your account was deleted."
+            } else if !error.isEmpty {
                 message = error
             }
         }
