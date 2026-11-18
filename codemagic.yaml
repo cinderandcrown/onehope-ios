@@ -21,9 +21,9 @@ workflows:
         BUNDLE_ID: com.cinderandcrown.onehope
         XCODE_PROJECT: ios/OneHope.xcodeproj
         XCODE_SCHEME: OneHope
-        # Numeric App Store Connect Apple ID for com.cinderandcrown.onehope.
-        # Replace REPLACE_WITH_APPLE_ID before the first TestFlight build.
-        APP_STORE_APPLE_ID: REPLACE_WITH_APPLE_ID
+        # Numeric App Store Connect Apple ID for "One Hope Church Richardson".
+        # The home-screen name stays "One Hope".
+        APP_STORE_APPLE_ID: "6836197983"
       xcode: latest
     # Start this from the Codemagic UI. Pushes do not spend a Mac build
     # until the App Store Connect integration and the app record exist.
