@@ -13,12 +13,17 @@ workflows:
       app_store_connect: onehope-app-store-connect
     environment:
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.cinderandcrown.onehope
+        provisioning_profiles:
+          - onehope_appstore
+        certificates:
+          - equitex_dist
       vars:
         BUNDLE_ID: com.cinderandcrown.onehope
         XCODE_PROJECT: ios/OneHope.xcodeproj
         XCODE_SCHEME: OneHope
+        # Numeric App Store Connect Apple ID for com.cinderandcrown.onehope.
+        # Replace REPLACE_WITH_APPLE_ID before the first TestFlight build.
+        APP_STORE_APPLE_ID: REPLACE_WITH_APPLE_ID
       xcode: latest
     # Start this from the Codemagic UI. Pushes do not spend a Mac build
     # until the App Store Connect integration and the app record exist.
@@ -34,15 +39,31 @@ workflows:
           brew install xcodegen
           cd ios
           xcodegen generate
-      - name: Set up code signing
+      - name: Verify signing files and apply profiles
         script: |
+          set -euo pipefail
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          CERTS_DIR="$HOME/Library/MobileDevice/Certificates"
+          if ! ls "$PROFILES_DIR"/*.mobileprovision >/dev/null 2>&1; then
+            echo "Missing provisioning profile onehope_appstore."
+            exit 1
+          fi
+          if ! ls "$CERTS_DIR"/* >/dev/null 2>&1; then
+            echo "Missing certificate equitex_dist."
+            exit 1
+          fi
+          security find-identity -v -p codesigning
           xcode-project use-profiles \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --custom-export-options='{"testFlightInternalTestingOnly": true}'
       - name: Increment the build number
         script: |
+          set -euo pipefail
           cd ios
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID")
+          LATEST_BUILD_NUMBER="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || true)"
+          if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            LATEST_BUILD_NUMBER=0
+          fi
           agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
       - name: Build the ipa
         script: |
@@ -56,6 +77,6 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
-        beta_groups:
-          - One Hope Internal
+        # Upload only. Internal testers receive the build after Apple
+        # finishes processing. This does not submit it for Beta App Review.
+        submit_to_testflight: false
