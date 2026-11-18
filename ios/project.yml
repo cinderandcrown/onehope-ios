@@ -61,6 +61,18 @@ targets:
     info:
       path: OneHope/Info.plist
       properties:
+        API_BASE_URL: "$(API_BASE_URL)"
+        CFBundleDisplayName: One Hope
+        ITSAppUsesNonExemptEncryption: false
+        NSCalendarsWriteOnlyAccessUsageDescription: One Hope adds events you choose to your calendar.
+        NSCameraUsageDescription: One Hope uses the camera to scan a kids check-in code.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        "UISupportedInterfaceOrientations~ipad":
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
   OneHopeTests:
@@ -76,6 +88,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.cinderandcrown.onehope.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/OneHope.app/OneHope"
+        BUNDLE_LOADER: "$(TEST_HOST)"
         DEVELOPMENT_TEAM: GDNRT9DJ58
         SWIFT_STRICT_CONCURRENCY: complete
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES

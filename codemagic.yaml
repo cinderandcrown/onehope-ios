@@ -35,9 +35,15 @@ workflows:
     scripts:
       - name: Generate the Xcode project
         script: |
+          set -euo pipefail
           brew install xcodegen
           cd ios
           xcodegen generate
+          SOURCE_URL="$(plutil -extract API_BASE_URL raw -o - OneHope/Info.plist)"
+          if [ "$SOURCE_URL" != '$(API_BASE_URL)' ] && [ "$SOURCE_URL" != "https://onehope-beryl.vercel.app" ]; then
+            echo "xcodegen dropped or rewrote API_BASE_URL. Got: ${SOURCE_URL:-<missing>}"
+            exit 1
+          fi
       - name: Verify signing files and apply profiles
         script: |
           set -euo pipefail
@@ -66,10 +72,25 @@ workflows:
           agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
       - name: Build the ipa
         script: |
+          set -euo pipefail
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
             --config Release
+          shopt -s nullglob
+          ipas=("$CM_BUILD_DIR"/build/ios/ipa/*.ipa)
+          if [ ${#ipas[@]} -eq 0 ]; then
+            echo "No ipa was produced."
+            exit 1
+          fi
+          unpacked="$(mktemp -d)"
+          unzip -q "${ipas[0]}" -d "$unpacked"
+          app="$(find "$unpacked/Payload" -maxdepth 1 -name "*.app" -print -quit)"
+          built="$(plutil -extract API_BASE_URL raw -o - "$app/Info.plist" || true)"
+          if [ "$built" != "https://onehope-beryl.vercel.app" ]; then
+            echo "Built app API_BASE_URL is '${built:-<missing>}', expected https://onehope-beryl.vercel.app"
+            exit 1
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log

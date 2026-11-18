@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let reachabilityLog = Logger(subsystem: "com.cinderandcrown.onehope", category: "reachability")
 
 public enum APIEndpoint {
     public static func resolve() -> URL? {
@@ -28,11 +31,31 @@ public struct URLSessionTransport: HTTPTransport {
         if let bearer {
             request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch let error as URLError {
+            throw churchReachError(error)
+        } catch {
+            reachabilityLog.error("The church request failed before a response.")
+            throw ChurchAPIError(status: 0, code: "server", message: "The church server didn't answer.")
+        }
         guard let http = response as? HTTPURLResponse else {
             throw ChurchAPIError.transport("The response was not HTTP.")
         }
         return (http.statusCode, data)
+    }
+}
+
+func churchReachError(_ error: URLError) -> ChurchAPIError {
+    switch error.code {
+    case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff:
+        reachabilityLog.error("Offline. URL error \(error.code.rawValue, privacy: .public).")
+        return ChurchAPIError(status: 0, code: "offline", message: "You appear to be offline.")
+    default:
+        reachabilityLog.error("Server unreachable. URL error \(error.code.rawValue, privacy: .public).")
+        return ChurchAPIError(status: 0, code: "server", message: "The church server didn't answer.")
     }
 }
 

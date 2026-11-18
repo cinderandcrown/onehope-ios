@@ -49,8 +49,14 @@ jobs:
 
       - name: Generate the Xcode project
         run: |
+          set -euo pipefail
           brew install xcodegen
           cd ios && xcodegen generate
+          SOURCE_URL="$(plutil -extract API_BASE_URL raw -o - OneHope/Info.plist)"
+          if [ "$SOURCE_URL" != '$(API_BASE_URL)' ] && [ "$SOURCE_URL" != "https://onehope-beryl.vercel.app" ]; then
+            echo "xcodegen dropped or rewrote API_BASE_URL. Got: ${SOURCE_URL:-<missing>}"
+            exit 1
+          fi
 
       - name: Choose a simulator
         id: sim

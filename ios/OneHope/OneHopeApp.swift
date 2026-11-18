@@ -5,8 +5,11 @@ import OneHopeGive
 import OneHopeHome
 import OneHopeMore
 import OneHopeWatch
+import os
 import Security
 import SwiftUI
+
+private let authLog = Logger(subsystem: "com.cinderandcrown.onehope", category: "account")
 
 @main
 struct OneHopeApp: App {
@@ -66,7 +69,10 @@ struct RootView: View {
     }
 
     private func authenticate(email: String, password: String, name: String?) async -> String {
-        guard let client else { return "We couldn't reach the church just now." }
+        guard let client else {
+            authLog.error("API client is missing. Info.plist API_BASE_URL is empty.")
+            return "App is misconfigured"
+        }
         do {
             let session = if let name, !name.isEmpty {
                 try await client.signup(email: email, password: password, displayName: name)
@@ -84,7 +90,12 @@ struct RootView: View {
     }
 
     private func load() async {
-        guard let client, let token else { return }
+        guard let client else {
+            authLog.error("API client is missing. Info.plist API_BASE_URL is empty.")
+            signOut(message: "App is misconfigured")
+            return
+        }
+        guard let token else { return }
         do {
             snapshot = try await client.loadMember(token: token)
         } catch let error as ChurchAPIError where error.status == 401 {
@@ -97,7 +108,11 @@ struct RootView: View {
     }
 
     private func perform(_ action: MemberAction) async -> String {
-        guard let client, let token else { return "Sign in again." }
+        guard let client else {
+            authLog.error("API client is missing. Info.plist API_BASE_URL is empty.")
+            return "App is misconfigured"
+        }
+        guard let token else { return "Please sign in again." }
         do {
             switch action {
             case let .join(id):
@@ -141,7 +156,11 @@ struct RootView: View {
     }
 
     private func deleteAccount(_ password: String) async -> String {
-        guard let client, let token else { return "Sign in again." }
+        guard let client else {
+            authLog.error("API client is missing. Info.plist API_BASE_URL is empty.")
+            return "App is misconfigured"
+        }
+        guard let token else { return "Please sign in again." }
         do {
             try await client.stepUp(token: token, password: password)
             try await client.deleteAccount(token: token)
@@ -189,53 +208,133 @@ struct AccountGate: View {
     @State private var password = ""
     @State private var name = ""
     @State private var creating = false
+    @State private var busy = false
     @State private var message = ""
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Wordmark()
-                Text("One Hope").font(.largeTitle)
-                Text(SampleChurch.address)
-                Text("Sundays at 10:30 a.m. Come early for donuts and coffee.")
-                TextField("Name", text: $name)
-                    .textContentType(.name)
-                    .accessibilityIdentifier("name")
-                    .opacity(creating ? 1 : 0)
-                    .frame(height: creating ? nil : 0)
-                TextField("Email", text: $email)
-                    .textContentType(.username)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .accessibilityIdentifier("email")
-                SecureField("Password", text: $password)
-                    .textContentType(creating ? .newPassword : .password)
-                    .accessibilityIdentifier("password")
+                intro
+                credentials
                 if !message.isEmpty {
-                    Text(message).font(.footnote)
+                    Text(message).font(.footnote).foregroundStyle(BrandColor.terracotta)
                 }
-                Button(creating ? "Create account" : "Sign in") {
-                    Task {
-                        message = await submit(email, password, creating ? name : nil)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("submit-account")
-                Button(creating ? "I already have an account" : "Create an account") {
-                    creating.toggle()
-                    message = ""
-                }
-                .accessibilityIdentifier("toggle-account")
+                actions
             }
             .padding()
         }
         .background(BrandColor.paper)
-        .onAppear {
-            if UserDefaults.standard.bool(forKey: "onehope.accountDeleted") {
-                message = "Your account was deleted."
-            } else if !error.isEmpty {
-                message = error
+        .onAppear { showStoredMessage() }
+    }
+
+    private var intro: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Wordmark()
+            Text("One Hope").font(.largeTitle)
+            Text(SampleChurch.address)
+            Text("Sundays at 10:30 a.m. Come early for donuts and coffee.")
+        }
+    }
+
+    private var credentials: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if creating {
+                AccountField(title: "Name", text: $name, identifier: "name", content: .name)
             }
+            AccountField(
+                title: "Email",
+                text: $email,
+                identifier: "email",
+                content: .username,
+                keyboard: .emailAddress,
+                capitalize: false
+            )
+            AccountField(
+                title: "Password",
+                text: $password,
+                identifier: "password",
+                content: creating ? .newPassword : .password,
+                secure: true
+            )
+            if creating {
+                Text("Use at least 8 characters.").font(.footnote)
+            }
+        }
+    }
+
+    private var actions: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Button(action: { Task { await send() } }, label: {
+                if busy {
+                    ProgressView()
+                } else {
+                    Text(creating ? "Create account" : "Sign in")
+                }
+            })
+            .buttonStyle(.borderedProminent)
+            .disabled(busy)
+            .accessibilityIdentifier("submit-account")
+            Button(action: toggleMode, label: {
+                Text(creating ? "I already have an account" : "Create an account")
+            })
+            .disabled(busy)
+            .accessibilityIdentifier("toggle-account")
+        }
+    }
+
+    private func toggleMode() {
+        creating.toggle()
+        message = ""
+    }
+
+    private func send() async {
+        if creating, password.count < 8 {
+            message = "Use at least 8 characters."
+            return
+        }
+        busy = true
+        message = await submit(email, password, creating ? name : nil)
+        busy = false
+    }
+
+    private func showStoredMessage() {
+        if UserDefaults.standard.bool(forKey: "onehope.accountDeleted") {
+            message = "Your account was deleted."
+        } else if !error.isEmpty {
+            message = error
+        }
+    }
+}
+
+private struct AccountField: View {
+    let title: String
+    @Binding var text: String
+    let identifier: String
+    let content: UITextContentType
+    var keyboard: UIKeyboardType = .default
+    var secure = false
+    var capitalize = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.footnote)
+            entry
+                .textContentType(content)
+                .keyboardType(keyboard)
+                .textInputAutocapitalization(capitalize ? .words : .never)
+                .accessibilityIdentifier(identifier)
+                .padding(12)
+                .background(BrandColor.card)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(BrandColor.ink.opacity(0.28), lineWidth: 1))
+        }
+    }
+
+    @ViewBuilder private var entry: some View {
+        if secure {
+            SecureField(title, text: $text)
+        } else {
+            TextField(title, text: $text)
         }
     }
 }
