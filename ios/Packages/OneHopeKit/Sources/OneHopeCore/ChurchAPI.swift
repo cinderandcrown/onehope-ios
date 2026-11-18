@@ -216,48 +216,19 @@ public struct ChurchClient: Sendable {
         } catch {
             needsStepUp = true
         }
-        let video = sermons.videos.first
-        return ChurchSnapshot(
-            fromAPI: true,
-            offlineNote: "",
-            churchName: home.church.name,
-            address: home.church.address,
-            pastors: home.church.leadPastors,
-            serviceISO: home.countdown.service,
-            announcements: home.announcements.map { SampleChurch.Announcement(id: $0.id, title: $0.title, body: $0.body, sample: $0.sample) },
-            events: home.events.map {
-                SampleChurch.EventItem(
-                    id: $0.id,
-                    title: $0.title,
-                    detail: $0.location,
-                    sample: $0.sample,
-                    start: $0.start.map { Date(timeIntervalSince1970: $0 / 1000) },
-                    end: $0.end.map { Date(timeIntervalSince1970: $0 / 1000) }
-                )
-            },
-            sermonTitle: video?.title ?? "",
-            sermonSample: video == nil,
-            sermonNote: video == nil ? "Sunday messages will appear here." : "From the church YouTube channel.",
-            groups: groups.groups.map { GroupLine(id: $0.id, name: $0.name, summary: $0.summary, sample: $0.sample, joined: $0.joined) },
-            prayers: prayers.prayers.filter { !$0.body.isEmpty || $0.mine }.map {
-                PrayerLine(id: $0.id, body: $0.body, sample: $0.sample, approved: $0.approved, mine: $0.mine)
-            },
-            directory: directory.people.map {
-                DirectoryPerson(id: $0.id, displayName: $0.displayName, email: $0.email, emailPublic: $0.emailPublic, phone: $0.phone, phonePublic: $0.phonePublic)
-            },
-            accountName: me.person.displayName,
-            accountEmail: me.person.email,
+        return memberSnapshot(
+            home: home,
+            directory: directory,
+            groups: groups,
+            prayers: prayers,
+            sermons: sermons,
+            me: me,
+            kids: kids,
+            serving: serving,
+            pathway: pathway,
+            funds: funds,
             gifts: gifts,
-            needsStepUp: needsStepUp,
-            kids: kids.kids.map { KidLine(id: $0.id, displayName: $0.displayName, classroom: $0.classroom, sample: $0.sample) },
-            serving: serving.assignments.map { ServingLine(id: $0.id, position: $0.position, status: $0.status, sample: $0.sample) },
-            pathway: pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) },
-            sermons: sermons.videos.map { SermonLine(id: $0.id, title: $0.title, thumbnail: $0.thumbnail) },
-            funds: funds.funds.map { FundLine(id: $0.id, name: $0.name) },
-            givingOpen: funds.open,
-            emailPublic: me.person.emailPublic ?? false,
-            phonePublic: me.person.phonePublic ?? false,
-            listedInDirectory: me.person.listedInDirectory ?? false
+            needsStepUp: needsStepUp
         )
     }
 
@@ -281,6 +252,65 @@ public struct ChurchClient: Sendable {
             throw ChurchAPIError.transport("We couldn't read the church's reply. Please try again.")
         }
     }
+}
+
+private func memberSnapshot(
+    home: HomeReply,
+    directory: PeopleReply,
+    groups: GroupsReply,
+    prayers: PrayersReply,
+    sermons: SermonsReply,
+    me: MeReply,
+    kids: KidsReply,
+    serving: ServingReply,
+    pathway: PathwayReply,
+    funds: FundsReply,
+    gifts: [GiftLine],
+    needsStepUp: Bool
+) -> ChurchSnapshot {
+    let video = sermons.videos.first
+    return ChurchSnapshot(
+        fromAPI: true,
+        offlineNote: "",
+        churchName: home.church.name,
+        address: home.church.address,
+        pastors: home.church.leadPastors,
+        serviceISO: home.countdown.service,
+        announcements: home.announcements.map { SampleChurch.Announcement(id: $0.id, title: $0.title, body: $0.body, sample: $0.sample) },
+        events: home.events.map {
+            SampleChurch.EventItem(
+                id: $0.id,
+                title: $0.title,
+                detail: $0.location,
+                sample: $0.sample,
+                start: $0.start.map { Date(timeIntervalSince1970: $0 / 1000) },
+                end: $0.end.map { Date(timeIntervalSince1970: $0 / 1000) }
+            )
+        },
+        sermonTitle: video?.title ?? "",
+        sermonSample: video == nil,
+        sermonNote: video == nil ? "Sunday messages will appear here." : "From the church YouTube channel.",
+        groups: groups.groups.map { GroupLine(id: $0.id, name: $0.name, summary: $0.summary, sample: $0.sample, joined: $0.joined) },
+        prayers: prayers.prayers.filter { !$0.body.isEmpty || $0.mine }.map {
+            PrayerLine(id: $0.id, body: $0.body, sample: $0.sample, approved: $0.approved, mine: $0.mine)
+        },
+        directory: directory.people.map {
+            DirectoryPerson(id: $0.id, displayName: $0.displayName, email: $0.email, emailPublic: $0.emailPublic, phone: $0.phone, phonePublic: $0.phonePublic)
+        },
+        accountName: me.person.displayName,
+        accountEmail: me.person.email,
+        gifts: gifts,
+        needsStepUp: needsStepUp,
+        kids: kids.kids.map { KidLine(id: $0.id, displayName: $0.displayName, classroom: $0.classroom, sample: $0.sample) },
+        serving: serving.assignments.map { ServingLine(id: $0.id, position: $0.position, status: $0.status, sample: $0.sample) },
+        pathway: pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) },
+        sermons: sermons.videos.map { SermonLine(id: $0.id, title: $0.title, thumbnail: $0.thumbnail) },
+        funds: funds.funds.map { FundLine(id: $0.id, name: $0.name) },
+        givingOpen: funds.open,
+        emailPublic: me.person.emailPublic ?? false,
+        phonePublic: me.person.phonePublic ?? false,
+        listedInDirectory: me.person.listedInDirectory ?? false
+    )
 }
 
 private struct FailureBody: Decodable {
