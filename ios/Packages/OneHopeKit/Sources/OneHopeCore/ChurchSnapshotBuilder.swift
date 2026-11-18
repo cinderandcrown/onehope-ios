@@ -60,4 +60,3 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
         listedInDirectory: parts.me.person.listedInDirectory ?? false
     )
 }
-
