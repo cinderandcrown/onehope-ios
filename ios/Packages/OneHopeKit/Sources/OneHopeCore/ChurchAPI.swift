@@ -68,30 +68,40 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var kids: [KidLine]
     public var serving: [ServingLine]
     public var pathway: [PathwayStep]
+    public var sermons: [SermonLine]
+    public var funds: [FundLine]
+    public var givingOpen: Bool
 
     public static func bundled(offline: Bool = false) -> ChurchSnapshot {
         ChurchSnapshot(
             fromAPI: false,
-            offlineNote: offline ? "Saved sample. The church API did not answer." : "Sample on this device.",
+            offlineNote: offline ? "We couldn't reach the church just now." : "",
             churchName: SampleChurch.name,
             address: SampleChurch.address,
             pastors: SampleChurch.pastors,
             serviceISO: "",
             announcements: SampleChurch.announcements,
             events: SampleChurch.events,
-            sermonTitle: "A new season of growth",
-            sermonSample: true,
-            sermonNote: "Public sermons load from the YouTube channel when the API can reach it.",
-            groups: [GroupLine(id: "group-weekday", name: "Weekday group", summary: "Sample group you can join.", sample: true, joined: false)],
-            prayers: [PrayerLine(id: "prayer-public", body: "Pray for our city.", sample: true)],
-            directory: DirectoryProjection.project(viewerId: SampleChurch.viewer.id, people: SampleChurch.directory),
-            accountName: SampleChurch.viewer.displayName,
-            accountEmail: SampleChurch.viewer.email,
-            gifts: [GiftLine(id: "gift-local", fundName: "General", amountCents: 2500, charged: false, sample: true)],
+            sermonTitle: "A New Season of Growth",
+            sermonSample: false,
+            sermonNote: "Sunday messages from the church YouTube channel.",
+            groups: [
+                GroupLine(id: "group-kids", name: "One Hope Kids", summary: "During Sunday, from 3 months through 5th grade.", sample: false, joined: false),
+                GroupLine(id: "group-small", name: "Small Groups", summary: "Grow your faith and build friendships through the week.", sample: false, joined: false),
+                GroupLine(id: "group-growth", name: "Growth Track", summary: "Hear the vision of One Hope and find a place to serve.", sample: false, joined: false),
+            ],
+            prayers: [],
+            directory: [],
+            accountName: "",
+            accountEmail: "",
+            gifts: [],
             needsStepUp: false,
-            kids: [KidLine(id: "child-local", displayName: "Sample child", classroom: "Preschool", sample: true)],
+            kids: [],
             serving: [],
-            pathway: [PathwayStep(id: "baptism", title: "Baptism", status: "In progress")]
+            pathway: [],
+            sermons: [],
+            funds: [FundLine(id: "general", name: "General"), FundLine(id: "outreach", name: "Outreach")],
+            givingOpen: false
         )
     }
 }
@@ -130,6 +140,27 @@ public struct PathwayStep: Equatable, Sendable, Identifiable {
     public let status: String
 }
 
+public struct SermonLine: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let thumbnail: String?
+}
+
+public enum MemberAction: Sendable {
+    case join(String)
+    case message(String, String)
+    case register(String)
+    case prayer(String)
+    case addChild(String, String)
+    case checkIn(String)
+    case pickup(String, String)
+}
+
+public struct FundLine: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let name: String
+}
+
 public struct GiftLine: Equatable, Sendable, Identifiable {
     public let id: String
     public let fundName: String
@@ -154,6 +185,67 @@ public struct ChurchClient: Sendable {
         return reply.token
     }
 
+    public func signup(email: String, password: String, displayName: String) async throws -> String {
+        struct Body: Encodable { let email: String; let password: String; let displayName: String }
+        struct Reply: Decodable { let token: String }
+        let reply: Reply = try await send(
+            "/api/auth/signup",
+            method: "POST",
+            token: nil,
+            json: JSONEncoder().encode(Body(email: email, password: password, displayName: displayName))
+        )
+        return reply.token
+    }
+
+    public func logout(token: String) async {
+        struct Body: Encodable {}
+        let _: EmptyReply? = try? await send("/api/auth/logout", method: "POST", token: token, json: JSONEncoder().encode(Body()))
+    }
+
+    public func join(token: String, groupId: String) async throws {
+        let _: EmptyReply = try await send("/api/groups/\(groupId)/join", method: "POST", token: token, json: Data("{}".utf8))
+    }
+
+    public func postMessage(token: String, groupId: String, body: String) async throws {
+        struct Body: Encodable { let body: String }
+        let _: EmptyReply = try await send("/api/groups/\(groupId)/messages", method: "POST", token: token, json: JSONEncoder().encode(Body(body: body)))
+    }
+
+    public func register(token: String, eventId: String) async throws {
+        let _: EmptyReply = try await send("/api/events/\(eventId)/register", method: "POST", token: token, json: Data("{}".utf8))
+    }
+
+    public func submitPrayer(token: String, body: String) async throws {
+        struct Body: Encodable { let body: String; let visibility: String }
+        let _: EmptyReply = try await send("/api/prayers", method: "POST", token: token, json: JSONEncoder().encode(Body(body: body, visibility: "public")))
+    }
+
+    public func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool) async throws {
+        struct Body: Encodable { let emailPublic: Bool; let phonePublic: Bool }
+        let _: EmptyReply = try await send("/api/me", method: "POST", token: token, json: JSONEncoder().encode(Body(emailPublic: emailPublic, phonePublic: phonePublic)))
+    }
+
+    public func addChild(token: String, displayName: String, classroom: String) async throws -> String {
+        struct Body: Encodable { let displayName: String; let classroom: String }
+        struct Reply: Decodable { struct Child: Decodable { let id: String }; let child: Child }
+        let reply: Reply = try await send("/api/household/children", method: "POST", token: token, json: JSONEncoder().encode(Body(displayName: displayName, classroom: classroom)))
+        return reply.child.id
+    }
+
+    public func checkIn(token: String, childId: String) async throws -> String {
+        struct Body: Encodable { let childId: String }
+        struct Reply: Decodable { let code: String }
+        let reply: Reply = try await send("/api/kids/check-in", method: "POST", token: token, json: JSONEncoder().encode(Body(childId: childId)))
+        return reply.code
+    }
+
+    public func householdPickup(token: String, childId: String, code: String) async throws -> String {
+        struct Body: Encodable { let childId: String; let code: String }
+        struct Reply: Decodable { let reason: String }
+        let reply: Reply = try await send("/api/kids/household-pickup", method: "POST", token: token, json: JSONEncoder().encode(Body(childId: childId, code: code)))
+        return reply.reason
+    }
+
     public func stepUp(token: String, password: String) async throws {
         struct Body: Encodable { let password: String }
         struct Reply: Decodable { let stepUpUntil: Int }
@@ -170,6 +262,7 @@ public struct ChurchClient: Sendable {
         let kids: KidsReply = try await send("/api/kids/mine", method: "GET", token: token, json: nil)
         let serving: ServingReply = try await send("/api/serving/mine", method: "GET", token: token, json: nil)
         let pathway: PathwayReply = try await send("/api/pathways/mine", method: "GET", token: token, json: nil)
+        let funds: FundsReply = try await send("/api/giving/funds", method: "GET", token: nil, json: nil)
         var gifts: [GiftLine] = []
         var needsStepUp = false
         do {
@@ -192,7 +285,7 @@ public struct ChurchClient: Sendable {
             events: home.events.map { SampleChurch.EventItem(id: $0.id, title: $0.title, detail: $0.location, sample: $0.sample) },
             sermonTitle: video?.title ?? home.sampleSermon.title,
             sermonSample: video == nil,
-            sermonNote: video == nil ? "The YouTube feed did not return a video. The title above is a sample." : "From the public YouTube channel.",
+            sermonNote: video == nil ? "Sunday messages will appear here." : "From the church YouTube channel.",
             groups: groups.groups.map { GroupLine(id: $0.id, name: $0.name, summary: $0.summary, sample: $0.sample, joined: $0.joined) },
             prayers: prayers.prayers.filter { !$0.body.isEmpty }.map { PrayerLine(id: $0.id, body: $0.body, sample: $0.sample) },
             directory: directory.people.map {
@@ -204,7 +297,10 @@ public struct ChurchClient: Sendable {
             needsStepUp: needsStepUp,
             kids: kids.kids.map { KidLine(id: $0.id, displayName: $0.displayName, classroom: $0.classroom, sample: $0.sample) },
             serving: serving.assignments.map { ServingLine(id: $0.id, position: $0.position, status: $0.status, sample: $0.sample) },
-            pathway: pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) }
+            pathway: pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) },
+            sermons: sermons.videos.map { SermonLine(id: $0.id, title: $0.title, thumbnail: $0.thumbnail) },
+            funds: funds.funds.map { FundLine(id: $0.id, name: $0.name) },
+            givingOpen: funds.open
         )
     }
 
@@ -272,9 +368,17 @@ private struct PrayersReply: Decodable {
 }
 
 private struct SermonsReply: Decodable {
-    struct Video: Decodable { let title: String }
+    struct Video: Decodable { let id: String; let title: String; let thumbnail: String? }
     let videos: [Video]
 }
+
+private struct FundsReply: Decodable {
+    struct Fund: Decodable { let id: String; let name: String }
+    let funds: [Fund]
+    let open: Bool
+}
+
+private struct EmptyReply: Decodable {}
 
 private struct MeReply: Decodable {
     struct Person: Decodable { let displayName: String; let email: String }

@@ -4,44 +4,47 @@ import SwiftUI
 
 public struct GiveView: View {
     private let snapshot: ChurchSnapshot
-    private let onStepUp: (String) -> Void
-    @State private var password = ""
+    private let onRefresh: () async -> Void
+    @State private var amount = ""
+    @State private var fundId = "general"
 
-    public init(snapshot: ChurchSnapshot, onStepUp: @escaping (String) -> Void) {
+    public init(snapshot: ChurchSnapshot, onRefresh: @escaping () async -> Void = {}) {
         self.snapshot = snapshot
-        self.onStepUp = onStepUp
+        self.onRefresh = onRefresh
     }
 
     public var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Text("Demo mode. Apple Pay nonprofit approval is pending. This does not charge a card.")
-                        .font(.footnote)
-                }
-                if snapshot.needsStepUp {
-                    Section("Your giving") {
-                        Text("Confirm it is you before the amounts open.")
-                        SecureField("Password", text: $password)
-                        Button("Show my giving") { onStepUp(password) }
+                Section("Give") {
+                    TextField("Amount", text: $amount)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("gift-amount")
+                    Picker("Fund", selection: $fundId) {
+                        ForEach(snapshot.funds) { fund in
+                            Text(fund.name).tag(fund.id)
+                        }
                     }
-                } else if snapshot.gifts.isEmpty {
-                    Section("History") { EmptyHint("No gifts on this account.") }
-                } else {
+                    if snapshot.givingOpen {
+                        Text("Giving is ready in test mode.")
+                    } else {
+                        Text("Giving opens soon.")
+                            .accessibilityIdentifier("giving-soon")
+                    }
+                }
+                if !snapshot.gifts.isEmpty {
                     Section("History") {
                         ForEach(snapshot.gifts) { gift in
                             VStack(alignment: .leading) {
                                 Text(gift.fundName)
                                 Text(Self.dollars(gift.amountCents))
-                                Text(gift.charged ? "Charged" : "Not charged").font(.footnote)
-                                if gift.sample {
-                                    SampleBadge()
-                                }
+                                Text(gift.charged ? "Received" : "Not received yet").font(.footnote)
                             }
                         }
                     }
                 }
             }
+            .refreshable { await onRefresh() }
             .navigationTitle(L10n.text(.give))
         }
     }

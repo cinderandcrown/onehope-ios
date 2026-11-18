@@ -32,7 +32,6 @@ export function MemberTabs({ demo }: { demo: MemberDemo }) {
   const [tab, setTab] = useState<Tab>("Home");
   return (
     <main className="member">
-      <p className="badge">Sample</p>
       <h1>{tab}</h1>
       {tab === "Home" ? <Home demo={demo} /> : null}
       {tab === "Watch" ? <Watch demo={demo} /> : null}
@@ -53,7 +52,6 @@ export function MemberTabs({ demo }: { demo: MemberDemo }) {
 function Home({ demo }: { demo: MemberDemo }) {
   return (
     <>
-      <p className="muted">Loaded from the church API.</p>
       <h2>{demo.churchName}</h2>
       <p>{demo.address}</p>
       <p>Lead pastors {demo.pastors}.</p>
@@ -61,7 +59,7 @@ function Home({ demo }: { demo: MemberDemo }) {
       {demo.announcements.map((item) => (
         <article className="card" key={item.id}>
           <h3>
-            {item.title} {item.sample ? <span className="badge">Sample</span> : null}
+            {item.title}
           </h3>
           <p>{item.body}</p>
         </article>
@@ -69,7 +67,7 @@ function Home({ demo }: { demo: MemberDemo }) {
       {demo.events.map((event) => (
         <article className="card" key={event.id}>
           <h3>
-            {event.title} {event.sample ? <span className="badge">Sample</span> : null}
+            {event.title}
           </h3>
           <p>{event.detail}</p>
         </article>
@@ -82,7 +80,7 @@ function Watch({ demo }: { demo: MemberDemo }) {
   return (
     <article className="card">
       <h2>
-        {demo.sermonTitle} {demo.sermonSample ? <span className="badge">Sample</span> : null}
+        {demo.sermonTitle}
       </h2>
       <p>{demo.sermonNote}</p>
     </article>
@@ -97,7 +95,7 @@ function Give({ demo }: { demo: MemberDemo }) {
       {demo.gifts.map((gift) => (
         <article className="card" key={gift.id}>
           <h3>
-            {gift.fundName} {gift.sample ? <span className="badge">Sample</span> : null}
+            {gift.fundName}
           </h3>
           <p>
             {gift.amount} · {gift.charged ? "Charged" : "Not charged"}
@@ -116,7 +114,7 @@ function Connect({ demo }: { demo: MemberDemo }) {
         {demo.pathway.map((step) => (
           <article className="card" key={step.id}>
             <h3>
-              {step.title} <span className="badge">Sample</span>
+              {step.title}
             </h3>
             <p>{step.status}</p>
           </article>
@@ -128,7 +126,7 @@ function Connect({ demo }: { demo: MemberDemo }) {
         {demo.kids.map((child) => (
           <article className="card" key={child.id}>
             <h3>
-              {child.displayName} {child.sample ? <span className="badge">Sample</span> : null}
+              {child.displayName}
             </h3>
             <p>{child.classroom}</p>
           </article>
@@ -139,7 +137,7 @@ function Connect({ demo }: { demo: MemberDemo }) {
         {demo.groups.map((group) => (
           <article className="card" key={group.id}>
             <h3>
-              {group.name} {group.sample ? <span className="badge">Sample</span> : null}
+              {group.name}
             </h3>
             <p>{group.summary}</p>
             <p>{group.joined ? "Joined" : "Not joined"}</p>
@@ -151,7 +149,7 @@ function Connect({ demo }: { demo: MemberDemo }) {
         {demo.prayers.map((prayer) => (
           <article className="card" key={prayer.id}>
             <p>
-              {prayer.body} {prayer.sample ? <span className="badge">Sample</span> : null}
+              {prayer.body}
             </p>
           </article>
         ))}
@@ -162,7 +160,7 @@ function Connect({ demo }: { demo: MemberDemo }) {
         {demo.serving.map((item) => (
           <article className="card" key={item.id}>
             <h3>
-              {item.position} {item.sample ? <span className="badge">Sample</span> : null}
+              {item.position}
             </h3>
             <p>{item.status}</p>
           </article>

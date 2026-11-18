@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { MemberTabs, type MemberDemo } from "@/components/member-tabs";
+import { signInMember, signOutMember, signUpMember } from "@/app/member/actions";
 import { loadConfig, loadSermons, withStore } from "@onehope/server";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function MemberPage() {
   const jar = await cookies();
   const token = jar.get("onehope_member")?.value;
-  if (!token) redirect("/member/start");
+  if (!token) return <MemberAuth />;
   const config = loadConfig(process.env);
   const videos = await loadSermons(fetch, config.youtubeChannelId);
   const latest = videos[0];
@@ -89,5 +90,54 @@ export default async function MemberPage() {
   } catch {
     redirect("/member/start");
   }
-  return <MemberTabs demo={demo} />;
+  return (
+    <>
+      <form action={signOutMember}>
+        <button className="button" type="submit">
+          Sign out
+        </button>
+      </form>
+      <MemberTabs demo={demo} />
+    </>
+  );
+}
+
+function MemberAuth() {
+  return (
+    <main className="member">
+      <h1>One Hope</h1>
+      <p>Sundays at 10:30 a.m. Come early for donuts and coffee.</p>
+      <form className="form" action={signInMember}>
+        <label>
+          Email
+          <input name="email" type="email" autoComplete="username" required />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autoComplete="current-password" required />
+        </label>
+        <button className="button" type="submit">
+          Sign in
+        </button>
+      </form>
+      <form className="form" action={signUpMember}>
+        <h2>Create an account</h2>
+        <label>
+          Name
+          <input name="name" autoComplete="name" required />
+        </label>
+        <label>
+          Email
+          <input name="email" type="email" autoComplete="username" required />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autoComplete="new-password" minLength={8} required />
+        </label>
+        <button className="button" type="submit">
+          Create account
+        </button>
+      </form>
+    </main>
+  );
 }

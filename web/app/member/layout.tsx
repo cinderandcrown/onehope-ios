@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "One Hope",
-  description: "Member demo for One Hope Church. Every invented record is labeled Sample.",
+  description: "One Hope Church in Richardson. Sundays at 10:30 a.m.",
   applicationName: "One Hope",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "One Hope", statusBarStyle: "default" },

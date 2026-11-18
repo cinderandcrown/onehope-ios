@@ -17,12 +17,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="muted">{text.product}</p>
         <h1>One Hope</h1>
         <p>1251 S. Sherman St., Ste. 112, Richardson, TX. Sundays at 10:30 a.m.</p>
-        <form action={previewSampleStaff}>
-          <button className="button" type="submit">
-            {text.preview}
-          </button>
-        </form>
-        <p className="muted">{text.previewNote}</p>
+        {process.env.ONEHOPE_SAMPLE_DATA === "true" ? (
+          <form action={previewSampleStaff}>
+            <button className="button" type="submit">
+              {text.preview}
+            </button>
+          </form>
+        ) : null}
+        <p className="muted">Staff sign in with email, password, and an authentication code.</p>
         <p className="muted">
           <Link href="/member">Open the member demo</Link>. It can be added to a phone home screen.
         </p>

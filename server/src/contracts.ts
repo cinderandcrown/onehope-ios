@@ -13,6 +13,72 @@ export const loginBodySchema = z
   })
   .strict();
 
+export const signupBodySchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(8).max(200),
+    displayName: z.string().trim().min(1).max(80),
+  })
+  .strict();
+
+export const profileBodySchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80).optional(),
+    phone: z.string().max(40).optional(),
+    emailPublic: z.boolean().optional(),
+    phonePublic: z.boolean().optional(),
+  })
+  .strict();
+
+export const childBodySchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80),
+    classroom: z.string().trim().min(1).max(40),
+  })
+  .strict();
+
+export const announcementBodySchema = z
+  .object({
+    title: z.string().trim().min(1).max(80),
+    body: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export const eventBodySchema = z
+  .object({
+    title: z.string().trim().min(1).max(80),
+    location: z.string().trim().min(1).max(160),
+    start: z.number().int(),
+    end: z.number().int(),
+  })
+  .strict();
+
+export const groupBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    summary: z.string().trim().min(1).max(240),
+  })
+  .strict();
+
+export const checkInBodySchema = z
+  .object({
+    childId: z.string().min(1).max(80),
+  })
+  .strict();
+
+export const householdPickupBodySchema = z
+  .object({
+    childId: z.string().min(1).max(80),
+    code: z.string().regex(/^\d{4}$/),
+  })
+  .strict();
+
+export const moderateBodySchema = z
+  .object({
+    approved: z.boolean(),
+  })
+  .strict();
+
 export const codeBodySchema = z
   .object({
     code: z.string().regex(/^\d{6}$/),

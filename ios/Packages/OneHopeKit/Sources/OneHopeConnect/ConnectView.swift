@@ -1,116 +1,128 @@
+import EventKit
 import OneHopeCore
 import OneHopeDesign
 import SwiftUI
 
 public struct ConnectView: View {
     private let snapshot: ChurchSnapshot
-    @State private var code = ""
-    @State private var decision: PickupDecision?
+    private let onRefresh: () async -> Void
+    private let perform: (MemberAction) async -> String
+    @State private var prayer = ""
+    @State private var message = ""
+    @State private var childName = ""
+    @State private var notice = ""
+    @State private var pickupCode = ""
+    @State private var selectedChild = ""
 
-    public init(snapshot: ChurchSnapshot) {
+    public init(
+        snapshot: ChurchSnapshot,
+        onRefresh: @escaping () async -> Void = {},
+        perform: @escaping (MemberAction) async -> String = { _ in "" }
+    ) {
         self.snapshot = snapshot
+        self.onRefresh = onRefresh
+        self.perform = perform
     }
 
     public var body: some View {
         NavigationStack {
             List {
+                if !notice.isEmpty {
+                    Text(notice).font(.footnote)
+                }
                 Section("Groups") {
                     if snapshot.groups.isEmpty {
-                        EmptyHint("No groups yet.")
+                        EmptyHint("Groups will be listed here.")
                     }
                     ForEach(snapshot.groups) { group in
-                        VStack(alignment: .leading) {
-                            Text(group.name)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(group.name).font(.headline)
                             Text(group.summary).font(.footnote)
-                            Text(group.joined ? "Joined" : "Not joined").font(.footnote)
-                            if group.sample {
-                                SampleBadge()
+                            Button(group.joined ? "Joined" : "Join") {
+                                Task { notice = await perform(.join(group.id)) }
+                            }
+                            .disabled(group.joined)
+                        }
+                    }
+                }
+                Section("Group note") {
+                    TextField("Message your group", text: $message)
+                    if let group = snapshot.groups.first(where: \.joined) ?? snapshot.groups.first {
+                        Button("Send to \(group.name)") {
+                            Task {
+                                notice = await perform(.message(group.id, message))
+                                message = ""
                             }
                         }
                     }
                 }
                 Section("Events") {
                     ForEach(snapshot.events) { event in
-                        VStack(alignment: .leading) {
-                            Text(event.title)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(event.title).font(.headline)
                             Text(event.detail).font(.footnote)
-                            if event.sample {
-                                SampleBadge()
+                            Button("Register") {
+                                Task { notice = await perform(.register(event.id)) }
+                            }
+                            Button("Add to calendar") {
+                                addToCalendar(event)
                             }
                         }
                     }
                 }
                 Section("Prayer") {
-                    if snapshot.prayers.isEmpty {
-                        EmptyHint("No prayers you can see.")
+                    TextField("Prayer request", text: $prayer, axis: .vertical)
+                    Button("Share a prayer") {
+                        Task {
+                            notice = await perform(.prayer(prayer))
+                            prayer = ""
+                        }
                     }
                     ForEach(snapshot.prayers) { prayer in
-                        VStack(alignment: .leading) {
-                            Text(prayer.body)
-                            if prayer.sample {
-                                SampleBadge()
-                            }
-                        }
-                    }
-                }
-                Section("Next steps") {
-                    if snapshot.pathway.isEmpty {
-                        EmptyHint("No next steps on this account.")
-                    }
-                    ForEach(snapshot.pathway) { step in
-                        VStack(alignment: .leading) {
-                            Text(step.title)
-                            Text(step.status).font(.footnote)
-                            SampleBadge()
-                        }
-                    }
-                }
-                Section("Your kids") {
-                    if snapshot.kids.isEmpty {
-                        EmptyHint("No children on this household.")
-                    }
-                    ForEach(snapshot.kids) { child in
-                        VStack(alignment: .leading) {
-                            Text(child.displayName)
-                            Text(child.classroom).font(.footnote)
-                            if child.sample {
-                                SampleBadge()
-                            }
-                        }
-                    }
-                    Text("Allergies and security codes stay on the staff station.")
-                        .font(.footnote)
-                }
-                Section("Serving") {
-                    if snapshot.serving.isEmpty {
-                        EmptyHint("No assignment on this account.")
-                    }
-                    ForEach(snapshot.serving) { item in
-                        VStack(alignment: .leading) {
-                            Text(item.position)
-                            Text(item.status).font(.footnote)
-                            if item.sample {
-                                SampleBadge()
-                            }
-                        }
+                        Text(prayer.body)
                     }
                 }
                 Section("Kids check-in") {
-                    TextField("Security code", text: $code).keyboardType(.numberPad)
-                    Button("Check pickup") {
-                        decision = PickupRules.evaluate(
-                            PickupInput(code: code, expectedCode: "4821", guardianAuthorized: true, custodyRestricted: false, adultsOnDuty: 2)
-                        )
-                        Haptics.tap()
+                    TextField("Child's name", text: $childName)
+                    Button("Add child") {
+                        Task { notice = await perform(.addChild(childName, "Sunday")) }
                     }
-                    if let decision {
-                        Text(decision.reason)
+                    if !snapshot.kids.isEmpty {
+                        Picker("Child", selection: $selectedChild) {
+                            Text("Choose").tag("")
+                            ForEach(snapshot.kids) { child in
+                                Text(child.displayName).tag(child.id)
+                            }
+                        }
+                        Button("Check in") {
+                            Task { notice = await perform(.checkIn(selectedChild)) }
+                        }
+                        TextField("Security code", text: $pickupCode)
+                            .keyboardType(.numberPad)
+                        Button("Confirm pickup") {
+                            Task { notice = await perform(.pickup(selectedChild, pickupCode)) }
+                        }
                     }
-                    Text("This is a practice check on the phone. The staff station is the real pickup.")
+                    Text("Pickup is confirmed for a guardian, with the security code from check-in, when two adults are at the station.")
                         .font(.footnote)
                 }
             }
+            .refreshable { await onRefresh() }
             .navigationTitle(L10n.text(.connect))
+        }
+    }
+
+    private func addToCalendar(_ event: SampleChurch.EventItem) {
+        let store = EKEventStore()
+        store.requestWriteOnlyAccessToEvents { granted, _ in
+            guard granted else { return }
+            let item = EKEvent(eventStore: store)
+            item.title = event.title
+            item.location = event.detail
+            item.startDate = Date()
+            item.endDate = Date().addingTimeInterval(90 * 60)
+            item.calendar = store.defaultCalendarForNewEvents
+            try? store.save(item, span: .thisEvent)
         }
     }
 }

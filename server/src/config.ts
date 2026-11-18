@@ -9,6 +9,7 @@ export type AppConfig = {
   fieldEncryptionKey: Buffer;
   fieldEncryptionMode: "demo" | "configured";
   stripeSecretKey: string;
+  stripePublishableKey: string;
   givingLive: boolean;
   applePayNonprofitApproved: boolean;
   sessionIdleStaffMs: number;
@@ -50,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     fieldEncryptionKey,
     fieldEncryptionMode,
     stripeSecretKey: env.STRIPE_SECRET_KEY || "",
+    stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY || "",
     givingLive: env.GIVING_LIVE === "true",
     applePayNonprofitApproved: env.APPLE_PAY_NONPROFIT_APPROVED === "true",
     sessionIdleStaffMs: 15 * 60 * 1000,

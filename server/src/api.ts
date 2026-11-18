@@ -7,7 +7,16 @@ import {
   giftBodySchema,
   healthSchema,
   integrationBodySchema,
+  announcementBodySchema,
+  checkInBodySchema,
+  householdPickupBodySchema,
+  childBodySchema,
+  eventBodySchema,
+  groupBodySchema,
   loginBodySchema,
+  moderateBodySchema,
+  profileBodySchema,
+  signupBodySchema,
   messageBodySchema,
   pickupBodySchema,
   prayerBodySchema,
@@ -24,11 +33,13 @@ import type { ZodType } from "zod";
 export const API_ROUTES = [
   ["GET", "/api/health"],
   ["POST", "/api/auth/login"],
+  ["POST", "/api/auth/signup"],
   ["POST", "/api/auth/mfa"],
   ["POST", "/api/auth/step-up"],
   ["POST", "/api/auth/logout"],
   ["POST", "/api/auth/sample-staff"],
   ["GET", "/api/me"],
+  ["POST", "/api/me"],
   ["GET", "/api/home"],
   ["GET", "/api/sermons"],
   ["GET", "/api/events/{id}/ics"],
@@ -44,9 +55,19 @@ export const API_ROUTES = [
   ["POST", "/api/groups/{id}/join"],
   ["GET", "/api/prayers"],
   ["POST", "/api/prayers"],
+  ["POST", "/api/prayers/{id}/moderate"],
   ["GET", "/api/kids/mine"],
   ["GET", "/api/serving/mine"],
   ["GET", "/api/pathways/mine"],
+  ["POST", "/api/kids/check-in"],
+  ["POST", "/api/kids/household-pickup"],
+  ["POST", "/api/household/children"],
+  ["POST", "/api/announcements"],
+  ["POST", "/api/events"],
+  ["POST", "/api/groups"],
+  ["GET", "/api/giving/quickbooks"],
+  ["GET", "/api/audit"],
+  ["GET", "/api/kids/{id}/label"],
   ["POST", "/api/kids/pickup"],
   ["POST", "/api/communications/push"],
   ["GET", "/api/modules"],
@@ -112,6 +133,10 @@ async function route(
     const input = parse(loginBodySchema, body);
     return store.login({ ...input, ip: "api", userAgent: "api" });
   }
+  if (method === "POST" && path === "/api/auth/signup") {
+    const input = parse(signupBodySchema, body);
+    return store.signup({ ...input, ip: "api", userAgent: "api" });
+  }
   if (method === "POST" && path === "/api/auth/mfa")
     return store.verifyMfa(need(), parse(codeBodySchema, body).code);
   if (method === "POST" && path === "/api/auth/step-up")
@@ -123,6 +148,7 @@ async function route(
   if (method === "POST" && path === "/api/auth/sample-staff")
     return store.loginSampleStaff({ ip: "api", userAgent: "sample-preview" });
   if (method === "GET" && path === "/api/me") return { person: store.me(need()) };
+  if (method === "POST" && path === "/api/me") return { person: store.updateProfile(need(), parse(profileBodySchema, body)) };
   if (method === "GET" && path === "/api/home") return store.publicHome();
   if (method === "GET" && path === "/api/sermons") {
     const videos = await loadSermons(deps.fetchImpl ?? fetch, store.config.youtubeChannelId);
@@ -133,7 +159,8 @@ async function route(
   const register = path.match(/^\/api\/events\/([^/]+)\/register$/);
   if (method === "POST" && register?.[1]) return store.register(need(), decodeURIComponent(register[1]));
   if (method === "GET" && path === "/api/directory") return { people: store.directory(need()) };
-  if (method === "GET" && path === "/api/giving/funds") return { funds: store.funds() };
+  if (method === "GET" && path === "/api/giving/funds")
+    return { funds: store.funds(), ...store.givingAvailability() };
   if (method === "POST" && path === "/api/giving/gifts")
     return { gift: await store.createGift(need(), parse(giftBodySchema, body)) };
   if (method === "GET" && path === "/api/giving/mine") return { gifts: store.myGifts(need()) };
@@ -156,9 +183,29 @@ async function route(
   if (method === "GET" && path === "/api/prayers") return { prayers: store.listPrayers(token) };
   if (method === "POST" && path === "/api/prayers")
     return store.submitPrayer(need(), parse(prayerBodySchema, body));
+  const moderate = path.match(/^\/api\/prayers\/([^/]+)\/moderate$/);
+  if (method === "POST" && moderate?.[1]) {
+    return store.moderatePrayer(need(), decodeURIComponent(moderate[1]), parse(moderateBodySchema, body).approved);
+  }
   if (method === "GET" && path === "/api/kids/mine") return { kids: store.myKids(need()) };
   if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
   if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());
+  if (method === "POST" && path === "/api/kids/check-in")
+    return store.checkIn(need(), parse(checkInBodySchema, body).childId);
+  if (method === "POST" && path === "/api/kids/household-pickup")
+    return store.householdPickup(need(), parse(householdPickupBodySchema, body));
+  if (method === "POST" && path === "/api/household/children")
+    return { child: store.addChild(need(), parse(childBodySchema, body)) };
+  if (method === "POST" && path === "/api/announcements")
+    return { announcement: store.createAnnouncement(need(), parse(announcementBodySchema, body)) };
+  if (method === "POST" && path === "/api/events")
+    return { event: store.createEvent(need(), parse(eventBodySchema, body)) };
+  if (method === "POST" && path === "/api/groups" && method === "POST")
+    return { group: store.createGroup(need(), parse(groupBodySchema, body)) };
+  if (method === "GET" && path === "/api/giving/quickbooks") return { csv: store.quickbooksCsv(need()) };
+  if (method === "GET" && path === "/api/audit") return { audit: store.audit(need()) };
+  const label = path.match(/^\/api\/kids\/([^/]+)\/label$/);
+  if (method === "GET" && label?.[1]) return store.label(need(), decodeURIComponent(label[1]));
   if (method === "POST" && path === "/api/kids/pickup")
     return store.pickup(need(), parse(pickupBodySchema, body));
   if (method === "POST" && path === "/api/communications/push")

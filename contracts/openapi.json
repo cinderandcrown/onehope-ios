@@ -121,6 +121,20 @@
             "description": "Not allowed"
           }
         }
+      },
+      "post": {
+        "operationId": "post__api_me",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
       }
     },
     "/api/home": {
@@ -271,9 +285,29 @@
       "get": {
         "operationId": "get__api_groups",
         "responses": {
-          "200": { "description": "OK" },
-          "401": { "description": "Sign in or step up" },
-          "403": { "description": "Not allowed" }
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post__api_groups_create",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
         }
       }
     },
@@ -564,6 +598,166 @@
     "/api/facilities/bookings": {
       "post": {
         "operationId": "post__api_facilities_bookings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/auth/signup": {
+      "post": {
+        "operationId": "post__api_auth_signup",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/prayers/{id}/moderate": {
+      "post": {
+        "operationId": "post__api_prayers_id_moderate",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/kids/check-in": {
+      "post": {
+        "operationId": "post__api_kids_check_in",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/kids/household-pickup": {
+      "post": {
+        "operationId": "post__api_kids_household_pickup",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/household/children": {
+      "post": {
+        "operationId": "post__api_household_children",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/announcements": {
+      "post": {
+        "operationId": "post__api_announcements",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "post": {
+        "operationId": "post__api_events",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/giving/quickbooks": {
+      "get": {
+        "operationId": "get__api_giving_quickbooks",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/audit": {
+      "get": {
+        "operationId": "get__api_audit",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/kids/{id}/label": {
+      "get": {
+        "operationId": "get__api_kids_id_label",
         "responses": {
           "200": {
             "description": "OK"

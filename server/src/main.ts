@@ -1,11 +1,10 @@
 import { createServer } from "node:http";
 
 import { createApi } from "./api";
-import { loadConfig } from "./config";
 import { ChurchStore } from "./store";
 
 const port = Number(process.env.PORT ?? "8787");
-const store = new ChurchStore(loadConfig({}));
+const store = ChurchStore.demo();
 const handle = createApi({ store });
 
 const server = createServer(async (incoming, outgoing) => {

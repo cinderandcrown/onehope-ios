@@ -57,6 +57,29 @@ export async function setLanguage(formData: FormData) {
   jar.set("onehope_lang", isLanguage(raw) ? raw : "en", { sameSite: "lax", path: "/" });
 }
 
+export async function createGroupAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const name = String(formData.get("name") ?? "").trim();
+  const summary = String(formData.get("summary") ?? "").trim();
+  if (!name || !summary) redirect("/groups?error=1");
+  await withStore((store) => store.createGroup(token, { name, summary }));
+  redirect("/groups");
+}
+
+export async function createEventAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const title = String(formData.get("title") ?? "").trim();
+  const location = String(formData.get("location") ?? "").trim();
+  if (!title || !location) redirect("/events?error=1");
+  const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  await withStore((store) => store.createEvent(token, { title, location, start, end: start + 90 * 60 * 1000 }));
+  redirect("/events");
+}
+
 export async function savePush(formData: FormData) {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;

@@ -1,6 +1,5 @@
 import { Pool, type PoolClient, neonConfig } from "@neondatabase/serverless";
 
-import { loadConfig } from "./config";
 import { ChurchStore, type StoreDocument } from "./store";
 
 if (typeof WebSocket !== "undefined") neonConfig.webSocketConstructor = WebSocket;
@@ -64,7 +63,7 @@ async function loadOrCreate(client: PoolClient): Promise<ChurchStore> {
   const found = await client.query<{ payload: string }>("SELECT payload FROM demo_runtime WHERE id = $1", [
     SNAPSHOT_ID,
   ]);
-  const store = new ChurchStore(loadConfig(process.env));
+  const store = ChurchStore.demo(process.env);
   const row = found.rows[0];
   if (row) {
     const parsed: unknown = JSON.parse(row.payload);

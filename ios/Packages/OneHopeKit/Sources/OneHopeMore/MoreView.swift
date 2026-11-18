@@ -4,10 +4,22 @@ import SwiftUI
 
 public struct MoreView: View {
     private let snapshot: ChurchSnapshot
-    @AppStorage("onehope.notifications") private var notifications = true
+    private let onRefresh: () async -> Void
+    private let onSignOut: () -> Void
+    private let onPrivacy: (Bool, Bool) async -> Void
+    @State private var emailPublic = false
+    @State private var phonePublic = false
 
-    public init(snapshot: ChurchSnapshot) {
+    public init(
+        snapshot: ChurchSnapshot,
+        onRefresh: @escaping () async -> Void = {},
+        onSignOut: @escaping () -> Void = {},
+        onPrivacy: @escaping (Bool, Bool) async -> Void = { _, _ in }
+    ) {
         self.snapshot = snapshot
+        self.onRefresh = onRefresh
+        self.onSignOut = onSignOut
+        self.onPrivacy = onPrivacy
     }
 
     public var body: some View {
@@ -16,11 +28,18 @@ public struct MoreView: View {
                 Section("Account") {
                     Text(snapshot.accountName)
                     Text(snapshot.accountEmail).font(.footnote)
-                    if !snapshot.fromAPI {
-                        SampleBadge()
-                    }
+                    Button("Sign out", role: .destructive, action: onSignOut)
+                        .accessibilityIdentifier("sign-out")
                 }
                 Section("Directory") {
+                    Toggle("Show my email", isOn: $emailPublic)
+                    Toggle("Show my phone", isOn: $phonePublic)
+                    Button("Save privacy") {
+                        Task { await onPrivacy(emailPublic, phonePublic) }
+                    }
+                    if snapshot.directory.isEmpty {
+                        Text("People appear here when they choose to be listed.")
+                    }
                     ForEach(snapshot.directory) { person in
                         VStack(alignment: .leading) {
                             Text(person.displayName)
@@ -37,10 +56,8 @@ public struct MoreView: View {
                         Link("Open in Maps", destination: url)
                     }
                 }
-                Section("Notifications") {
-                    Toggle("Sunday reminder", isOn: $notifications)
-                }
             }
+            .refreshable { await onRefresh() }
             .navigationTitle(L10n.text(.more))
         }
     }

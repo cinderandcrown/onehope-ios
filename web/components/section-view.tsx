@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { savePush } from "@/app/actions";
+import { createEventAction, createGroupAction, savePush } from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
 import {
   AccessError,
@@ -113,7 +113,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               {people.map((person) => (
                 <tr key={person.id}>
                   <td>
-                    {person.displayName} <Badge sample />
+                    {person.displayName}
                   </td>
                   <td>{person.email || "Hidden"}</td>
                   <td>{person.phone || "Hidden"}</td>
@@ -180,6 +180,13 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       return (
         <section>
           <h1>Groups</h1>
+          <form className="form" action={createGroupAction}>
+            <input name="name" placeholder="Group name" required />
+            <input name="summary" placeholder="Summary" required />
+            <button className="button" type="submit">
+              Add group
+            </button>
+          </form>
           {store.listGroups(token).map((group) => (
             <article className="card" key={group.id}>
               <h2>
@@ -196,6 +203,13 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       return (
         <section>
           <h1>Events</h1>
+          <form className="form" action={createEventAction}>
+            <input name="title" placeholder="Event title" required />
+            <input name="location" placeholder="Location" required />
+            <button className="button" type="submit">
+              Add event
+            </button>
+          </form>
           {store.publicHome().events.map((event) => (
             <article className="card" key={event.id}>
               <h2>
@@ -210,7 +224,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
     }
     case "checkin": {
       const roster = store.roster(token);
-      const label = store.label(token, "child-remy");
+      const label = roster[0] ? store.label(token, roster[0].id) : null;
       return (
         <section>
           <h1>Check-in</h1>
@@ -240,7 +254,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           <p>
             Zebra receives ZPL. Brother receives the same fields. This screen does not open a printer socket.
           </p>
-          <pre>{label.zpl}</pre>
+          <pre>{label ? label.zpl : "No child record to print."}</pre>
         </section>
       );
     }

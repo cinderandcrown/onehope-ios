@@ -166,6 +166,8 @@ export type StoreOptions = {
   totpOverrides?: Record<string, string>;
   /** Explicit opt-in so tests can assert production guards against a memory store. */
   memoryForTests?: boolean;
+  /** Fictional households for tests. The app boots with public church facts when this is false. */
+  fixture?: boolean;
 };
 
 const FUNDS = [
@@ -285,7 +287,7 @@ export class ChurchStore {
   private readonly drafts: { id: string; title: string; segment: string; sample: boolean }[] = [];
 
   static demo(env: NodeJS.ProcessEnv = process.env): ChurchStore {
-    return new ChurchStore(loadConfig(env));
+    return new ChurchStore(loadConfig(env), { fixture: env.ONEHOPE_SAMPLE_DATA === "true" });
   }
 
   constructor(config: AppConfig, options: StoreOptions = {}) {
@@ -315,13 +317,14 @@ export class ChurchStore {
     this.expenses = [];
     this.visitors = [];
     this.requests = [];
-    this.loadSample();
+    if (options.fixture === false) this.loadPublic();
+    else this.loadSample();
     this.applyOverrides(options);
     this.ensureSeat(config.masterAdminPrimaryEmail, config.masterAdminPrimaryName);
     if (config.masterAdminSecondaryEmail.trim()) {
       this.ensureSeat(config.masterAdminSecondaryEmail, config.masterAdminSecondaryName);
     }
-    this.ensureDemoSessions();
+    if (options.fixture !== false) this.ensureDemoSessions();
   }
 
   status(version: string) {
@@ -388,6 +391,35 @@ export class ChurchStore {
       sample: person.sample,
     });
     return { token, mfaRequired: staff, person: this.toPerson(person) };
+  }
+
+  signup(input: { email: string; password: string; displayName: string; ip: string; userAgent: string }) {
+    const email = input.email.trim().toLowerCase();
+    const displayName = input.displayName.trim();
+    if (!email || !displayName) throw new AccessError("invalid", "Name and email are required.");
+    if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
+    const existing = this.byEmail(email);
+    if (existing?.passwordHash) throw new AccessError("invalid", "An account with that email already exists.");
+    if (existing) {
+      existing.passwordHash = hashPassword(input.password);
+      if (!existing.displayName) existing.displayName = displayName;
+      return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
+    }
+    const id = newId("person");
+    const person = this.makePerson({
+      id,
+      displayName,
+      email,
+      role: "member",
+      householdId: newId("hh"),
+      sample: false,
+      password: false,
+      totp: false,
+      listed: false,
+    });
+    person.passwordHash = hashPassword(input.password);
+    this.people.set(id, person);
+    return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
   }
 
   verifyMfa(token: string, code: string) {
@@ -473,10 +505,10 @@ export class ChurchStore {
       announcements: this.announcements.map((item) => ({ ...item })),
       events: this.events.map((event) => this.eventView(event)),
       sampleSermon: {
-        sample: true as const,
-        title: "Sample: A new season of growth",
-        speaker: "Sample teacher",
-        passage: "John 3:16",
+        sample: false as const,
+        title: "A New Season of Growth",
+        speaker: "One Hope",
+        passage: "Sunday message",
       },
     };
   }
@@ -495,12 +527,14 @@ export class ChurchStore {
     }));
   }
 
-  updateProfile(token: string, input: { emailPublic?: boolean; phonePublic?: boolean }) {
+  updateProfile(token: string, input: { emailPublic?: boolean; phonePublic?: boolean; displayName?: string; phone?: string }) {
     const actor = this.actor(token);
     authorize(actor, "edit_own_profile", this.now());
     const person = this.requirePerson(actor.personId);
     if (typeof input.emailPublic === "boolean") person.emailPublic = input.emailPublic;
     if (typeof input.phonePublic === "boolean") person.phonePublic = input.phonePublic;
+    if (input.displayName?.trim()) person.displayName = input.displayName.trim();
+    if (typeof input.phone === "string") person.phone = input.phone.trim();
     return this.toPerson(person);
   }
 
@@ -514,6 +548,97 @@ export class ChurchStore {
 
   funds() {
     return FUNDS.map((fund) => ({ ...fund }));
+  }
+
+  givingAvailability() {
+    const secret = this.config.stripeSecretKey;
+    const publishable = this.config.stripePublishableKey;
+    const testMode = secret.startsWith("sk_test_") && publishable.startsWith("pk_test_");
+    const open = canChargeLive(this.config) || testMode;
+    return { open, publishableKey: open ? publishable : "" };
+  }
+
+  addChild(token: string, input: { displayName: string; classroom: string }) {
+    const actor = this.actor(token);
+    if (!actor.householdId) throw new AccessError("invalid", "Create your account before adding a child.");
+    const child: ChildRow = {
+      id: newId("child"),
+      householdId: actor.householdId,
+      displayName: input.displayName.trim(),
+      classroom: input.classroom.trim(),
+      ciphertext: encryptString(JSON.stringify({ allergy: "", medical: "", code: "" }), this.key),
+      guardianIds: [actor.personId],
+      restrictedPersonIds: [],
+      sample: false,
+    };
+    this.children.set(child.id, child);
+    this.record(actor, "write", "kid", child.id, 3);
+    return { id: child.id, displayName: child.displayName, classroom: child.classroom, sample: false };
+  }
+
+  checkIn(token: string, childId: string) {
+    const actor = this.actor(token);
+    const child = this.requireChild(actor, childId);
+    const prior = this.readJson(child.ciphertext);
+    const code = String(1000 + Math.floor(Math.random() * 9000));
+    const body = prior && typeof prior === "object" ? { ...(prior as Record<string, unknown>), code } : { code };
+    child.ciphertext = encryptString(JSON.stringify(body), this.key);
+    this.record(actor, "write", "kid_checkin", child.id, 3);
+    return { childId: child.id, displayName: child.displayName, code };
+  }
+
+  householdPickup(token: string, input: { childId: string; code: string }) {
+    const actor = this.actor(token);
+    const child = this.requireChild(actor, input.childId);
+    const medical = this.readJson(child.ciphertext);
+    const expected = textField(medical, "code");
+    this.record(actor, "read", "kid_pickup", child.id, 3);
+    return evaluatePickup({
+      code: input.code,
+      expectedCode: expected,
+      guardianAuthorized: child.guardianIds.includes(actor.personId),
+      custodyRestricted: child.restrictedPersonIds.includes(actor.personId),
+      adultsOnDuty: this.station.size,
+    });
+  }
+
+  createAnnouncement(token: string, input: { title: string; body: string }) {
+    const actor = this.requireEditor(token);
+    const item = { id: newId("ann"), title: input.title.trim(), body: input.body.trim(), sample: false };
+    this.announcements.push(item);
+    this.record(actor, "write", "announcement", item.id, 0);
+    return item;
+  }
+
+  createEvent(token: string, input: { title: string; location: string; start: number; end: number }) {
+    const actor = this.requireEditor(token);
+    const event = {
+      id: newId("event"),
+      title: input.title.trim(),
+      start: input.start,
+      end: input.end,
+      location: input.location.trim(),
+      description: "",
+      capacity: null,
+      sample: false,
+    };
+    this.events.push(event);
+    this.record(actor, "write", "event", event.id, 0);
+    return event;
+  }
+
+  createGroup(token: string, input: { name: string; summary: string }) {
+    const actor = this.requireEditor(token);
+    const group = {
+      id: newId("group"),
+      name: input.name.trim(),
+      summary: input.summary.trim(),
+      sample: false,
+      memberIds: [] as string[],
+    };
+    this.groups.push(group);
+    this.record(actor, "write", "group", group.id, 1);
+    return group;
   }
 
   async createGift(
@@ -599,7 +724,7 @@ export class ChurchStore {
   quickbooksCsv(token: string) {
     const gifts = this.allGifts(token);
     const lines = gifts.map((gift) => `${gift.id},${gift.fundId},${gift.amountCents},${gift.charged}`);
-    return `SAMPLE,One Hope QuickBooks export\n${lines.join("\n")}\n`;
+    return `id,fund,amountCents,charged\n${lines.join("\n")}\n`;
   }
 
   listGroups(token: string) {
@@ -1394,6 +1519,22 @@ export class ChurchStore {
     return group;
   }
 
+  private requireChild(actor: Actor, childId: string): ChildRow {
+    const child = this.children.get(childId);
+    if (!child || !sameHousehold(actor, child.householdId)) {
+      throw new AccessError("not_found", "That child isn't in your household.");
+    }
+    return child;
+  }
+
+  private requireEditor(token: string): Actor {
+    const actor = this.actor(token);
+    if (actor.role !== "master_admin" && actor.role !== "pastor" && actor.role !== "team_leader") {
+      throw new AccessError("forbidden", "Only pastors and leaders can publish this.");
+    }
+    return actor;
+  }
+
   private requirePerson(id: string) {
     const person = this.people.get(id);
     if (!person) throw new AccessError("not_found", "That person isn't here.");
@@ -1468,6 +1609,71 @@ export class ChurchStore {
     const g = globalThis as typeof globalThis & { __onehopeSampleHash?: string };
     if (!g.__onehopeSampleHash) g.__onehopeSampleHash = hashPassword(SAMPLE_PASSWORD);
     return g.__onehopeSampleHash;
+  }
+
+  private loadPublic() {
+    this.people.set(
+      "person-nicholas",
+      this.makePerson({
+        id: "person-nicholas",
+        displayName: this.config.masterAdminPrimaryName,
+        email: this.config.masterAdminPrimaryEmail,
+        role: "master_admin",
+        householdId: null,
+        sample: false,
+        password: false,
+        totp: false,
+        listed: false,
+      }),
+    );
+    const service = nextSundayService(new Date(this.now()));
+    this.announcements.push(
+      {
+        id: "ann-sunday",
+        title: "Sunday gathering",
+        body: "10:30 a.m. Come early for donuts and coffee.",
+        sample: false,
+      },
+      {
+        id: "ann-kids",
+        title: "One Hope Kids",
+        body: "Kids ministry is open during the Sunday gathering, from 3 months through 5th grade.",
+        sample: false,
+      },
+    );
+    this.events.push({
+      id: "event-sunday",
+      title: "Sunday gathering",
+      start: service.service.getTime(),
+      end: service.service.getTime() + 90 * 60 * 1000,
+      location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
+      description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
+      capacity: null,
+      sample: false,
+    });
+    this.groups.push(
+      {
+        id: "group-kids",
+        name: "One Hope Kids",
+        summary: "During Sunday for ages 3 months through 5th grade. Kids meet friends and learn about God.",
+        sample: false,
+        memberIds: [],
+      },
+      {
+        id: "group-small",
+        name: "Small Groups",
+        summary: "Grow your faith and build friendships through the week.",
+        sample: false,
+        memberIds: [],
+      },
+      {
+        id: "group-growth",
+        name: "Growth Track",
+        summary: "Hear the vision of One Hope, discover your purpose, and find a place to serve.",
+        sample: false,
+        memberIds: [],
+      },
+    );
   }
 
   private loadSample() {

@@ -1,15 +1,10 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export function GET(request: Request) {
-  const response = NextResponse.redirect(new URL("/member", request.url));
-  response.cookies.set("onehope_member", "session-member-demo", {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 12,
-  });
-  return response;
+export async function GET(request: Request) {
+  const jar = await cookies();
+  jar.delete("onehope_member");
+  return NextResponse.redirect(new URL("/member", request.url));
 }
