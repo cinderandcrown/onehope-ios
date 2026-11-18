@@ -191,6 +191,7 @@ export class ChurchStore {
   private readonly now: () => number;
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly key: Buffer;
+  private readonly fixture: boolean;
   private readonly dummyHash: string;
   private readonly people = new Map<string, Person>();
   private readonly gifts = new Map<string, GiftRow>();
@@ -301,6 +302,7 @@ export class ChurchStore {
     this.now = options.now ?? Date.now;
     this.fetchImpl = options.fetchImpl;
     this.key = config.fieldEncryptionKey;
+    this.fixture = options.fixture ?? true;
     this.dummyHash = hashPassword("not-a-real-password");
     this.flags = Object.fromEntries(MODULES.map((id) => [id, true])) as Record<ModuleId, boolean>;
     this.groups = [];
@@ -2121,7 +2123,35 @@ export class ChurchStore {
     this.visitors.splice(0, this.visitors.length, ...document.visitors);
     this.requests.splice(0, this.requests.length, ...document.requests);
     this.drafts.splice(0, this.drafts.length, ...document.drafts);
-    this.ensureDemoSessions();
+    if (this.fixture) this.ensureDemoSessions();
+    else this.dropFixtureContent();
+  }
+
+  private dropFixtureContent() {
+    for (const person of [...this.people.values()]) {
+      if (person.sample || person.email.endsWith("@sample.onehope")) this.people.delete(person.id);
+    }
+    const keep = <T extends { sample: boolean }>(rows: T[]) => rows.filter((row) => !row.sample);
+    this.announcements.splice(0, this.announcements.length, ...keep(this.announcements));
+    this.events.splice(0, this.events.length, ...keep(this.events));
+    this.groups.splice(0, this.groups.length, ...keep(this.groups));
+    this.prayers.splice(0, this.prayers.length, ...keep(this.prayers));
+    for (const [id, gift] of [...this.gifts.entries()]) {
+      if (gift.sample) this.gifts.delete(id);
+    }
+    for (const [id, child] of [...this.children.entries()]) {
+      if (child.sample) this.children.delete(id);
+    }
+    if (!this.groups.some((group) => group.id === "group-kids")) {
+      const saved = [...this.people.values()];
+      this.announcements.splice(0, this.announcements.length);
+      this.events.splice(0, this.events.length);
+      this.groups.splice(0, this.groups.length);
+      this.loadPublic();
+      for (const person of saved) {
+        if (person.id !== "person-nicholas") this.people.set(person.id, person);
+      }
+    }
   }
 
   private ensureDemoSessions() {
