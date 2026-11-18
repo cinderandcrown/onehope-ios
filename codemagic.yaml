@@ -7,10 +7,9 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      # Team integration name. Create it in Codemagic under
-      # Team integrations > Developer Portal, and upload the App Store Connect
-      # API key there. Do not put the key, the .p8, or the issuer id in git.
-      app_store_connect: onehope-app-store-connect
+      # Existing Codemagic Developer Portal integration for this API key.
+      # The key is not stored in git.
+      app_store_connect: "EquiTex ASC"
     environment:
       ios_signing:
         provisioning_profiles:
