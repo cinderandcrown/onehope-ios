@@ -38,8 +38,10 @@ struct RootView: View {
                         await perform(action)
                     }
                     .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
-                    MoreView(snapshot: snapshot, onRefresh: load, onSignOut: signOut) { emailPublic, phonePublic in
-                        await updatePrivacy(emailPublic: emailPublic, phonePublic: phonePublic)
+                    MoreView(snapshot: snapshot, onRefresh: load, onSignOut: signOut) { emailPublic, phonePublic, listed in
+                        await updatePrivacy(emailPublic: emailPublic, phonePublic: phonePublic, listed: listed)
+                    } onDelete: { password in
+                        await deleteAccount(password)
                     }
                     .tabItem { Label(L10n.text(.more), systemImage: "ellipsis") }
                 }
@@ -58,7 +60,7 @@ struct RootView: View {
     }
 
     private func authenticate(email: String, password: String, name: String?) async -> String {
-        guard let client else { return "The church server is not configured on this build." }
+        guard let client else { return "We couldn't reach the church just now." }
         do {
             let session = if let name, !name.isEmpty {
                 try await client.signup(email: email, password: password, displayName: name)
@@ -69,10 +71,8 @@ struct RootView: View {
             token = session
             authError = ""
             return ""
-        } catch let error as ChurchAPIError {
-            return error.message
         } catch {
-            return "We couldn't sign you in."
+            return friendly(error)
         }
     }
 
@@ -95,14 +95,24 @@ struct RootView: View {
             switch action {
             case let .join(id):
                 try await client.join(token: token, groupId: id)
+                await load()
+                return "You're in that group."
             case let .message(id, body):
                 try await client.postMessage(token: token, groupId: id, body: body)
+                await load()
+                return "Your note was sent."
             case let .register(id):
                 try await client.register(token: token, eventId: id)
+                await load()
+                return "You're registered."
             case let .prayer(body):
                 try await client.submitPrayer(token: token, body: body)
+                await load()
+                return "Your prayer was sent to the pastors."
             case let .addChild(name, classroom):
                 _ = try await client.addChild(token: token, displayName: name, classroom: classroom)
+                await load()
+                return "\(name) was added."
             case let .checkIn(id):
                 let code = try await client.checkIn(token: token, childId: id)
                 await load()
@@ -112,19 +122,39 @@ struct RootView: View {
                 await load()
                 return reason
             }
-            await load()
-            return ""
-        } catch let error as ChurchAPIError {
-            return error.message
         } catch {
-            return "That didn't go through."
+            return friendly(error)
         }
     }
 
-    private func updatePrivacy(emailPublic: Bool, phonePublic: Bool) async {
+    private func updatePrivacy(emailPublic: Bool, phonePublic: Bool, listed: Bool) async {
         guard let client, let token else { return }
-        try? await client.updateProfile(token: token, emailPublic: emailPublic, phonePublic: phonePublic)
+        try? await client.updateProfile(token: token, emailPublic: emailPublic, phonePublic: phonePublic, listed: listed)
         await load()
+    }
+
+    private func deleteAccount(_ password: String) async -> String {
+        guard let client, let token else { return "Sign in again." }
+        do {
+            try await client.stepUp(token: token, password: password)
+            try await client.deleteAccount(token: token)
+            signOut()
+            return "Your account was deleted."
+        } catch {
+            return friendly(error)
+        }
+    }
+
+    private func friendly(_ error: Error) -> String {
+        guard let error = error as? ChurchAPIError else { return "We couldn't reach the church just now." }
+        let blocked = ["contract", "shape", "configured", "not valid"]
+        if blocked.contains(where: { error.message.localizedCaseInsensitiveContains($0) }) {
+            return "Please check what you entered and try again."
+        }
+        if error.code == "unauthenticated" {
+            return "That email and password don't match."
+        }
+        return error.message
     }
 
     private func signOut() {

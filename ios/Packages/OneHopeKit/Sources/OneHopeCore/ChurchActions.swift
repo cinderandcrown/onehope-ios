@@ -4,7 +4,6 @@ private struct TokenReply: Decodable { let token: String }
 private struct EmptyBody: Encodable {}
 private struct TextBody: Encodable { let body: String }
 private struct PrayerBody: Encodable { let body: String; let visibility: String }
-private struct PrivacyBody: Encodable { let emailPublic: Bool; let phonePublic: Bool }
 private struct ChildBody: Encodable { let displayName: String; let classroom: String }
 private struct ChildCreated: Decodable { let id: String }
 private struct ChildReply: Decodable { let child: ChildCreated }
@@ -56,13 +55,18 @@ public extension ChurchClient {
         )
     }
 
-    func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool) async throws {
+    func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool, listed: Bool) async throws {
+        struct Body: Encodable { let emailPublic: Bool; let phonePublic: Bool; let listedInDirectory: Bool }
         let _: EmptyReply = try await send(
             "/api/me",
             method: "POST",
             token: token,
-            json: JSONEncoder().encode(PrivacyBody(emailPublic: emailPublic, phonePublic: phonePublic))
+            json: JSONEncoder().encode(Body(emailPublic: emailPublic, phonePublic: phonePublic, listedInDirectory: listed))
         )
+    }
+
+    func deleteAccount(token: String) async throws {
+        let _: EmptyReply = try await send("/api/account/delete", method: "POST", token: token, json: Data("{}".utf8))
     }
 
     func addChild(token: String, displayName: String, classroom: String) async throws -> String {

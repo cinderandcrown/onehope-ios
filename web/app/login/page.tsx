@@ -26,7 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         ) : null}
         <p className="muted">Staff sign in with email, password, and an authentication code.</p>
         <p className="muted">
-          <Link href="/member">Open the member demo</Link>. It can be added to a phone home screen.
+          <Link href="/member">Open the member app</Link>. It can be added to a phone home screen.
         </p>
         <form className="form" action={signIn}>
           <label>
@@ -42,7 +42,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <input name="code" inputMode="numeric" autoComplete="one-time-code" aria-describedby="mfa-help" />
           </label>
           <p id="mfa-help" className="muted">
-            Staff enter a 6-digit code. Sample staff can use the preview button instead.
+            Staff enter a 6-digit code.
           </p>
           {params.error ? (
             <p className="error">That sign-in did not go through. Check the email, password, and code.</p>

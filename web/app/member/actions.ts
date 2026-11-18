@@ -1,6 +1,6 @@
 "use server";
 
-import { AccessError, withStore } from "@onehope/server";
+import { withStore } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -15,6 +15,11 @@ async function setMember(token: string) {
   });
 }
 
+function accessMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object" || !("code" in error) || !("message" in error)) return null;
+  return String(error.message);
+}
+
 export async function signInMember(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
@@ -24,7 +29,7 @@ export async function signInMember(formData: FormData) {
     );
     await setMember(token);
   } catch (error) {
-    if (error instanceof AccessError) redirect("/member?error=1");
+    if (accessMessage(error)) redirect("/member?error=password");
     throw error;
   }
   redirect("/member");
@@ -41,7 +46,8 @@ export async function signUpMember(formData: FormData) {
     );
     await setMember(token);
   } catch (error) {
-    if (error instanceof AccessError) redirect("/member?error=1");
+    const message = accessMessage(error);
+    if (message) redirect(message.includes("already exists") ? "/member?error=exists" : "/member?error=signup");
     throw error;
   }
   redirect("/member");

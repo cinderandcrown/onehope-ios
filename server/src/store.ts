@@ -197,6 +197,7 @@ export class ChurchStore {
   private readonly gifts = new Map<string, GiftRow>();
   private readonly children = new Map<string, ChildRow>();
   private readonly sessions = new Map<string, Session>();
+  private readonly invites = new Map<string, { email: string; expires: number }>();
   private readonly auditLog: AuditEntry[] = [];
   private readonly alerts: { id: string; personId: string; at: number; kind: string; detail: string }[] = [];
   private readonly proposals = new Map<string, Proposal>();
@@ -327,6 +328,7 @@ export class ChurchStore {
       this.ensureSeat(config.masterAdminSecondaryEmail, config.masterAdminSecondaryName);
     }
     if (options.fixture !== false) this.ensureDemoSessions();
+    this.applyBootPassword();
   }
 
   status(version: string) {
@@ -334,7 +336,7 @@ export class ChurchStore {
     return {
       service: "onehope" as const,
       version,
-      env: this.config.env,
+      env: this.fixture ? this.config.env : ("production" as const),
       fieldEncryption: this.config.fieldEncryptionMode,
       givingLive: canChargeLive(this.config),
       sendsEnabled: false as const,
@@ -400,13 +402,7 @@ export class ChurchStore {
     const displayName = input.displayName.trim();
     if (!email || !displayName) throw new AccessError("invalid", "Name and email are required.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
-    const existing = this.byEmail(email);
-    if (existing?.passwordHash) throw new AccessError("invalid", "An account with that email already exists.");
-    if (existing) {
-      existing.passwordHash = hashPassword(input.password);
-      if (!existing.displayName) existing.displayName = displayName;
-      return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
-    }
+    if (this.byEmail(email)) throw new AccessError("invalid", "An account with that email already exists.");
     const id = newId("person");
     const person = this.makePerson({
       id,
@@ -420,7 +416,34 @@ export class ChurchStore {
       listed: false,
     });
     person.passwordHash = hashPassword(input.password);
+    person.displayName = displayName;
     this.people.set(id, person);
+    return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
+  }
+
+  issueInvite(token: string, email: string) {
+    this.requireEditor(token);
+    const cleaned = email.trim().toLowerCase();
+    const person = this.byEmail(cleaned);
+    if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
+    const inviteToken = newId("invite");
+    this.invites.set(inviteToken, { email: cleaned, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
+    return { email: cleaned, inviteToken };
+  }
+
+  claimInvite(input: { email: string; inviteToken: string; password: string; ip: string; userAgent: string }) {
+    const email = input.email.trim().toLowerCase();
+    const invite = this.invites.get(input.inviteToken);
+    if (!invite || invite.email !== email || invite.expires < this.now()) {
+      throw new AccessError("unauthenticated", "That invite is not valid.");
+    }
+    const person = this.byEmail(email);
+    if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
+    if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
+    person.passwordHash = hashPassword(input.password);
+    this.invites.delete(input.inviteToken);
     return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
   }
 
@@ -508,9 +531,9 @@ export class ChurchStore {
       events: this.events.map((event) => this.eventView(event)),
       sampleSermon: {
         sample: false as const,
-        title: "A New Season of Growth",
+        title: "",
         speaker: "One Hope",
-        passage: "Sunday message",
+        passage: "",
       },
     };
   }
@@ -529,7 +552,10 @@ export class ChurchStore {
     }));
   }
 
-  updateProfile(token: string, input: { emailPublic?: boolean; phonePublic?: boolean; displayName?: string; phone?: string }) {
+  updateProfile(
+    token: string,
+    input: { emailPublic?: boolean; phonePublic?: boolean; displayName?: string; phone?: string; listedInDirectory?: boolean },
+  ) {
     const actor = this.actor(token);
     authorize(actor, "edit_own_profile", this.now());
     const person = this.requirePerson(actor.personId);
@@ -537,6 +563,7 @@ export class ChurchStore {
     if (typeof input.phonePublic === "boolean") person.phonePublic = input.phonePublic;
     if (input.displayName?.trim()) person.displayName = input.displayName.trim();
     if (typeof input.phone === "string") person.phone = input.phone.trim();
+    if (typeof input.listedInDirectory === "boolean") person.listedInDirectory = input.listedInDirectory;
     return this.toPerson(person);
   }
 
@@ -748,6 +775,14 @@ export class ChurchStore {
     return { id: group.id, joined: true as const };
   }
 
+  leaveGroup(token: string, groupId: string) {
+    const actor = this.actor(token);
+    const group = this.groups.find((item) => item.id === groupId);
+    if (!group) throw new AccessError("not_found", "That group isn't here.");
+    group.memberIds = group.memberIds.filter((id) => id !== actor.personId);
+    return { id: group.id, joined: false as const };
+  }
+
   listMessages(token: string, groupId: string) {
     const actor = this.actor(token);
     const group = this.requireGroup(groupId, actor.personId);
@@ -759,7 +794,7 @@ export class ChurchStore {
   postMessage(token: string, groupId: string, body: string) {
     const actor = this.actor(token);
     const group = this.requireGroup(groupId, actor.personId);
-    const message = { id: newId("msg"), groupId: group.id, authorId: actor.personId, body, sample: true };
+    const message = { id: newId("msg"), groupId: group.id, authorId: actor.personId, body, sample: false };
     this.messages.push(message);
     return message;
   }
@@ -857,7 +892,7 @@ export class ChurchStore {
       body: input.body,
       visibility: input.visibility,
       approved: false,
-      sample: true,
+      sample: false,
     };
     this.prayers.push(prayer);
     if (input.visibility === "private") this.record(actor, "write", "prayer", prayer.id, 3);
@@ -875,7 +910,8 @@ export class ChurchStore {
 
   myPathway(token: string) {
     const actor = this.actor(token);
-    return { sample: true as const, ...this.pathwayView(actor.personId) };
+    const view = this.pathwayView(actor.personId);
+    return { sample: false as const, ...view };
   }
 
   myKids(token: string) {
@@ -1559,6 +1595,7 @@ export class ChurchStore {
       sample: person.sample,
       emailPublic: person.emailPublic,
       phonePublic: person.phonePublic,
+      listedInDirectory: person.listedInDirectory,
     };
   }
 
@@ -2125,9 +2162,43 @@ export class ChurchStore {
     this.drafts.splice(0, this.drafts.length, ...document.drafts);
     if (this.fixture) this.ensureDemoSessions();
     else this.dropFixtureContent();
+    this.applyBootPassword();
+  }
+
+  private purgeQaRecords() {
+    const emails = new Set(["qa+web1794986696159@example.com", "qa+api1794986642@example.com"]);
+    for (const person of [...this.people.values()]) {
+      if (!emails.has(person.email.toLowerCase())) continue;
+      const household = person.householdId;
+      this.people.delete(person.id);
+      this.messages.splice(0, this.messages.length, ...this.messages.filter((row) => row.authorId !== person.id));
+      this.registrations.splice(
+        0,
+        this.registrations.length,
+        ...this.registrations.filter((row) => row.personId !== person.id),
+      );
+      this.prayers.splice(0, this.prayers.length, ...this.prayers.filter((row) => row.authorId !== person.id));
+      if (household) {
+        for (const [id, child] of [...this.children.entries()]) {
+          if (child.householdId === household) this.children.delete(id);
+        }
+      }
+      for (const [tokenKey, session] of this.sessions) {
+        if (session.personId === person.id) this.sessions.delete(tokenKey);
+      }
+    }
+    this.children.delete("child_a5c55db10195dc81a4");
+  }
+
+  private applyBootPassword() {
+    const boot = process.env.MASTER_ADMIN_BOOT_PASSWORD ?? "";
+    if (boot.length < 8) return;
+    const person = this.byEmail(this.config.masterAdminPrimaryEmail);
+    if (person && !person.passwordHash && !person.deleted) person.passwordHash = hashPassword(boot);
   }
 
   private dropFixtureContent() {
+    this.purgeQaRecords();
     for (const person of [...this.people.values()]) {
       if (person.sample || person.email.endsWith("@sample.onehope")) this.people.delete(person.id);
     }

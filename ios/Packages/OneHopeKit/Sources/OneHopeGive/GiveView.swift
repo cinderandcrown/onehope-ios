@@ -17,16 +17,15 @@ public struct GiveView: View {
         NavigationStack {
             Form {
                 Section("Give") {
-                    TextField("Amount", text: $amount)
-                        .keyboardType(.decimalPad)
-                        .accessibilityIdentifier("gift-amount")
-                    Picker("Fund", selection: $fundId) {
-                        ForEach(snapshot.funds) { fund in
-                            Text(fund.name).tag(fund.id)
-                        }
-                    }
                     if snapshot.givingOpen {
-                        Text("Giving is ready in test mode.")
+                        TextField("Amount", text: $amount)
+                            .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("gift-amount")
+                        Picker("Fund", selection: $fundId) {
+                            ForEach(snapshot.funds) { fund in
+                                Text(fund.name).tag(fund.id)
+                            }
+                        }
                     } else {
                         Text("Giving opens soon.")
                             .accessibilityIdentifier("giving-soon")

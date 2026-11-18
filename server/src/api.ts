@@ -8,6 +8,8 @@ import {
   healthSchema,
   integrationBodySchema,
   announcementBodySchema,
+  claimBodySchema,
+  inviteBodySchema,
   checkInBodySchema,
   householdPickupBodySchema,
   childBodySchema,
@@ -34,12 +36,15 @@ export const API_ROUTES = [
   ["GET", "/api/health"],
   ["POST", "/api/auth/login"],
   ["POST", "/api/auth/signup"],
+  ["POST", "/api/auth/claim"],
+  ["POST", "/api/security/invites"],
   ["POST", "/api/auth/mfa"],
   ["POST", "/api/auth/step-up"],
   ["POST", "/api/auth/logout"],
   ["POST", "/api/auth/sample-staff"],
   ["GET", "/api/me"],
   ["POST", "/api/me"],
+  ["POST", "/api/account/delete"],
   ["GET", "/api/home"],
   ["GET", "/api/sermons"],
   ["GET", "/api/events/{id}/ics"],
@@ -53,6 +58,7 @@ export const API_ROUTES = [
   ["GET", "/api/groups/{id}/messages"],
   ["POST", "/api/groups/{id}/messages"],
   ["POST", "/api/groups/{id}/join"],
+  ["POST", "/api/groups/{id}/leave"],
   ["GET", "/api/prayers"],
   ["POST", "/api/prayers"],
   ["POST", "/api/prayers/{id}/moderate"],
@@ -98,6 +104,16 @@ export function createApi(deps: Deps) {
       const token = bearerOrCookie(request);
       const body = request.method === "GET" || request.method === "HEAD" ? {} : await readBody(request);
       if (request.method !== "GET" && request.method !== "HEAD") assertNoCardData(body);
+      const icsPath = url.pathname.match(/^\/api\/events\/([^/]+)\/ics$/);
+      if (request.method === "GET" && icsPath?.[1]) {
+        const calendar = deps.store.ics(decodeURIComponent(icsPath[1]));
+        return new Response(calendar, {
+          headers: {
+            "content-type": "text/calendar; charset=utf-8",
+            "content-disposition": `attachment; filename="${decodeURIComponent(icsPath[1])}.ics"`,
+          },
+        });
+      }
       const result = await route(deps, token, request.method, url.pathname, body);
       log.log("info", "request", { method: request.method, path: url.pathname, status: 200 });
       return Response.json({ ok: true, ...result });
@@ -105,7 +121,7 @@ export function createApi(deps: Deps) {
       if (error instanceof AccessError) {
         log.log("info", "request_denied", { method: request.method, path: url.pathname, code: error.code });
         return Response.json(
-          { ok: false, error: error.message, code: error.code },
+          { ok: false, error: friendlyError(error), code: error.code },
           { status: statusFor(error.code) },
         );
       }
@@ -137,6 +153,10 @@ async function route(
     const input = parse(signupBodySchema, body);
     return store.signup({ ...input, ip: "api", userAgent: "api" });
   }
+  if (method === "POST" && path === "/api/auth/claim") {
+    const input = parse(claimBodySchema, body);
+    return store.claimInvite({ ...input, ip: "api", userAgent: "api" });
+  }
   if (method === "POST" && path === "/api/auth/mfa")
     return store.verifyMfa(need(), parse(codeBodySchema, body).code);
   if (method === "POST" && path === "/api/auth/step-up")
@@ -149,6 +169,7 @@ async function route(
     return store.loginSampleStaff({ ip: "api", userAgent: "sample-preview" });
   if (method === "GET" && path === "/api/me") return { person: store.me(need()) };
   if (method === "POST" && path === "/api/me") return { person: store.updateProfile(need(), parse(profileBodySchema, body)) };
+  if (method === "POST" && path === "/api/account/delete") return store.deleteSelf(need());
   if (method === "GET" && path === "/api/home") return store.publicHome();
   if (method === "GET" && path === "/api/sermons") {
     const videos = await loadSermons(deps.fetchImpl ?? fetch, store.config.youtubeChannelId);
@@ -180,6 +201,8 @@ async function route(
   }
   const join = path.match(/^\/api\/groups\/([^/]+)\/join$/);
   if (method === "POST" && join?.[1]) return store.joinGroup(need(), decodeURIComponent(join[1]));
+  const leave = path.match(/^\/api\/groups\/([^/]+)\/leave$/);
+  if (method === "POST" && leave?.[1]) return store.leaveGroup(need(), decodeURIComponent(leave[1]));
   if (method === "GET" && path === "/api/prayers") return { prayers: store.listPrayers(token) };
   if (method === "POST" && path === "/api/prayers")
     return store.submitPrayer(need(), parse(prayerBodySchema, body));
@@ -212,6 +235,9 @@ async function route(
     return store.sendPush(need(), parse(pushBodySchema, body));
   if (method === "GET" && path === "/api/modules") return { modules: store.modules() };
   if (method === "GET" && path === "/api/security/seats") return { seats: store.seats() };
+  if (method === "POST" && path === "/api/security/invites") {
+    return store.issueInvite(need(), parse(inviteBodySchema, body).email);
+  }
   if (method === "POST" && path === "/api/security/roles")
     return { person: store.changeRole(need(), parse(roleChangeBodySchema, body)) };
   if (method === "POST" && path === "/api/security/master-admin/proposals") {
@@ -238,9 +264,16 @@ async function route(
   throw new AccessError("not_found", "That route isn't part of this API.");
 }
 
+function friendlyError(error: AccessError): string {
+  if (error.message.includes("contract") || error.message.includes("shape")) {
+    return "Please check what you entered and try again.";
+  }
+  return error.message;
+}
+
 function parse<T>(schema: ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new AccessError("invalid", "That request didn't match the contract.");
+  if (!result.success) throw new AccessError("invalid", "Please check what you entered and try again.");
   return result.data;
 }
 
@@ -264,7 +297,7 @@ function bearerOrCookie(request: Request): string | null {
   const header = request.headers.get("authorization") ?? "";
   if (header.startsWith("Bearer ")) return header.slice("Bearer ".length).trim();
   const cookie = request.headers.get("cookie") ?? "";
-  const match = /(?:^|;\s*)onehope_session=([^;]+)/.exec(cookie);
+  const match = /(?:^|;\s*)onehope_(?:session|member)=([^;]+)/.exec(cookie);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 

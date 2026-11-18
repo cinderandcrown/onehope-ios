@@ -21,16 +21,16 @@ public enum SampleChurch {
         public let title: String
         public let detail: String
         public let sample: Bool
+        public let start: Date?
+        public let end: Date?
     }
 
     public static let announcements: [Announcement] = [
-        Announcement(id: "service", title: "Sunday", body: "Pre-service coffee at 10:00 a.m. Gathering at 10:30 a.m.", sample: false),
-        Announcement(id: "growth", title: "Growth Track", body: "Sample class dates, not a live registration.", sample: true),
+        Announcement(id: "service", title: "Sunday gathering", body: "10:30 a.m. Come early for donuts and coffee.", sample: false),
     ]
 
     public static let events: [EventItem] = [
-        EventItem(id: "sunday", title: "Sunday gathering", detail: address, sample: false),
-        EventItem(id: "workshop", title: "Workshop", detail: "Sample event with a waitlist.", sample: true),
+        EventItem(id: "sunday", title: "Sunday gathering", detail: address, sample: false, start: nil, end: nil),
     ]
 
     public static let viewer = DirectoryPerson(

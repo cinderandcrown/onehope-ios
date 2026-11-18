@@ -56,4 +56,62 @@ test("the public church has real gathering facts and accounts only after sign-up
   assert.equal(checked.status, 200);
   const visit = (await checked.json()) as { code: string };
   assert.match(visit.code, /^\d{4}$/);
+  const takeover = await handle(
+    new Request("http://localhost/api/auth/signup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "nicholas.will@cinderandcrown.com",
+        password: "gathering",
+        displayName: "Not Nicholas",
+      }),
+    }),
+  );
+  assert.equal(takeover.status, 400);
+  const stolen = await handle(
+    new Request("http://localhost/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "nicholas.will@cinderandcrown.com", password: "gathering" }),
+    }),
+  );
+  assert.equal(stolen.status, 401);
+  const health = await handle(new Request("http://localhost/api/health"));
+  const status = (await health.json()) as { env: string };
+  assert.equal(status.env, "production");
+  const calendar = await handle(new Request("http://localhost/api/events/event-sunday/ics"));
+  assert.equal(calendar.headers.get("content-type"), "text/calendar; charset=utf-8");
+  assert.match(await calendar.text(), /BEGIN:VCALENDAR/);
+});
+
+test("an existing seat can be claimed only with an invite", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const pastor = store.loginSampleStaff({ ip: "t", userAgent: "t" });
+  assert.throws(() =>
+    store.signup({
+      email: "nicholas.will@cinderandcrown.com",
+      password: "gathering",
+      displayName: "Not Nicholas",
+      ip: "t",
+      userAgent: "t",
+    }),
+  );
+  const issued = store.issueInvite(pastor.token, "nicholas.will@cinderandcrown.com");
+  const claimed = store.claimInvite({
+    email: issued.email,
+    inviteToken: issued.inviteToken,
+    password: "gathering",
+    ip: "t",
+    userAgent: "t",
+  });
+  assert.equal(claimed.person.role, "master_admin");
+  assert.throws(() =>
+    store.claimInvite({
+      email: issued.email,
+      inviteToken: issued.inviteToken,
+      password: "gathering",
+      ip: "t",
+      userAgent: "t",
+    }),
+  );
 });

@@ -27,6 +27,7 @@ export const profileBodySchema = z
     phone: z.string().max(40).optional(),
     emailPublic: z.boolean().optional(),
     phonePublic: z.boolean().optional(),
+    listedInDirectory: z.boolean().optional(),
   })
   .strict();
 
@@ -70,6 +71,20 @@ export const householdPickupBodySchema = z
   .object({
     childId: z.string().min(1).max(80),
     code: z.string().regex(/^\d{4}$/),
+  })
+  .strict();
+
+export const claimBodySchema = z
+  .object({
+    email: z.string().email(),
+    inviteToken: z.string().min(8).max(80),
+    password: z.string().min(8).max(200),
+  })
+  .strict();
+
+export const inviteBodySchema = z
+  .object({
+    email: z.string().email(),
   })
   .strict();
 
@@ -177,6 +192,7 @@ export const personSchema = z
     sample: z.boolean(),
     emailPublic: z.boolean(),
     phonePublic: z.boolean(),
+    listedInDirectory: z.boolean(),
   })
   .strict();
 

@@ -71,25 +71,24 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var sermons: [SermonLine]
     public var funds: [FundLine]
     public var givingOpen: Bool
+    public var emailPublic: Bool
+    public var phonePublic: Bool
+    public var listedInDirectory: Bool
 
     public static func bundled(offline: Bool = false) -> ChurchSnapshot {
         ChurchSnapshot(
             fromAPI: false,
-            offlineNote: offline ? "We couldn't reach the church just now." : "",
+            offlineNote: offline ? "We couldn't reach the church just now." : "Loading the church…",
             churchName: SampleChurch.name,
             address: SampleChurch.address,
             pastors: SampleChurch.pastors,
             serviceISO: "",
-            announcements: SampleChurch.announcements,
-            events: SampleChurch.events,
-            sermonTitle: "A New Season of Growth",
+            announcements: [],
+            events: [],
+            sermonTitle: "",
             sermonSample: false,
-            sermonNote: "Sunday messages from the church YouTube channel.",
-            groups: [
-                GroupLine(id: "group-kids", name: "One Hope Kids", summary: "During Sunday, from 3 months through 5th grade.", sample: false, joined: false),
-                GroupLine(id: "group-small", name: "Small Groups", summary: "Grow your faith and build friendships through the week.", sample: false, joined: false),
-                GroupLine(id: "group-growth", name: "Growth Track", summary: "Hear the vision of One Hope and find a place to serve.", sample: false, joined: false),
-            ],
+            sermonNote: offline ? "We couldn't reach the church just now." : "Sunday messages will appear here.",
+            groups: [],
             prayers: [],
             directory: [],
             accountName: "",
@@ -100,8 +99,11 @@ public struct ChurchSnapshot: Equatable, Sendable {
             serving: [],
             pathway: [],
             sermons: [],
-            funds: [FundLine(id: "general", name: "General"), FundLine(id: "outreach", name: "Outreach")],
-            givingOpen: false
+            funds: [],
+            givingOpen: false,
+            emailPublic: false,
+            phonePublic: false,
+            listedInDirectory: false
         )
     }
 }
@@ -118,6 +120,8 @@ public struct PrayerLine: Equatable, Sendable, Identifiable {
     public let id: String
     public let body: String
     public let sample: Bool
+    public let approved: Bool
+    public let mine: Bool
 }
 
 public struct KidLine: Equatable, Sendable, Identifiable {
@@ -221,12 +225,23 @@ public struct ChurchClient: Sendable {
             pastors: home.church.leadPastors,
             serviceISO: home.countdown.service,
             announcements: home.announcements.map { SampleChurch.Announcement(id: $0.id, title: $0.title, body: $0.body, sample: $0.sample) },
-            events: home.events.map { SampleChurch.EventItem(id: $0.id, title: $0.title, detail: $0.location, sample: $0.sample) },
-            sermonTitle: video?.title ?? home.sampleSermon.title,
+            events: home.events.map {
+                SampleChurch.EventItem(
+                    id: $0.id,
+                    title: $0.title,
+                    detail: $0.location,
+                    sample: $0.sample,
+                    start: $0.start.map { Date(timeIntervalSince1970: $0 / 1000) },
+                    end: $0.end.map { Date(timeIntervalSince1970: $0 / 1000) }
+                )
+            },
+            sermonTitle: video?.title ?? "",
             sermonSample: video == nil,
             sermonNote: video == nil ? "Sunday messages will appear here." : "From the church YouTube channel.",
             groups: groups.groups.map { GroupLine(id: $0.id, name: $0.name, summary: $0.summary, sample: $0.sample, joined: $0.joined) },
-            prayers: prayers.prayers.filter { !$0.body.isEmpty }.map { PrayerLine(id: $0.id, body: $0.body, sample: $0.sample) },
+            prayers: prayers.prayers.filter { !$0.body.isEmpty || $0.mine }.map {
+                PrayerLine(id: $0.id, body: $0.body, sample: $0.sample, approved: $0.approved, mine: $0.mine)
+            },
             directory: directory.people.map {
                 DirectoryPerson(id: $0.id, displayName: $0.displayName, email: $0.email, emailPublic: $0.emailPublic, phone: $0.phone, phonePublic: $0.phonePublic)
             },
@@ -239,7 +254,10 @@ public struct ChurchClient: Sendable {
             pathway: pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) },
             sermons: sermons.videos.map { SermonLine(id: $0.id, title: $0.title, thumbnail: $0.thumbnail) },
             funds: funds.funds.map { FundLine(id: $0.id, name: $0.name) },
-            givingOpen: funds.open
+            givingOpen: funds.open,
+            emailPublic: me.person.emailPublic ?? false,
+            phonePublic: me.person.phonePublic ?? false,
+            listedInDirectory: me.person.listedInDirectory ?? false
         )
     }
 
@@ -250,7 +268,7 @@ public struct ChurchClient: Sendable {
         json: Data?
     ) async throws -> Response {
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
-            throw ChurchAPIError.transport("The API address is not valid.")
+            throw ChurchAPIError.transport("We couldn't reach the church just now.")
         }
         let (status, data) = try await transport.send(url: url, method: method, body: json, bearer: token)
         if status >= 400 {
@@ -260,7 +278,7 @@ public struct ChurchClient: Sendable {
         do {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
-            throw ChurchAPIError.transport("The church API returned a shape this app does not understand.")
+            throw ChurchAPIError.transport("We couldn't read the church's reply. Please try again.")
         }
     }
 }
@@ -274,7 +292,7 @@ private struct HomeReply: Decodable {
     struct Church: Decodable { let name: String; let address: String; let leadPastors: [String] }
     struct Countdown: Decodable { let service: String }
     struct Item: Decodable { let id: String; let title: String; let body: String; let sample: Bool }
-    struct Event: Decodable { let id: String; let title: String; let location: String; let sample: Bool }
+    struct Event: Decodable { let id: String; let title: String; let location: String; let sample: Bool; let start: Double?; let end: Double? }
     struct Sermon: Decodable { let title: String }
     let church: Church
     let countdown: Countdown
@@ -302,7 +320,7 @@ private struct GroupsReply: Decodable {
 }
 
 private struct PrayersReply: Decodable {
-    struct Prayer: Decodable { let id: String; let body: String; let sample: Bool }
+    struct Prayer: Decodable { let id: String; let body: String; let sample: Bool; let approved: Bool; let mine: Bool }
     let prayers: [Prayer]
 }
 
@@ -318,7 +336,13 @@ private struct FundsReply: Decodable {
 }
 
 private struct MeReply: Decodable {
-    struct Person: Decodable { let displayName: String; let email: String }
+    struct Person: Decodable {
+        let displayName: String
+        let email: String
+        let emailPublic: Bool?
+        let phonePublic: Bool?
+        let listedInDirectory: Bool?
+    }
     let person: Person
 }
 

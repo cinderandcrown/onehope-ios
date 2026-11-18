@@ -61,13 +61,6 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
             </form>
             <ThemeToggle light={text.light} dark={text.dark} />
           </div>
-          <div className="sample-banner">
-            <strong>{text.sample}</strong>
-            <span>
-              Figures, gifts, and people marked Sample are illustrations. Public service facts are from the
-              church site.
-            </span>
-          </div>
           <div id="content">{children}</div>
         </div>
       </div>

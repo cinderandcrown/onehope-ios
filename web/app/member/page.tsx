@@ -7,33 +7,18 @@ import { loadConfig, loadSermons, withStore } from "@onehope/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function MemberPage() {
+export default async function MemberPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const params = await searchParams;
   const jar = await cookies();
   const token = jar.get("onehope_member")?.value;
-  if (!token) return <MemberAuth />;
+  if (!token) return <MemberAuth error={params.error} />;
   const config = loadConfig(process.env);
   const videos = await loadSermons(fetch, config.youtubeChannelId);
-  const latest = videos[0];
   let demo: MemberDemo;
   try {
     demo = await withStore((store) => {
       const home = store.publicHome();
       const me = store.me(token);
-      let gifts: MemberDemo["gifts"] = [];
-      let needsStepUp = false;
-      try {
-        gifts = store.myGifts(token).map((gift) => ({
-          id: gift.id,
-          fundName: gift.fundName,
-          amount: new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-            gift.amountCents / 100,
-          ),
-          charged: gift.charged,
-          sample: gift.sample,
-        }));
-      } catch {
-        needsStepUp = true;
-      }
       return {
         churchName: home.church.name,
         address: home.church.address,
@@ -49,31 +34,35 @@ export default async function MemberPage() {
           id: event.id,
           title: event.title,
           detail: event.location,
-          sample: event.sample,
+          start: event.start,
+          end: event.end,
         })),
-        sermonTitle: latest?.title ?? home.sampleSermon.title,
-        sermonSample: !latest,
-        sermonNote: latest
-          ? "From the public YouTube channel."
-          : "The YouTube feed did not return a video. The title above is a sample.",
+        videos: videos.map((video) => ({ id: video.id, title: video.title, thumbnail: video.thumbnail })),
         groups: store.listGroups(token).map((group) => ({
           id: group.id,
           name: group.name,
           summary: group.summary,
-          sample: group.sample,
           joined: group.joined,
         })),
         prayers: store
           .listPrayers(token)
-          .filter((prayer) => prayer.body.length > 0)
-          .map((prayer) => ({ id: prayer.id, body: prayer.body, sample: prayer.sample })),
-        kids: store.myKids(token),
+          .filter((prayer) => prayer.body.length > 0 || prayer.mine)
+          .map((prayer) => ({
+            id: prayer.id,
+            body: prayer.body,
+            approved: prayer.approved,
+            mine: prayer.mine,
+          })),
+        kids: store.myKids(token).map((child) => ({
+          id: child.id,
+          displayName: child.displayName,
+          classroom: child.classroom,
+        })),
         pathway: store.myPathway(token).steps,
         serving: store.serving(token).map((item) => ({
           id: item.id,
           position: item.position,
           status: item.status,
-          sample: item.sample,
         })),
         directory: store.directory(token).map((person) => ({
           id: person.id,
@@ -83,8 +72,10 @@ export default async function MemberPage() {
         })),
         accountName: me.displayName,
         accountEmail: me.email,
-        gifts,
-        needsStepUp,
+        emailPublic: me.emailPublic,
+        phonePublic: me.phonePublic,
+        listedInDirectory: me.listedInDirectory,
+        givingOpen: store.givingAvailability().open,
       } satisfies MemberDemo;
     });
   } catch {
@@ -102,11 +93,20 @@ export default async function MemberPage() {
   );
 }
 
-function MemberAuth() {
+function MemberAuth({ error }: { error?: string }) {
+  const message =
+    error === "password"
+      ? "That email and password don't match."
+      : error === "exists"
+        ? "An account with that email already exists."
+        : error
+          ? "We couldn't create that account. Check the name, email, and password."
+          : "";
   return (
     <main className="member">
       <h1>One Hope</h1>
       <p>Sundays at 10:30 a.m. Come early for donuts and coffee.</p>
+      {message ? <p className="error">{message}</p> : null}
       <form className="form" action={signInMember}>
         <label>
           Email

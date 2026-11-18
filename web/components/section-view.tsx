@@ -15,8 +15,8 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-function Badge({ sample }: { sample: boolean }) {
-  return sample ? <span className="badge">Sample</span> : null;
+function Badge({ sample: _sample }: { sample?: boolean }) {
+  return null;
 }
 
 function Locked({ title }: { title: string }) {
@@ -24,8 +24,7 @@ function Locked({ title }: { title: string }) {
     <section className="panel">
       <h2>{title}</h2>
       <p>
-        Confirm it is you again before this opens. This sample pastor session is already stepped up; a normal
-        staff session stops here.
+        Confirm it is you again before this opens.
       </p>
     </section>
   );
@@ -87,7 +86,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <p>{store.modules().filter((item) => item.enabled).length} on for this church.</p>
             </article>
             <article className="card">
-              <h2>Sample sermon</h2>
+              <h2>Latest message</h2>
               <p>
                 <Badge sample /> {home.sampleSermon.title}
               </p>
@@ -361,7 +360,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                 name="body"
                 required
                 maxLength={240}
-                defaultValue="Sample reminder. This will not be delivered."
+                defaultValue="Sunday at 10:30 a.m."
               />
             </label>
             <label>
@@ -489,7 +488,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           )}
           {finance.locked ? null : (
             <>
-              <p>QuickBooks download is a Sample CSV. It is not posted to a company file.</p>
+              <p>Download the giving CSV. It is not posted to a company file.</p>
               <pre>{store.quickbooksCsv(token).slice(0, 180)}</pre>
             </>
           )}

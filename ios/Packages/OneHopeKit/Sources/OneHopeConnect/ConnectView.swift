@@ -10,6 +10,7 @@ public struct ConnectView: View {
     @State private var prayer = ""
     @State private var message = ""
     @State private var childName = ""
+    @State private var classroom = "Preschool"
     @State private var notice = ""
     @State private var pickupCode = ""
     @State private var selectedChild = ""
@@ -46,14 +47,23 @@ public struct ConnectView: View {
                     }
                 }
                 Section("Group note") {
-                    TextField("Message your group", text: $message)
-                    if let group = snapshot.groups.first(where: \.joined) ?? snapshot.groups.first {
-                        Button("Send to \(group.name)") {
-                            Task {
-                                notice = await perform(.message(group.id, message))
-                                message = ""
+                    if snapshot.groups.contains(where: \.joined) {
+                        TextField("Message your group", text: $message)
+                        if let group = snapshot.groups.first(where: \.joined) {
+                            Button("Send to \(group.name)") {
+                                let body = message.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !body.isEmpty else {
+                                    notice = "Write a note before sending it."
+                                    return
+                                }
+                                Task {
+                                    notice = await perform(.message(group.id, body))
+                                    message = ""
+                                }
                             }
                         }
+                    } else {
+                        Text("Join a group before sending a note.")
                     }
                 }
                 Section("Events") {
@@ -73,19 +83,42 @@ public struct ConnectView: View {
                 Section("Prayer") {
                     TextField("Prayer request", text: $prayer, axis: .vertical)
                     Button("Share a prayer") {
+                        let body = prayer.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !body.isEmpty else {
+                            notice = "Write a prayer before sharing it."
+                            return
+                        }
                         Task {
-                            notice = await perform(.prayer(prayer))
+                            notice = await perform(.prayer(body))
                             prayer = ""
                         }
                     }
                     ForEach(snapshot.prayers) { prayer in
-                        Text(prayer.body)
+                        VStack(alignment: .leading) {
+                            Text(prayer.body)
+                            if prayer.mine && !prayer.approved {
+                                Text("Waiting for pastor approval").font(.footnote)
+                            }
+                        }
                     }
                 }
                 Section("Kids check-in") {
                     TextField("Child's name", text: $childName)
+                    Picker("Classroom", selection: $classroom) {
+                        Text("Nursery").tag("Nursery")
+                        Text("Preschool").tag("Preschool")
+                        Text("Elementary").tag("Elementary")
+                    }
                     Button("Add child") {
-                        Task { notice = await perform(.addChild(childName, "Sunday")) }
+                        let name = childName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !name.isEmpty else {
+                            notice = "Enter your child's name."
+                            return
+                        }
+                        Task {
+                            notice = await perform(.addChild(name, classroom))
+                            childName = ""
+                        }
                     }
                     if !snapshot.kids.isEmpty {
                         Picker("Child", selection: $selectedChild) {
@@ -119,8 +152,8 @@ public struct ConnectView: View {
             let item = EKEvent(eventStore: store)
             item.title = event.title
             item.location = event.detail
-            item.startDate = Date()
-            item.endDate = Date().addingTimeInterval(90 * 60)
+        item.startDate = event.start ?? Date()
+        item.endDate = event.end ?? (event.start ?? Date()).addingTimeInterval(90 * 60)
             item.calendar = store.defaultCalendarForNewEvents
             try? store.save(item, span: .thisEvent)
         }
