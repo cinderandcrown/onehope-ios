@@ -36,9 +36,17 @@ export type MemberDemo = {
 const TABS: Tab[] = ["Home", "Watch", "Give", "Connect", "More"];
 const CLASSROOMS = ["Nursery", "Preschool", "Elementary"];
 
-export function MemberTabs({ demo }: { demo: MemberDemo }) {
-  const [tab, setTab] = useState<Tab>("Home");
-  const [notice, setNotice] = useState("");
+export function MemberTabs({
+  demo,
+  initialTab = "Home",
+  initialNotice = "",
+}: {
+  demo: MemberDemo;
+  initialTab?: Tab;
+  initialNotice?: string;
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [notice, setNotice] = useState(initialNotice);
   return (
     <main className="member">
       <h1>{tab}</h1>

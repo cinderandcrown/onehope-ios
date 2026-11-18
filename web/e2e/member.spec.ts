@@ -66,6 +66,12 @@ test("a member can sign in, act, and see a clear password error", async ({ page 
   await page.getByRole("button", { name: "Save privacy" }).click();
   await expect(page.getByText("Your privacy settings were saved.")).toBeVisible();
 
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByLabel("Password to delete").fill("wrong-password");
+  await page.getByRole("button", { name: "Delete my account" }).click();
+  await expect(page.getByRole("heading", { name: "More" })).toBeVisible();
+  await expect(page.getByText("That password didn't match.")).toBeVisible();
+
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
   await page.locator('input[name="email"]').first().fill(email);

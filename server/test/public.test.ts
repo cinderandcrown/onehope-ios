@@ -86,6 +86,28 @@ test("the public church has real gathering facts and accounts only after sign-up
   assert.match(await calendar.text(), /BEGIN:VCALENDAR/);
 });
 
+test("a living member cannot take the name Former member or lose their records", () => {
+  const store = new ChurchStore(loadConfig({}), { fixture: false });
+  const session = store.signup({
+    email: "ada@onehope.test",
+    password: "gathering",
+    displayName: "Ada",
+    ip: "t",
+    userAgent: "t",
+  });
+  store.addChild(session.token, { displayName: "Remy", classroom: "Preschool" });
+  store.submitPrayer(session.token, { body: "For the city.", visibility: "public" });
+  assert.throws(() => store.updateProfile(session.token, { displayName: "Former member" }));
+  const copy = new ChurchStore(loadConfig({}), { fixture: false });
+  copy.installDocument(store.toDocument());
+  const again = copy.login({ email: "ada@onehope.test", password: "gathering", ip: "t", userAgent: "t" });
+  assert.equal(copy.myKids(again.token).length, 1);
+  assert.equal(
+    copy.listPrayers(again.token).some((row) => row.body.includes("city")),
+    true,
+  );
+});
+
 test("an existing seat can be claimed only with an invite", async () => {
   const store = new ChurchStore(loadConfig({}));
   const pastor = store.loginSampleStaff({ ip: "t", userAgent: "t" });

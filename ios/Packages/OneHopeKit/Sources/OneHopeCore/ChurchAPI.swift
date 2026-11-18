@@ -206,6 +206,7 @@ public struct ChurchClient: Sendable {
         let serving: ServingReply = try await send("/api/serving/mine", method: "GET", token: token, json: nil)
         let pathway: PathwayReply = try await send("/api/pathways/mine", method: "GET", token: token, json: nil)
         let funds: FundsReply = try await send("/api/giving/funds", method: "GET", token: nil, json: nil)
+        let eventMine: EventsMineReply = try await send("/api/events/mine", method: "GET", token: token, json: nil)
         var gifts: [GiftLine] = []
         var needsStepUp = false
         do {
@@ -229,7 +230,8 @@ public struct ChurchClient: Sendable {
                 pathway: pathway,
                 funds: funds,
                 gifts: gifts,
-                needsStepUp: needsStepUp
+                needsStepUp: needsStepUp,
+                registeredEventIds: eventMine.events.filter(\.registered).map(\.id)
             )
         )
     }
@@ -300,6 +302,12 @@ struct PrayersReply: Decodable {
 struct SermonsReply: Decodable {
     struct Video: Decodable { let id: String; let title: String; let thumbnail: String? }
     let videos: [Video]
+}
+
+struct EventsMineReply: Decodable {
+    struct Event: Decodable { let id: String; let registered: Bool }
+
+    let events: [Event]
 }
 
 struct FundsReply: Decodable {

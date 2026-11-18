@@ -57,6 +57,9 @@ final class ChurchLogicTests: XCTestCase {
             if url.path == "/api/home" {
                 return (200, home)
             }
+            if url.path == "/api/events/mine" {
+                return (200, Data("{\"events\":[{\"id\":\"e\",\"registered\":true}]}".utf8))
+            }
             if url.path == "/api/giving/mine" {
                 return (401, Data("{\"ok\":false,\"error\":\"step up\",\"code\":\"step_up_required\"}".utf8))
             }
@@ -73,6 +76,7 @@ final class ChurchLogicTests: XCTestCase {
         XCTAssertTrue(snapshot.gifts.isEmpty)
         XCTAssertEqual(snapshot.kids.first?.displayName, "Remy Sample")
         XCTAssertEqual(snapshot.pathway.first?.title, "Baptism")
+        XCTAssertEqual(snapshot.events.first?.registered, true)
         XCTAssertTrue(snapshot.serving.isEmpty)
     }
 

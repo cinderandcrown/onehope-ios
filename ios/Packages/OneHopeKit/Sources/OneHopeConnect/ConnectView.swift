@@ -71,9 +71,10 @@ public struct ConnectView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(event.title).font(.headline)
                             Text(event.detail).font(.footnote)
-                            Button("Register") {
+                            Button(event.registered ? "Registered" : "Register") {
                                 Task { notice = await perform(.register(event.id)) }
                             }
+                            .disabled(event.registered)
                             Button("Add to calendar") {
                                 addToCalendar(event)
                             }

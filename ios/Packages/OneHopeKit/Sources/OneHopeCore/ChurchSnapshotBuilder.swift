@@ -13,6 +13,7 @@ struct MemberParts {
     let funds: FundsReply
     let gifts: [GiftLine]
     let needsStepUp: Bool
+    let registeredEventIds: [String]
 }
 
 func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
@@ -32,7 +33,8 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
                 detail: $0.location,
                 sample: $0.sample,
                 start: $0.start.map { Date(timeIntervalSince1970: $0 / 1000) },
-                end: $0.end.map { Date(timeIntervalSince1970: $0 / 1000) }
+                end: $0.end.map { Date(timeIntervalSince1970: $0 / 1000) },
+                registered: parts.registeredEventIds.contains($0.id)
             )
         },
         sermonTitle: video?.title ?? "",

@@ -410,6 +410,7 @@ export class ChurchStore {
     const email = input.email.trim().toLowerCase();
     const displayName = input.displayName.trim();
     if (!email || !displayName) throw new AccessError("invalid", "Name and email are required.");
+    if (isReservedName(displayName)) throw new AccessError("invalid", "Choose a different name.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
     if (this.byEmail(email)) {
       throw new AccessError("invalid", "We couldn't create that account. Check the name, email, and password.");
@@ -572,7 +573,11 @@ export class ChurchStore {
     const person = this.requirePerson(actor.personId);
     if (typeof input.emailPublic === "boolean") person.emailPublic = input.emailPublic;
     if (typeof input.phonePublic === "boolean") person.phonePublic = input.phonePublic;
-    if (input.displayName?.trim()) person.displayName = input.displayName.trim();
+    if (input.displayName?.trim()) {
+      const name = input.displayName.trim();
+      if (isReservedName(name)) throw new AccessError("invalid", "Choose a different name.");
+      person.displayName = name;
+    }
     if (typeof input.phone === "string") person.phone = input.phone.trim();
     if (typeof input.listedInDirectory === "boolean") person.listedInDirectory = input.listedInDirectory;
     return this.toPerson(person);
@@ -2193,7 +2198,7 @@ export class ChurchStore {
 
   private scrubFormerMembers() {
     for (const person of [...this.people.values()]) {
-      if (!person.deleted && person.displayName !== "Former member") continue;
+      if (!person.deleted) continue;
       this.eraseOwnedData(person.id, person.householdId);
     }
   }
@@ -2297,6 +2302,10 @@ export class ChurchStore {
       });
     }
   }
+}
+
+function isReservedName(name: string): boolean {
+  return name.trim().toLowerCase() === "former member";
 }
 
 function hashInvite(token: string): string {

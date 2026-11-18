@@ -582,7 +582,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                   </td>
                   <td className={row.read ? "yes" : "no"}>{row.read ? "Yes" : "No"}</td>
                   <td className={row.write ? "yes" : "no"}>{row.write ? "Yes" : "No"}</td>
-                  <td>{row.status === "enforced-demo" ? "Enforced demo" : "Scaffolded"}</td>
+                  <td>{row.status === "enforced-demo" ? "Ready" : "Not connected"}</td>
                 </tr>
               ))}
             </tbody>

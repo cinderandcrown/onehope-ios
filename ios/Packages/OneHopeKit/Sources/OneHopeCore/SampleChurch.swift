@@ -23,6 +23,7 @@ public enum SampleChurch {
         public let sample: Bool
         public let start: Date?
         public let end: Date?
+        public let registered: Bool
     }
 
     public static let announcements: [Announcement] = [
@@ -30,7 +31,7 @@ public enum SampleChurch {
     ]
 
     public static let events: [EventItem] = [
-        EventItem(id: "sunday", title: "Sunday gathering", detail: address, sample: false, start: nil, end: nil),
+        EventItem(id: "sunday", title: "Sunday gathering", detail: address, sample: false, start: nil, end: nil, registered: false),
     ]
 
     public static let viewer = DirectoryPerson(

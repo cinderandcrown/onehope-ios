@@ -93,7 +93,11 @@ export default async function MemberPage({
           Sign out
         </button>
       </form>
-      <MemberTabs demo={demo} />
+      <MemberTabs
+        demo={demo}
+        initialTab={params.error === "password" ? "More" : "Home"}
+        initialNotice={params.error === "password" ? "That password didn't match." : ""}
+      />
     </>
   );
 }
