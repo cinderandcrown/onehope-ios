@@ -321,6 +321,7 @@ export class ChurchStore {
     if (config.masterAdminSecondaryEmail.trim()) {
       this.ensureSeat(config.masterAdminSecondaryEmail, config.masterAdminSecondaryName);
     }
+    this.ensureDemoSessions();
   }
 
   status(version: string) {
@@ -373,7 +374,8 @@ export class ChurchStore {
     person.lastIp = input.ip;
     person.lastUserAgent = input.userAgent;
     const staff = isStaff(person.role);
-    const token = newId("session");
+    const token =
+      this.config.env === "demo" && person.id === "person-avery" ? "session-member-demo" : newId("session");
     this.sessions.set(token, {
       token,
       personId: person.id,
@@ -1257,6 +1259,13 @@ export class ChurchStore {
     if (isStaff(person.role) && !session.mfaVerified) {
       throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
     }
+    if (
+      this.config.env === "demo" &&
+      (session.userAgent === "member-demo" || session.userAgent === "staff-demo")
+    ) {
+      session.lastActivity = this.now();
+      if (session.userAgent === "staff-demo") session.stepUpUntil = this.now() + this.config.stepUpMs;
+    }
     const idle = isStaff(person.role) ? this.config.sessionIdleStaffMs : this.config.sessionIdleMemberMs;
     if (this.now() - session.lastActivity > idle) {
       this.sessions.delete(token);
@@ -1906,6 +1915,37 @@ export class ChurchStore {
     this.visitors.splice(0, this.visitors.length, ...document.visitors);
     this.requests.splice(0, this.requests.length, ...document.requests);
     this.drafts.splice(0, this.drafts.length, ...document.drafts);
+    this.ensureDemoSessions();
+  }
+
+  private ensureDemoSessions() {
+    if (this.config.env !== "demo") return;
+    if (!this.sessions.has("session-member-demo")) {
+      this.sessions.set("session-member-demo", {
+        token: "session-member-demo",
+        personId: "person-avery",
+        createdAt: this.now(),
+        lastActivity: this.now(),
+        mfaVerified: true,
+        stepUpUntil: 0,
+        ip: "demo",
+        userAgent: "member-demo",
+        sample: true,
+      });
+    }
+    if (!this.sessions.has("session-staff-demo")) {
+      this.sessions.set("session-staff-demo", {
+        token: "session-staff-demo",
+        personId: "person-reese",
+        createdAt: this.now(),
+        lastActivity: this.now(),
+        mfaVerified: true,
+        stepUpUntil: this.now() + this.config.stepUpMs,
+        ip: "demo",
+        userAgent: "staff-demo",
+        sample: true,
+      });
+    }
   }
 }
 

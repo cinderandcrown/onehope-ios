@@ -38,7 +38,7 @@ Leave Stripe, Planning Center, Resend, Twilio, Facebook, and Apple Pay flags uns
 
 ## How to tell it is live
 
-`GET /api/health` includes `"persistence":"postgres"` when a database URL is present, and `"persistence":"memory"` when it is not. Memory mode is what CI uses. It is not a shared demo: each server instance would keep its own copy.
+`GET /api/health` includes `"persistence":"postgres"` when a database URL is present, and `"persistence":"memory"` when it is not. Memory mode is what CI uses. On the hosted demo, two published sessions (`session-member-demo` and `session-staff-demo`) are recreated in every instance so the pages and the sample member login still open. Writes made in one instance are not visible in another until `DATABASE_URL` is set.
 
 Staff preview and the member page both read that same snapshot, so a change made in one shows in the other after the next request.
 

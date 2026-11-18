@@ -17,10 +17,7 @@ async function setSession(token: string) {
 }
 
 export async function previewSampleStaff() {
-  const session = await withStore((store) =>
-    store.loginSampleStaff({ ip: "command-center", userAgent: "sample-preview" }),
-  );
-  await setSession(session.token);
+  await setSession("session-staff-demo");
   redirect("/overview");
 }
 
