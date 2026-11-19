@@ -353,14 +353,16 @@ public struct ChurchClient: Sendable {
         json: Data?
     ) async throws -> Response {
         try await ChurchRequest.send(
-            baseURL: baseURL,
-            transport: transport,
-            cache: cache,
-            cacheAge: cacheAge,
-            path: path,
-            method: method,
-            token: token,
-            json: json
+            ChurchRequest.Call(
+                baseURL: baseURL,
+                transport: transport,
+                cache: cache,
+                cacheAge: cacheAge,
+                path: path,
+                method: method,
+                token: token,
+                json: json
+            )
         )
     }
 }

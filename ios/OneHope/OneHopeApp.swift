@@ -53,11 +53,17 @@ struct RootView: View {
             PrayerView(snapshot: snapshot, onRefresh: load, perform: perform)
                 .tabItem { Label(L10n.text(.prayer), systemImage: "hands.sparkles") }
                 .tag("prayer")
-            ConnectView(snapshot: snapshot, onRefresh: load, perform: perform, give: {
-                GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
-            }) {
-                account
-            }
+            ConnectView(
+                snapshot: snapshot,
+                onRefresh: load,
+                perform: perform,
+                give: {
+                    GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
+                },
+                account: {
+                    account
+                }
+            )
             .id(token != nil)
             .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
             .tag("connect")
