@@ -3,7 +3,7 @@ import OneHopeCore
 import OneHopeDesign
 import SwiftUI
 
-/// Groups and events from Church Center for everyone; next steps, prayer, and kids check-in for members.
+/// Groups, events, Toolkit, Recovery, and care for everyone; next steps, prayer, and kids check-in for members.
 /// `account` is the sign-in screen for a guest, or account and directory settings for a member.
 public struct ConnectView<Account: View>: View {
     private let snapshot: ChurchSnapshot
@@ -44,6 +44,9 @@ public struct ConnectView<Account: View>: View {
                 }
                 if snapshot.signedIn {
                     MemberSections(snapshot: snapshot, perform: perform, notice: $notice)
+                }
+                if let growth = snapshot.growth {
+                    GrowSection(growth: growth, signedIn: snapshot.signedIn, perform: perform)
                 }
                 eventsSection
                 ForEach(categories, id: \.self) { category in
@@ -140,10 +143,6 @@ private struct MemberSections: View {
     @State private var prayer = ""
     @State private var contact = false
     @State private var message = ""
-    @State private var childName = ""
-    @State private var classroom = "Preschool"
-    @State private var pickupCode = ""
-    @State private var selectedChild = ""
 
     var body: some View {
         Section("Next steps") {
@@ -167,7 +166,7 @@ private struct MemberSections: View {
         }
         groupNote
         prayerRequest
-        kids
+        KidsSection(kids: snapshot.kids, perform: perform, notice: $notice)
     }
 
     private var groupNote: some View {
@@ -230,46 +229,6 @@ private struct MemberSections: View {
                     }
                 }
             }
-        }
-    }
-
-    private var kids: some View {
-        Section("Kids check-in") {
-            TextField("Child's name", text: $childName)
-            Picker("Classroom", selection: $classroom) {
-                Text("Nursery").tag("Nursery")
-                Text("Preschool").tag("Preschool")
-                Text("Elementary").tag("Elementary")
-            }
-            Button("Add child") {
-                let name = childName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty else {
-                    notice = "Enter your child's name."
-                    return
-                }
-                Task {
-                    notice = await perform(.addChild(name, classroom))
-                    childName = ""
-                }
-            }
-            if !snapshot.kids.isEmpty {
-                Picker("Child", selection: $selectedChild) {
-                    Text("Choose").tag("")
-                    ForEach(snapshot.kids) { child in
-                        Text(child.displayName).tag(child.id)
-                    }
-                }
-                Button("Check in") {
-                    Task { notice = await perform(.checkIn(selectedChild)) }
-                }
-                TextField("Security code", text: $pickupCode)
-                    .keyboardType(.numberPad)
-                Button("Confirm pickup") {
-                    Task { notice = await perform(.pickup(selectedChild, pickupCode)) }
-                }
-            }
-            Text("Pickup is confirmed for a guardian, with the security code from check-in, when two adults are at the station.")
-                .font(.footnote)
         }
     }
 
