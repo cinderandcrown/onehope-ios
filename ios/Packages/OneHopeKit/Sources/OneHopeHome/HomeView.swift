@@ -141,7 +141,9 @@ private struct ReminderToggle: View {
             .onChange(of: enabled) { _, value in
                 Task {
                     let on = await DailyReminder.setEnabled(value)
-                    if value, !on { enabled = false }
+                    if value, !on {
+                        enabled = false
+                    }
                 }
             }
         Text("This stays on this phone. It is not a push from the church.").font(.footnote)

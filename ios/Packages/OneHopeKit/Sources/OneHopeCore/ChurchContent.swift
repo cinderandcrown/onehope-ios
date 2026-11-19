@@ -179,7 +179,9 @@ public enum DayGreeting {
         let hour = calendar.component(.hour, from: now)
         let hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
         let first = name.split(separator: " ").first.map(String.init) ?? ""
-        if first.count < 2 || first.lowercased() == "former" { return hello }
+        if first.count < 2 || first.lowercased() == "former" {
+            return hello
+        }
         return "\(hello), \(first)"
     }
 }

@@ -122,7 +122,7 @@ export function MemberTabs({
   const go = (next: View) => {
     setNotice("");
     setView(next);
-    document.querySelector(".member")?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
   };
   return (
     <div className="phone">

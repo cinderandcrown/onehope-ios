@@ -124,8 +124,13 @@ public extension View {
 
 public extension Font {
     /// Large headlines in the site's scale. Articulat CF is not licensed for the app, so this is SF.
-    static var hopeDisplay: Font { .system(size: 40, weight: .semibold, design: .default) }
-    static var hopeTitle: Font { .system(.title2, design: .default).weight(.semibold) }
+    static var hopeDisplay: Font {
+        .system(size: 40, weight: .semibold, design: .default)
+    }
+
+    static var hopeTitle: Font {
+        .system(.title2, design: .default).weight(.semibold)
+    }
 }
 
 enum BundledPhoto {
@@ -133,10 +138,14 @@ enum BundledPhoto {
 
     static func image(named resource: String, ext: String = "jpg") -> UIImage? {
         let key = "\(resource).\(ext)" as NSString
-        if let cached = cache.object(forKey: key) { return cached }
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
         guard let url = Bundle.module.url(forResource: resource, withExtension: ext),
               let data = try? Data(contentsOf: url),
-              let image = UIImage(data: data) else { return nil }
+              let image = UIImage(data: data) else {
+            return nil
+        }
         cache.setObject(image, forKey: key)
         return image
     }

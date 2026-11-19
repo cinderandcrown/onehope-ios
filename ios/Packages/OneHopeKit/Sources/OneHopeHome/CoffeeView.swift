@@ -91,5 +91,7 @@ private struct MenuLine: Identifiable {
     let detail: String
     let price: String
 
-    var id: String { name }
+    var id: String {
+        name
+    }
 }

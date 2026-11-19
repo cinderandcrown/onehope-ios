@@ -10,7 +10,7 @@ enum DailyReminder {
             center.removePendingNotificationRequests(withIdentifiers: [id])
             return false
         }
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        let granted = await (try? center.requestAuthorization(options: [.alert, .sound])) ?? false
         guard granted else { return false }
         let content = UNMutableNotificationContent()
         content.title = "One Hope"

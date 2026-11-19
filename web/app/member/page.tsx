@@ -4,6 +4,12 @@ import { redirect } from "next/navigation";
 import { MemberTabs, type ChurchView, type MemberView } from "@/components/member-tabs";
 import { GIVING_FREQUENCIES, greeting, loadConfig, loadSermons, withStore } from "@onehope/server";
 
+/** Hide labeled sample rows when the church has real ones. A demo with only sample rows still works. */
+function preferReal<T extends { sample?: boolean }>(rows: T[]): T[] {
+  const real = rows.filter((row) => !row.sample);
+  return real.length > 0 ? real : rows;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function MemberPage({
@@ -34,31 +40,26 @@ export default async function MemberPage({
           minute: "2-digit",
         }).format(new Date(home.countdown.service)),
         announcements: home.announcements.filter((item) => !item.sample && !item.title.startsWith("Sample")),
-        events: home.events
-          .filter((event) => !event.sample)
-          .map((event) => ({
-            id: event.id,
-            title: event.title,
-            detail: event.location,
-            start: event.start,
-            end: event.end,
-            url: event.url,
-          })),
-        groups: store
-          .listGroups(token)
-          .filter((group) => !group.sample)
-          .map((group) => ({
-            id: group.id,
-            name: group.name,
-            summary: group.summary,
-            category: group.category,
-            schedule: group.schedule,
-            area: group.area,
-            leaders: group.leaders,
-            joinType: group.joinType,
-            url: group.url,
-            joined: group.joined,
-          })),
+        events: preferReal(home.events).map((event) => ({
+          id: event.id,
+          title: event.title,
+          detail: event.location,
+          start: event.start,
+          end: event.end,
+          url: event.url,
+        })),
+        groups: preferReal(store.listGroups(token)).map((group) => ({
+          id: group.id,
+          name: group.name,
+          summary: group.summary,
+          category: group.category,
+          schedule: group.schedule,
+          area: group.area,
+          leaders: group.leaders,
+          joinType: group.joinType,
+          url: group.url,
+          joined: group.joined,
+        })),
         videos: videos.map((video) => ({
           id: video.id,
           title: video.title,
