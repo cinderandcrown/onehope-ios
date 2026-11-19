@@ -129,9 +129,23 @@ test("the Toolkit, Recovery page, and support choices are public and match the c
 });
 
 test("giving offers the church's frequencies and only fund names the church publishes", async () => {
-  const church = new ChurchStore(loadConfig({}));
+  let stripeCalls = 0;
+  const church = new ChurchStore(
+    loadConfig({
+      STRIPE_SECRET_KEY: "sk_test_onehope",
+      STRIPE_PUBLISHABLE_KEY: "pk_test_onehope",
+    }),
+    {
+      fetchImpl: async () => {
+        stripeCalls += 1;
+        return new Response("{}", { status: 200 });
+      },
+    },
+  );
   const avery = login(church, "avery@sample.onehope");
   church.stepUp(avery, { password: SAMPLE_PASSWORD });
+  assert.equal(church.givingAvailability().open, true);
+  assert.equal(church.status("test").givingLive, false);
   assert.deepEqual(
     church.funds().map((fund) => fund.name),
     ["One Hope Church", "Christmas Giving Tree"],
@@ -145,7 +159,10 @@ test("giving offers the church's frequencies and only fund names the church publ
     assert.equal(gift.recurring, recurring);
     assert.equal(gift.fundName, "Christmas Giving Tree");
     assert.equal(gift.charged, false);
+    assert.equal(gift.processor, "demo");
+    assert.equal(gift.sample, true);
   }
+  assert.equal(stripeCalls, 0);
   const handle = createApi({ store: church });
   const response = await handle(
     new Request("http://localhost/api/giving/gifts", {
@@ -155,6 +172,46 @@ test("giving offers the church's frequencies and only fund names the church publ
     }),
   );
   assert.equal(response.status, 400);
+});
+
+test("a gift is refused when giving is not open", async () => {
+  let stripeCalls = 0;
+  const church = new ChurchStore(loadConfig({}), {
+    fetchImpl: async () => {
+      stripeCalls += 1;
+      return new Response("{}", { status: 200 });
+    },
+  });
+  const handle = createApi({ store: church });
+  const health = await handle(new Request("http://localhost/api/health"));
+  const healthBody = (await health.json()) as { givingLive: boolean };
+  assert.equal(health.status, 200);
+  assert.equal(healthBody.givingLive, false);
+  const funds = await handle(new Request("http://localhost/api/giving/funds"));
+  const fundsBody = (await funds.json()) as { open: boolean };
+  assert.equal(funds.status, 200);
+  assert.equal(fundsBody.open, false);
+  const avery = login(church, "avery@sample.onehope");
+  church.stepUp(avery, { password: SAMPLE_PASSWORD });
+  const before = church.myGifts(avery).length;
+  const response = await handle(
+    new Request("http://localhost/api/giving/gifts", {
+      method: "POST",
+      headers: { authorization: `Bearer ${avery}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        amountCents: 500,
+        fundId: "christmas-giving-tree",
+        recurring: "twice_monthly",
+      }),
+    }),
+  );
+  const body = (await response.json()) as { ok: boolean; code: string; error: string };
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "invalid");
+  assert.equal(body.error, "Giving isn't open.");
+  assert.equal(church.myGifts(avery).length, before);
+  assert.equal(stripeCalls, 0);
 });
 
 test("a family checks in, sees it, and only a verified guardian with the code picks up once", () => {
@@ -175,14 +232,103 @@ test("a family checks in, sees it, and only a verified guardian with the code pi
   assert.equal(church.householdPickup(avery, { childId: "child-remy", code: tag }).allowed, false);
 });
 
-test("pickup locks after five wrong codes", () => {
+test("a short-staffed station does not lock pickup, and the right code works once two adults are on duty", () => {
   const church = new ChurchStore(loadConfig({}));
   const avery = login(church, "avery@sample.onehope");
   const { code: tag } = church.checkIn(avery, "child-remy");
   const wrong = tag === "1000" ? "1001" : "1000";
-  for (let index = 0; index < 5; index += 1)
-    assert.equal(church.householdPickup(avery, { childId: "child-remy", code: wrong }).allowed, false);
+  for (let index = 0; index < 6; index += 1) {
+    assert.deepEqual(
+      church.householdPickup(avery, { childId: "child-remy", code: index % 2 === 0 ? wrong : tag }),
+      {
+        allowed: false,
+        reason: "Two adults must be on duty at the station.",
+      },
+    );
+  }
+  church.clockIn(staff(church, "frankie@sample.onehope"));
+  assert.deepEqual(church.householdPickup(avery, { childId: "child-remy", code: tag }), {
+    allowed: false,
+    reason: "Two adults must be on duty at the station.",
+  });
+  church.clockIn(staff(church, "dana@sample.onehope"));
+  assert.deepEqual(church.householdPickup(avery, { childId: "child-remy", code: tag }), {
+    allowed: true,
+    reason: "Guardian verified and the security code matches.",
+  });
+  assert.deepEqual(church.householdPickup(avery, { childId: "child-remy", code: tag }), {
+    allowed: false,
+    reason: "This child is not checked in.",
+  });
+});
+
+test("custody and unauthorized refusals do not count toward the pickup lockout", () => {
+  const church = new ChurchStore(loadConfig({}));
+  const frankie = staff(church, "frankie@sample.onehope");
+  church.clockIn(frankie);
+  church.clockIn(staff(church, "dana@sample.onehope"));
+  for (let index = 0; index < 5; index += 1) {
+    assert.deepEqual(
+      church.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-blake", code: "4821" }),
+      { allowed: false, reason: "A custody restriction blocks this pickup." },
+    );
+    assert.deepEqual(
+      church.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-casey", code: "0000" }),
+      { allowed: false, reason: "This adult is not an authorized guardian." },
+    );
+  }
+  assert.deepEqual(
+    church.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "4821" }),
+    { allowed: true, reason: "Guardian verified and the security code matches." },
+  );
+});
+
+test("pickup locks after five wrong codes", () => {
+  const church = new ChurchStore(loadConfig({}));
+  const avery = login(church, "avery@sample.onehope");
+  church.clockIn(staff(church, "frankie@sample.onehope"));
+  church.clockIn(staff(church, "dana@sample.onehope"));
+  const { code: tag } = church.checkIn(avery, "child-remy");
+  const wrong = tag === "1000" ? "1001" : "1000";
+  for (let index = 0; index < 5; index += 1) {
+    assert.deepEqual(church.householdPickup(avery, { childId: "child-remy", code: wrong }), {
+      allowed: false,
+      reason: "Security code does not match.",
+    });
+  }
   assert.throws(() => church.householdPickup(avery, { childId: "child-remy", code: tag }), {
     code: "rate_limited",
   });
+  assert.equal(church.myKids(avery).find((child) => child.id === "child-remy")?.checkedIn, true);
+});
+
+test("live giving still records a Stripe gift when funds are open", async () => {
+  let stripeCalls = 0;
+  const church = new ChurchStore(
+    loadConfig({
+      STRIPE_SECRET_KEY: "sk_live_x",
+      STRIPE_PUBLISHABLE_KEY: "pk_live_x",
+      GIVING_LIVE: "true",
+      APPLE_PAY_NONPROFIT_APPROVED: "true",
+    }),
+    {
+      fetchImpl: async () => {
+        stripeCalls += 1;
+        return new Response("{}", { status: 200 });
+      },
+    },
+  );
+  assert.equal(church.status("test").givingLive, true);
+  assert.equal(church.givingAvailability().open, true);
+  const avery = login(church, "avery@sample.onehope");
+  church.stepUp(avery, { password: SAMPLE_PASSWORD });
+  const gift = await church.createGift(avery, {
+    amountCents: 500,
+    fundId: "christmas-giving-tree",
+    recurring: "twice_monthly",
+  });
+  assert.equal(gift.processor, "stripe");
+  assert.equal(gift.charged, false);
+  assert.equal(gift.sample, false);
+  assert.equal(stripeCalls, 1);
 });

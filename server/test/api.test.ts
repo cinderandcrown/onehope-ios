@@ -21,9 +21,10 @@ test("health, card rejection, cross-site cookies, and push are enforced at the H
   });
   const health = await handle(new Request("http://localhost/api/health"));
   assert.equal(health.status, 200);
-  const healthBody = (await health.json()) as { version: string; sendsEnabled: boolean };
+  const healthBody = (await health.json()) as { version: string; sendsEnabled: boolean; givingLive: boolean };
   assert.equal(healthBody.version, VERSION);
   assert.equal(healthBody.sendsEnabled, false);
+  assert.equal(healthBody.givingLive, false);
 
   const preview = await handle(
     new Request("http://localhost/api/auth/sample-staff", {
@@ -46,6 +47,10 @@ test("health, card rejection, cross-site cookies, and push are enforced at the H
     }),
   );
   assert.equal(gift.status, 400);
+  const funds = await handle(new Request("http://localhost/api/giving/funds"));
+  const fundsBody = (await funds.json()) as { open: boolean };
+  assert.equal(funds.status, 200);
+  assert.equal(fundsBody.open, false);
   const clean = await handle(
     new Request("http://localhost/api/giving/gifts", {
       method: "POST",
@@ -53,9 +58,10 @@ test("health, card rejection, cross-site cookies, and push are enforced at the H
       body: JSON.stringify({ amountCents: 500, fundId: "general", recurring: "once" }),
     }),
   );
-  const cleanBody = (await clean.json()) as { gift: { charged: boolean } };
-  assert.equal(clean.status, 200);
-  assert.equal(cleanBody.gift.charged, false);
+  const cleanBody = (await clean.json()) as { code: string; error: string };
+  assert.equal(clean.status, 400);
+  assert.equal(cleanBody.code, "invalid");
+  assert.equal(cleanBody.error, "Giving isn't open.");
 
   const crossSite = await handle(
     new Request("http://localhost/api/auth/logout", {
