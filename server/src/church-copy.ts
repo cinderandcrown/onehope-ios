@@ -253,3 +253,145 @@ export const CHURCH_EVENTS: readonly PublicEvent[] = [
     url: `${CC}/registrations/events/3990859`,
   },
 ];
+
+/** The six boxes on the church's Support/Assistance Request form (Church Center form 109520). */
+export const SUPPORT_NEEDS = [
+  { id: "counseling", label: "Short term pastoral counseling" },
+  { id: "premarital", label: "Pre-marital counseling" },
+  { id: "hospital", label: "Hospital visitation request" },
+  { id: "recovery", label: "One Hope recovery group" },
+  { id: "volunteer", label: "I'd like to volunteer" },
+  { id: "clothing", label: "In need of clothing" },
+] as const;
+
+export type SupportNeedId = (typeof SUPPORT_NEEDS)[number]["id"];
+
+export const SUPPORT_NEED_IDS = SUPPORT_NEEDS.map((need) => need.id) as [SupportNeedId, ...SupportNeedId[]];
+
+export const SUPPORT = {
+  title: "Support and assistance",
+  intro: "Please fill out this form and you will be contacted soon.",
+  prompt: "Please check each box below that applies.",
+  needs: SUPPORT_NEEDS,
+};
+
+/**
+ * The church's published Toolkit page, word for word in titles and links.
+ * Scripture text is the King James Version for the references the church lists.
+ */
+export const TOOLKIT = {
+  title: "Toolkit for Spiritual Growth",
+  source: `${CC}/pages/toolkit`,
+  readingPlan: {
+    title: "Bible Reading Plan",
+    url: "https://docs.google.com/document/d/1QGwdCS6bq1FIb9smmBfbuYMDqCE59fG7T0Q20djxx2c/edit",
+  },
+  staffReads: [
+    { title: "Unoffendable", author: "Brant Hansen" },
+    { title: "The Power To Change", author: "Craig Groeschel" },
+    { title: "Destined to Reign", author: "Joseph Prince" },
+    { title: "Destined to Reign Daily Devotional", author: "Joseph Prince" },
+    { title: "What's So Amazing About Grace", author: "Philip Yancy" },
+  ],
+  podcasts: [
+    "Joseph Prince",
+    "Charles Nieman",
+    "The Awake Podcast",
+    "Dr. Caroline Leaf",
+    "Dr. Creflo Dollar",
+    "Unlocking Freedom",
+    "Judah Smith",
+  ],
+  playlist: { title: "Spotify Playlist", url: "https://spotify.link/zxs5Bwl33Cb" },
+  scriptures: [
+    {
+      reference: "2 Timothy 1:7",
+      text: "For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind.",
+    },
+    {
+      reference: "Isaiah 53:4",
+      text: "Surely he hath borne our griefs, and carried our sorrows: yet we did esteem him stricken, smitten of God, and afflicted.",
+    },
+    {
+      reference: "Psalm 91:10",
+      text: "There shall no evil befall thee, neither shall any plague come nigh thy dwelling.",
+    },
+    {
+      reference: "Psalm 91:7-8",
+      text: "A thousand shall fall at thy side, and ten thousand at thy right hand; but it shall not come nigh thee. Only with thine eyes shalt thou behold and see the reward of the wicked.",
+    },
+    {
+      reference: "Ephesians 2:14",
+      text: "For he is our peace, who hath made both one, and hath broken down the middle wall of partition between us;",
+    },
+    {
+      reference: "Isaiah 54:17",
+      text: "No weapon that is formed against thee shall prosper; and every tongue that shall rise against thee in judgment thou shalt condemn. This is the heritage of the servants of the LORD, and their righteousness is of me, saith the LORD.",
+    },
+    {
+      reference: "Deuteronomy 28:13",
+      text: "And the LORD shall make thee the head, and not the tail; and thou shalt be above only, and thou shalt not be beneath; if that thou hearken unto the commandments of the LORD thy God, which I command thee this day, to observe and to do them:",
+    },
+    {
+      reference: "Philippians 2:9-11",
+      text: "Wherefore God also hath highly exalted him, and given him a name which is above every name: that at the name of Jesus every knee should bow, of things in heaven, and things in earth, and things under the earth; and that every tongue should confess that Jesus Christ is Lord, to the glory of God the Father.",
+    },
+  ],
+  proclamations: {
+    title: "Daily Proclamations",
+    url: "https://hopecitydallas-my.sharepoint.com/:b:/g/personal/dmiller_weareonehope_com/ET0Tud21jPhFrJ-1dGVDR70B_R5SHg9i37l2P5yk_2ewMg?e=kbLNYw",
+  },
+};
+
+/** The church's Recovery page. Worksheet answers stay on the person's device. */
+export const RECOVERY = {
+  title: "Hope City Recovery",
+  subtitle: "Unlocking Freedom",
+  source: `${CC}/pages/recovery`,
+  groupId: "unlocking-freedom",
+  worksheet: {
+    title: "Life Evaluation Worksheet",
+    prompt: "Rate each area of your life from 1 to 10.",
+    areas: [
+      "Faith/Spirituality",
+      "Marriage/Intimacy",
+      "Family & Friends",
+      "Physical Health",
+      "Serving/Giving",
+      "Finances",
+      "Career/Purpose",
+      "Personal Growth",
+      "Fun/Recreation",
+      "Physical Environment",
+    ],
+    pdfUrl: "https://drive.google.com/file/d/1DOgF87z5wVt4kuWYi-FiqH6GnPNIpcnA/view?usp=sharing",
+  },
+};
+
+/**
+ * Funds the app may offer once Stripe is live. "Christmas Giving Tree" is the
+ * only fund name Church Center publishes; "general" stands for a gift to the
+ * church with no fund chosen, until the church confirms the rest of its list.
+ */
+export const GIVING_FUNDS = [
+  { id: "general", name: "One Hope Church" },
+  { id: "christmas-giving-tree", name: "Christmas Giving Tree" },
+] as const;
+
+export const GIVING_FUND_IDS = GIVING_FUNDS.map((fund) => fund.id) as [string, ...string[]];
+
+/** The same frequencies as the Church Center giving form. */
+export const GIVING_FREQUENCIES = [
+  { id: "once", label: "Once" },
+  { id: "weekly", label: "Weekly" },
+  { id: "every_other_week", label: "Every other week" },
+  { id: "twice_monthly", label: "Twice monthly" },
+  { id: "monthly", label: "Monthly" },
+] as const;
+
+export type GivingFrequency = (typeof GIVING_FREQUENCIES)[number]["id"];
+
+export const GIVING_FREQUENCY_IDS = GIVING_FREQUENCIES.map((item) => item.id) as [
+  GivingFrequency,
+  ...GivingFrequency[],
+];

@@ -15,6 +15,7 @@ import {
   childBodySchema,
   eventBodySchema,
   followUpBodySchema,
+  supportBodySchema,
   followUpStatusBodySchema,
   groupBodySchema,
   loginBodySchema,
@@ -92,6 +93,8 @@ export const API_ROUTES = [
   ["GET", "/api/daily-word"],
   ["POST", "/api/daily-word/read"],
   ["POST", "/api/follow-ups"],
+  ["POST", "/api/support"],
+  ["GET", "/api/growth"],
   ["GET", "/api/care/follow-ups"],
   ["POST", "/api/care/follow-ups/{id}"],
 ] as const;
@@ -282,6 +285,9 @@ async function route(
   if (method === "POST" && path === "/api/daily-word/read") return store.markDailyWordRead(need());
   if (method === "POST" && path === "/api/follow-ups")
     return { followUp: store.submitFollowUp(token, parse(followUpBodySchema, body), client) };
+  if (method === "POST" && path === "/api/support")
+    return { support: store.submitSupport(token, parse(supportBodySchema, body), client) };
+  if (method === "GET" && path === "/api/growth") return store.growth();
   if (method === "GET" && path === "/api/care/follow-ups") return { followUps: store.followUpsFor(need()) };
   const followUp = path.match(/^\/api\/care\/follow-ups\/([^/]+)$/);
   if (method === "POST" && followUp?.[1]) {
