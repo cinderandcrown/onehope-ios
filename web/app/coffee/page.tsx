@@ -13,7 +13,7 @@ export default async function CoffeePage() {
   return (
     <main className="public-page">
       <section className="public-hero">
-        <Image src="/photos/times.jpg" alt="" width={1400} height={816} />
+        <Image src="/photos/revival.jpg" alt="The counter at Revival Coffee" width={1400} height={900} />
         <div>
           <p>{coffee.shop.name}</p>
           <h1>{coffee.shop.tagline}</h1>

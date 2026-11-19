@@ -87,13 +87,70 @@ export type MemberView = {
 
 type Notify = (message: string) => void;
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "Home", label: "Home" },
-  { id: "Watch", label: "Watch" },
-  { id: "Jesus", label: "Know Jesus" },
-  { id: "Give", label: "Give" },
-  { id: "Connect", label: "Connect" },
+const TABS: { id: Tab; label: string; name: string }[] = [
+  { id: "Home", label: "Home", name: "Home" },
+  { id: "Watch", label: "Watch", name: "Watch" },
+  { id: "Jesus", label: "Jesus", name: "Know Jesus" },
+  { id: "Give", label: "Give", name: "Give" },
+  { id: "Connect", label: "Connect", name: "Connect" },
 ];
+function TabIcon({ id }: { id: Tab }) {
+  if (id === "Home") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (id === "Watch") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M10 9.5v5l4.5-2.5-4.5-2.5z" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (id === "Jesus") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v18M7 8h10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (id === "Give") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 4.6-7 9-7 9z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="9" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16" cy="10" r="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M4.5 18.5c.6-2.2 2.4-3.3 4.5-3.3s3.9 1.1 4.5 3.3M13.5 15.6c1.2-.5 2.5-.6 3.6-.2 1.5.5 2.4 1.6 2.8 3.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 const HEADINGS: Record<View, string> = {
   Home: "Home",
   Watch: "Watch",
@@ -127,7 +184,13 @@ export function MemberTabs({
   return (
     <div className="phone">
       <main className="member">
-        <h1>{HEADINGS[view]}</h1>
+        <h1 className={view === "Home" ? "member-logo-title" : "member-page-title"}>
+          {view === "Home" ? (
+            <Image src="/brand/logo.svg" alt="Home" width={164} height={44} priority />
+          ) : (
+            HEADINGS[view]
+          )}
+        </h1>
         {notice ? <p role="status">{notice}</p> : null}
         {view === "Home" ? (
           <Home
@@ -169,10 +232,12 @@ export function MemberTabs({
             key={tab.id}
             type="button"
             role="tab"
+            aria-label={tab.name}
             aria-selected={view === tab.id}
             onClick={() => go(tab.id)}
           >
-            {tab.label}
+            <TabIcon id={tab.id} />
+            <span>{tab.label}</span>
           </button>
         ))}
       </nav>
@@ -393,7 +458,18 @@ function Home({
       </div>
       {latest ? (
         <button type="button" className="card video-card featured" onClick={() => onWatch(latest.id)}>
-          {latest.thumbnail ? <Image src={latest.thumbnail} alt="" width={480} height={360} /> : null}
+          <svg width="0" height="0" aria-hidden="true" className="sermon-filter">
+            <filter id="sermon-contrast" colorInterpolationFilters="sRGB">
+              <feComponentTransfer>
+                <feFuncR type="linear" slope="3.2" intercept="-2" />
+                <feFuncG type="linear" slope="3.2" intercept="-2" />
+                <feFuncB type="linear" slope="3.2" intercept="-2" />
+              </feComponentTransfer>
+            </filter>
+          </svg>
+          {latest.thumbnail ? (
+            <Image src={latest.thumbnail} alt="" width={640} height={360} className="sermon-art" />
+          ) : null}
           <span className="muted">Latest message · {formatDate(latest.published)}</span>
           <strong>{latest.title}</strong>
         </button>
@@ -408,8 +484,10 @@ function Home({
       <DailyWord church={church} signedIn={signedIn} onNotice={onNotice} />
       <FollowAlong links={church.social} />
       <Link className="card coffee-card" href="/coffee">
+        <Image src="/photos/revival.jpg" alt="" width={900} height={600} />
         <strong>Revival Coffee</strong>
         <span>Menu, hours, and directions. The shop is in our building.</span>
+        <span className="button">See menu</span>
       </Link>
       <button type="button" className="card photo-card" onClick={() => onGo("Jesus")}>
         <Image src="/photos/about.jpg" alt="" width={900} height={600} />
