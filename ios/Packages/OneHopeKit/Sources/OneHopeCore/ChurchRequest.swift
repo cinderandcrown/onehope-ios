@@ -68,10 +68,12 @@ enum ChurchRequest {
     }
 
     private static func cachedGet(_ call: Call) async -> Data? {
-        guard call.method == "GET", !OfflineWritePolicy.failsClosed(path: call.path), let cache = call.cache else {
+        guard call.method == "GET",
+              !OfflineWritePolicy.failsClosed(path: call.path),
+              let cache = call.cache,
+              let saved = await cache.load(key: call.path) else {
             return nil
         }
-        guard let saved = await cache.load(key: call.path) else { return nil }
         if let stamp = await cache.load(key: call.path + ".stamp"),
            let text = String(data: stamp, encoding: .utf8),
            let then = Int(text) {

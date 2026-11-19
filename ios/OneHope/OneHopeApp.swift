@@ -28,6 +28,7 @@ struct RootView: View {
             .appendingPathComponent("onehope-reads", isDirectory: true)
         return ChurchClient(baseURL: url, transport: URLSessionTransport(), cache: folder.map { ResponseCache(directory: $0) })
     }()
+
     @State private var token: String? = SessionKeychain.load()
     @State private var snapshot = ChurchSnapshot.bundled()
     @State private var authError = ""
