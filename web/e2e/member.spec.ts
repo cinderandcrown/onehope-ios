@@ -50,6 +50,21 @@ test("a guest can open Home, Watch, Know Jesus, Give, and Plan a Visit without a
   await expect(page.getByRole("heading", { name: "Events" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Join" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: "Toolkit for Spiritual Growth" })).toBeVisible();
+  await expect(page.getByText("2 Timothy 1:7 (KJV)")).toBeVisible();
+  await page.getByRole("button", { name: "Recovery" }).click();
+  await page.getByRole("slider", { name: "Faith/Spirituality" }).fill("7");
+  await expect(page.getByText("Faith/Spirituality: 7")).toBeVisible();
+  await page.getByRole("button", { name: "Care" }).click();
+  await page.getByRole("button", { name: "Send support request" }).click();
+  await expect(page.getByText("Please check at least one box.")).toBeVisible();
+  await page.getByLabel("In need of clothing").check();
+  await page.getByLabel("Your name").fill("E2E Support Guest");
+  await page.getByLabel("Phone").fill("214-555-0100");
+  await page.getByLabel(/One Hope may contact me/).check();
+  await page.getByRole("button", { name: "Send support request" }).click();
+  await expect(page.getByText(/Someone from One Hope will contact you soon/)).toBeVisible();
 });
 
 test("a member can sign in, act, and see a clear password error", async ({ page }) => {
@@ -108,6 +123,11 @@ test("a member can sign in, act, and see a clear password error", async ({ page 
   await expect(page.getByRole("button", { name: "Check in" })).toBeVisible();
   await page.getByRole("button", { name: "Check in" }).click();
   await expect(page.getByText(/Security code \d{4}/)).toBeVisible();
+  await expect(page.getByText("Checked in", { exact: true })).toBeVisible();
+  const tag = (await page.getByLabel("Security code", { exact: true }).locator("strong").textContent()) ?? "";
+  await page.getByLabel("Security code for pickup").fill(tag);
+  await page.getByRole("button", { name: "Pick up QA Child" }).click();
+  await expect(page.getByText(/Two adults must be on duty|QA Child is picked up/)).toBeVisible();
 
   await page.getByRole("tab", { name: "Know Jesus" }).click();
   await page.getByRole("button", { name: "I want to be baptized" }).click();
