@@ -1,13 +1,5 @@
 # Changelog
 
-## Hotfix - 2026-11-18
-
-### Fixed
-
-- iOS Watch: videos showed YouTube "Error 153, video player configuration error". The player loaded the embed URL directly, so YouTube got no HTTP Referer, the API client identity it now requires. The player page now loads with `loadHTMLString(_:baseURL:)` under `https://com.cinderandcrown.onehope` (the bundle id, as Google's Required Minimum Functionality rules specify), uses the IFrame Player API with `playsinline`, `origin` and `widget_referrer`, and reports player errors back to the app.
-- If YouTube still refuses a video, the player is covered with "Play on YouTube", which opens the YouTube app or Safari. The same button sits under every video.
-- Web Watch: the embed sets `referrerpolicy="strict-origin-when-cross-origin"` explicitly and has a "Play on YouTube" link.
-
 ## Build 6 - 2026-11-18
 
 ### Added
@@ -26,6 +18,12 @@
 ### Changed
 
 - Snapshots saved by earlier builds load unchanged. On load the placeholder groups (`group-kids`, `group-small`, `group-growth`) and their notes are removed, real groups are upserted by id with memberships kept, and the Sunday event moves to the next Sunday once it has passed.
+
+### Fixed (TestFlight build 6 hotfix)
+
+- iOS Watch: videos showed YouTube "Error 153, video player configuration error". The player loaded the embed URL directly, so YouTube got no HTTP Referer, the API client identity it now requires. The player page now loads with `loadHTMLString(_:baseURL:)` under `https://com.cinderandcrown.onehope` (the bundle id, as Google's Required Minimum Functionality rules specify), uses the IFrame Player API with `playsinline`, `origin` and `widget_referrer`, and reports player errors back to the app.
+- If YouTube still refuses a video, the player is covered with "Play on YouTube", which opens the YouTube app or Safari. The same button sits under every video.
+- Web Watch: the embed sets `referrerpolicy="strict-origin-when-cross-origin"` explicitly and has a "Play on YouTube" link.
 
 ## 1.0.0 - 2026-11-17
 
