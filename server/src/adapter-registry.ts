@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type AdapterMode = "live" | "dry_run" | "not_built";
 
@@ -238,6 +239,21 @@ export function projectCapabilities(connectedProviders: ReadonlySet<string>): Ca
       notes: adapter.notes,
     };
   });
+}
+
+/** Directory that contains server/src, walking up from cwd and this file. */
+export function sourceRoot(): string {
+  const starts = [process.cwd(), dirname(fileURLToPath(import.meta.url))];
+  for (const start of starts) {
+    let dir = start;
+    for (let hop = 0; hop < 8; hop += 1) {
+      if (existsSync(resolve(dir, "server/src/adapters.ts"))) return dir;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 }
 
 /** Fails when a live row has no backing module or no required credential. */

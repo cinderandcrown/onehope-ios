@@ -1,13 +1,20 @@
-import { createApi, UnknownTenantError, withStore } from "@onehope/server";
+import { createApi, storeErrorResponse, tablesFor, withStore } from "@onehope/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function profileFor(request: Request): "none" | "request" | "audit" {
   const path = new URL(request.url).pathname;
-  if (request.method === "GET" && (path === "/api/health" || path === "/api/tenant")) return "none";
+  const tables = tablesFor(request.method, path);
+  if (tables && tables.length === 0) return "none";
   if (request.method === "GET" && path === "/api/audit") return "audit";
   return "request";
+}
+
+function tablesForRequest(request: Request): readonly string[] | undefined {
+  const tables = tablesFor(request.method, new URL(request.url).pathname);
+  if (!tables || tables.length === 0) return undefined;
+  return tables;
 }
 
 function sessionToken(request: Request): string | null {
@@ -24,11 +31,11 @@ async function handle(request: Request): Promise<Response> {
       host: request.headers.get("host"),
       token: sessionToken(request),
       profile: profileFor(request),
+      tables: tablesForRequest(request),
     });
   } catch (error) {
-    if (error instanceof UnknownTenantError || (error instanceof Error && error.name === "UnknownTenantError")) {
-      return Response.json({ ok: false, error: error.message, code: "not_found" }, { status: 404 });
-    }
+    const mapped = storeErrorResponse(error);
+    if (mapped) return Response.json(mapped.body, { status: mapped.status });
     throw error;
   }
 }

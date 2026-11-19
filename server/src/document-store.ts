@@ -27,6 +27,8 @@ export type LoadOptions = {
   allSessions?: boolean;
   sessionToken?: string | null;
   platformKey?: Buffer | null;
+  /** When set, only these tables are read. Omit it to read every table. */
+  tables?: readonly string[];
 };
 
 export type SaveOptions = {
@@ -34,6 +36,8 @@ export type SaveOptions = {
   platformKey?: Buffer | null;
   /** Import path: do not delete rows that exist only in the tables. */
   retainExtras?: boolean;
+  /** When set, only these tables are written. audit_log is always included. */
+  onlyTables?: readonly string[];
 };
 
 type Row = Record<string, unknown>;
@@ -572,15 +576,12 @@ export async function loadDocument(
 ): Promise<StoreDocument> {
   const doc = emptyDocument();
   const platformKey = options.platformKey ?? null;
+  const only = options.tables ? new Set(options.tables) : null;
+  const want = (table: string) => !only || only.has(table);
   for (const spec of SPECS) {
-    if (spec.table === "audit_log" && !options.includeAudit) {
-      spec.assign(doc, []);
-      continue;
-    }
-    if (spec.table === "sessions" && !options.allSessions && !options.sessionToken) {
-      spec.assign(doc, []);
-      continue;
-    }
+    if (!want(spec.table)) continue;
+    if (spec.table === "audit_log" && !options.includeAudit) continue;
+    if (spec.table === "sessions" && !options.allSessions && !options.sessionToken) continue;
     const extra =
       spec.table === "sessions" && options.sessionToken
         ? " AND token = $2"
@@ -590,19 +591,25 @@ export async function loadDocument(
     const params = spec.table === "sessions" && options.sessionToken ? [options.sessionToken] : [];
     spec.assign(doc, await loadRecords(sql, tenantId, spec, doc, platformKey, extra, params));
   }
-  const duty = await sql.query<{ person_id: string }>(`SELECT person_id FROM station_duty WHERE tenant_id = $1`, [
-    tenantId,
-  ]);
-  doc.station = duty.rows.map((row) => row.person_id);
-  const amens = await sql.query<{ prayer_id: string; person_id: string }>(
-    `SELECT prayer_id, person_id FROM prayer_amens WHERE tenant_id = $1`,
-    [tenantId],
-  );
-  doc.amens = amens.rows.map((row) => ({ prayerId: row.prayer_id, personId: row.person_id }));
-  const shares = await sql.query<{ note_id: string; person_id: string }>(
-    `SELECT note_id, person_id FROM care_note_shares WHERE tenant_id = $1`,
-    [tenantId],
-  );
+  if (want("station_duty")) {
+    const duty = await sql.query<{ person_id: string }>(`SELECT person_id FROM station_duty WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
+    doc.station = duty.rows.map((row) => row.person_id);
+  }
+  if (want("prayer_amens")) {
+    const amens = await sql.query<{ prayer_id: string; person_id: string }>(
+      `SELECT prayer_id, person_id FROM prayer_amens WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    doc.amens = amens.rows.map((row) => ({ prayerId: row.prayer_id, personId: row.person_id }));
+  }
+  const shares = want("care_notes")
+    ? await sql.query<{ note_id: string; person_id: string }>(
+        `SELECT note_id, person_id FROM care_note_shares WHERE tenant_id = $1`,
+        [tenantId],
+      )
+    : { rows: [] as { note_id: string; person_id: string }[] };
   const byNote = new Map<string, string[]>();
   for (const share of shares.rows) {
     const list = byNote.get(share.note_id) ?? [];
@@ -610,24 +617,28 @@ export async function loadDocument(
     byNote.set(share.note_id, list);
   }
   doc.notes = doc.notes.map((note) => ({ ...note, sharedWith: byNote.get(note.id) ?? note.sharedWith ?? [] }));
-  const secrets = await sql.query<{ provider: string; credentials_ciphertext: string; last4: string }>(
-    `SELECT provider, credentials_ciphertext, last4 FROM tenant_integrations
-     WHERE tenant_id = $1 AND credentials_ciphertext IS NOT NULL AND revoked_at IS NULL`,
-    [tenantId],
-  );
-  doc.secrets = secrets.rows.map((row) => ({
-    provider: row.provider,
-    ciphertext: row.credentials_ciphertext,
-    last4: row.last4,
-  }));
-  const modules = await sql.query<{ module_id: string; enabled: boolean }>(
-    `SELECT module_id, enabled FROM tenant_modules WHERE tenant_id = $1`,
-    [tenantId],
-  );
-  for (const row of modules.rows) {
-    if (MODULES.includes(row.module_id as ModuleId)) doc.flags[row.module_id as ModuleId] = row.enabled;
+  if (want("tenant_integrations")) {
+    const secrets = await sql.query<{ provider: string; credentials_ciphertext: string; last4: string }>(
+      `SELECT provider, credentials_ciphertext, last4 FROM tenant_integrations
+       WHERE tenant_id = $1 AND credentials_ciphertext IS NOT NULL AND revoked_at IS NULL`,
+      [tenantId],
+    );
+    doc.secrets = secrets.rows.map((row) => ({
+      provider: row.provider,
+      ciphertext: row.credentials_ciphertext,
+      last4: row.last4,
+    }));
   }
-  await hydratePasswords(sql, tenantId, doc);
+  if (want("tenant_modules")) {
+    const modules = await sql.query<{ module_id: string; enabled: boolean }>(
+      `SELECT module_id, enabled FROM tenant_modules WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    for (const row of modules.rows) {
+      if (MODULES.includes(row.module_id as ModuleId)) doc.flags[row.module_id as ModuleId] = row.enabled;
+    }
+  }
+  if (want("people")) await hydratePasswords(sql, tenantId, doc);
   return doc;
 }
 
@@ -640,18 +651,26 @@ export async function saveDocumentDiff(
 ): Promise<number> {
   let writes = 0;
   const ctx: SaveContext = { platformKey: options.platformKey ?? null };
+  const only = options.onlyTables ? new Set(options.onlyTables) : null;
+  const want = (table: string) => !only || only.has(table) || table === "audit_log";
   for (const spec of SPECS) {
+    if (!want(spec.table)) continue;
     writes += await syncSpec(sql, tenantId, spec, before, after, ctx, options.retainExtras === true);
   }
-  writes += await syncStation(sql, tenantId, before.station, after.station);
-  writes += await syncAmens(sql, tenantId, before.amens ?? [], after.amens ?? []);
-  writes += await syncShares(sql, tenantId, before.notes, after.notes);
-  writes += await syncSecrets(sql, tenantId, before.secrets, after.secrets);
-  if (stable(before.people) !== stable(after.people) || stable(before.children) !== stable(after.children)) {
+  if (want("station_duty")) writes += await syncStation(sql, tenantId, before.station, after.station);
+  if (want("prayer_amens")) writes += await syncAmens(sql, tenantId, before.amens ?? [], after.amens ?? []);
+  if (want("care_notes")) writes += await syncShares(sql, tenantId, before.notes, after.notes);
+  if (want("tenant_integrations")) writes += await syncSecrets(sql, tenantId, before.secrets, after.secrets);
+  if (
+    (want("people") || want("kids")) &&
+    (stable(before.people) !== stable(after.people) || stable(before.children) !== stable(after.children))
+  ) {
     writes += await syncHouseholds(sql, tenantId, after);
   }
-  if (stable(before.people) !== stable(after.people)) writes += await syncAccounts(sql, tenantId, before, after);
-  if (options.syncModules && stable(before.flags) !== stable(after.flags)) {
+  if (want("people") && stable(before.people) !== stable(after.people)) {
+    writes += await syncAccounts(sql, tenantId, before, after);
+  }
+  if (want("tenant_modules") && options.syncModules && stable(before.flags) !== stable(after.flags)) {
     writes += await syncModules(sql, tenantId, after);
   }
   return writes;
@@ -774,7 +793,7 @@ async function syncSecrets(
 
 async function hydratePasswords(sql: SqlClient, tenantId: string, doc: StoreDocument) {
   const found = await sql.query<{ person_id: string; password_hash: string | null }>(
-    "SELECT person_id, password_hash FROM tenant_passwords($1)",
+    "SELECT person_id, password_hash FROM read_tenant_passwords($1)",
     [tenantId],
   );
   const hashes = new Map(found.rows.map((row) => [row.person_id, row.password_hash]));

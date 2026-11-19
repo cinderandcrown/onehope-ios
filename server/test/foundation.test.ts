@@ -10,8 +10,9 @@ import { verifyPassword } from "../src/crypto.ts";
 import { ADAPTERS, assertTruthful, projectCapabilities } from "../src/adapter-registry.ts";
 import { fakeEmailAdapter, saveTenantSecret } from "../src/integrations.ts";
 import { claimJobs, enqueueJob, finishJob, recordWebhook } from "../src/outbox.ts";
-import { migrate, type SqlClient } from "../src/migrate.ts";
-import { runRequest, seedTenantIfEmpty } from "../src/persist.ts";
+import { loadMigrations, migrate, type SqlClient } from "../src/migrate.ts";
+import { retryWrite, runRequest, seedTenantIfEmpty, storeErrorResponse } from "../src/persist.ts";
+import { tablesFor } from "../src/request-tables.ts";
 import { importLegacySnapshot, refuseSampleInProduction } from "../src/snapshot-import.ts";
 import { ChurchStore } from "../src/store.ts";
 import { loadConfig } from "../src/config.ts";
@@ -52,9 +53,12 @@ test("tenant is resolved from the host and never from a caller-supplied id", () 
   assert.throws(() => resolveTenant({ host: "localhost", mode: "single", singleTenantId: " " }));
 });
 
-test("truth gate refuses a live capability with no backing code", () => {
+test("truth gate refuses a live capability with no backing code", async () => {
   const root = fileURLToPath(new URL("../..", import.meta.url));
   assertTruthful(new Set(), root);
+  const handle = createApi({ store: ChurchStore.demo() });
+  const capabilities = await handle(new Request("http://localhost/api/capabilities"));
+  assert.equal(capabilities.status, 200);
   const projected = projectCapabilities(new Set());
   for (const row of projected) {
     if (row.status === "live") {
@@ -442,7 +446,188 @@ test("a stale row version loses and another tenant cannot read account emails", 
     loadDocument(sql, "onehope", { platformKey: loadConfig({}).fieldEncryptionKey }),
   );
   const kept = church.people.find((row) => row.email === "shared@example.com");
-  assert.equal(kept?.passwordHash?.length ? true : false, true);
   assert.equal(verifyPassword("password1", kept?.passwordHash ?? ""), true);
   assert.equal(verifyPassword("different1", kept?.passwordHash ?? ""), false);
+  const shop = await withServiceRole(sql, "revivalcoffee", () =>
+    loadDocument(sql, "revivalcoffee", { platformKey: loadConfig({}).fieldEncryptionKey }),
+  );
+  const shopPerson = shop.people.find((row) => row.email === "shared@example.com");
+  assert.equal(verifyPassword("different1", shopPerson?.passwordHash ?? ""), true);
+  assert.equal(verifyPassword("password1", shopPerson?.passwordHash ?? ""), false);
+  assert.notEqual(kept?.passwordHash, shopPerson?.passwordHash);
+});
+
+test("the same email keeps a separate password in each tenant", async () => {
+  const { sql } = await database();
+  const signUp = (host: string, password: string, displayName: string) =>
+    runRequest(
+      sql,
+      (store) =>
+        store.signup({
+          email: "victim@example.com",
+          password,
+          displayName,
+          ip: "203.0.113.20",
+          userAgent: "test",
+        }),
+      host,
+    );
+  const signIn = (host: string, password: string) =>
+    runRequest(
+      sql,
+      (store) =>
+        store.login({
+          email: "victim@example.com",
+          password,
+          ip: "203.0.113.20",
+          userAgent: "test",
+        }),
+      host,
+    );
+  await signUp("order.myrevivalcoffee.com", "password-a", "Shop Victim");
+  await signUp("localhost", "password-b", "Church Victim");
+  await signIn("localhost", "password-b");
+  await assert.rejects(() => signIn("localhost", "password-a"));
+  await signIn("order.myrevivalcoffee.com", "password-a");
+  await assert.rejects(() => signIn("order.myrevivalcoffee.com", "password-b"));
+  const shared = await sql.query<{ password_hash: string | null }>(
+    "SELECT password_hash FROM accounts WHERE email = 'victim@example.com'",
+  );
+  assert.equal(shared.rows[0]?.password_hash, null);
+  const hashes = await sql.query<{ password_hash: string }>("SELECT password_hash FROM tenant_passwords");
+  assert.equal(hashes.rows.length, 2);
+  assert.notEqual(hashes.rows[0]?.password_hash, hashes.rows[1]?.password_hash);
+});
+
+test("a lost row version is retried once and then reported as a conflict", async () => {
+  let calls = 0;
+  const recovered = await retryWrite(async () => {
+    calls += 1;
+    if (calls === 1) throw new WriteConflictError("people");
+    return "saved";
+  });
+  assert.equal(recovered, "saved");
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(
+    retryWrite(async () => {
+      calls += 1;
+      throw new WriteConflictError("people");
+    }),
+    (error: unknown) => error instanceof WriteConflictError,
+  );
+  assert.equal(calls, 2);
+  const response = storeErrorResponse(new WriteConflictError("people"));
+  assert.equal(response?.status, 409);
+});
+
+test("0004 backfills tenant_id on rows that already exist", async () => {
+  const db = new PGlite();
+  const sql = client(db);
+  await migrate(
+    sql,
+    loadMigrations().filter((item) => item.version === "0001_init"),
+  );
+  await sql.exec(`
+    INSERT INTO households (id, name) VALUES ('hh1', 'Ada');
+    INSERT INTO people (id, household_id, role, display_name, email)
+      VALUES ('p1', 'hh1', 'member', 'Ada', 'ada@example.com');
+    INSERT INTO gifts (id, household_id, person_id, amount_ciphertext)
+      VALUES ('g1', 'hh1', 'p1', 'cipher');
+    INSERT INTO kids (id, household_id, display_name, medical_ciphertext)
+      VALUES ('k1', 'hh1', 'Kid', 'cipher');
+    INSERT INTO care_notes (id, subject_person_id, body_ciphertext)
+      VALUES ('n1', 'p1', 'cipher');
+    INSERT INTO care_note_shares (note_id, person_id) VALUES ('n1', 'p1');
+    INSERT INTO prayers (id, author_id, body, visibility) VALUES ('pr1', 'p1', 'please', 'public');
+    INSERT INTO background_checks (id, person_id, status, notes_ciphertext)
+      VALUES ('b1', 'p1', 'clear', 'cipher');
+    INSERT INTO audit_log (id, actor_id, action, resource, tier)
+      VALUES ('a1', 'p1', 'read', 'person', 0);
+  `);
+  const applied = await migrate(sql);
+  assert.equal(applied.includes("0004_tenancy"), true);
+  const tables = [
+    "households",
+    "people",
+    "gifts",
+    "kids",
+    "care_notes",
+    "care_note_shares",
+    "prayers",
+    "background_checks",
+    "audit_log",
+  ];
+  const seeded: Record<string, string> = {
+    households: "hh1",
+    people: "p1",
+    gifts: "g1",
+    kids: "k1",
+    care_notes: "n1",
+    prayers: "pr1",
+    background_checks: "b1",
+    audit_log: "a1",
+  };
+  for (const table of Object.keys(seeded)) {
+    const marked = await sql.query<{ tenant_id: string }>(`SELECT tenant_id FROM ${table} WHERE id = $1`, [
+      seeded[table],
+    ]);
+    assert.equal(marked.rows[0]?.tenant_id, "onehope", table);
+  }
+  const share = await sql.query<{ tenant_id: string }>(
+    "SELECT tenant_id FROM care_note_shares WHERE note_id = 'n1' AND person_id = 'p1'",
+  );
+  assert.equal(share.rows[0]?.tenant_id, "onehope");
+  for (const table of tables) {
+    const nullable = await sql.query<{ is_nullable: string }>(
+      `SELECT is_nullable FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'tenant_id'`,
+      [table],
+    );
+    assert.equal(nullable.rows[0]?.is_nullable, "NO", table);
+  }
+});
+
+test("tenancy rollback removes tenant columns and can migrate again", async () => {
+  const db = new PGlite();
+  const sql = client(db);
+  await migrate(sql);
+  const down = readFileSync(new URL("../migrations/rollback/0004_tenancy_down.sql", import.meta.url), "utf8");
+  await sql.exec(down);
+  const missing = await sql.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'households' AND column_name = 'tenant_id'
+     ) AS exists`,
+  );
+  assert.equal(missing.rows[0]?.exists, false);
+  const again = await migrate(sql);
+  assert.equal(again.includes("0004_tenancy"), true);
+  const restored = await sql.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'households' AND column_name = 'tenant_id'
+     ) AS exists`,
+  );
+  assert.equal(restored.rows[0]?.exists, true);
+});
+
+test("a home request does not read the rest of the tenant", async () => {
+  const { sql } = await database();
+  await seedTenantIfEmpty(sql, "onehope");
+  const reads: string[] = [];
+  const watching: SqlClient = {
+    exec: (statement) => sql.exec(statement),
+    async query(statement, params) {
+      reads.push(statement);
+      return sql.query(statement, params);
+    },
+  };
+  const home = await runRequest(watching, (store) => store.publicHome(), "localhost", process.env, {
+    tables: tablesFor("GET", "/api/home") ?? undefined,
+  });
+  assert.equal(typeof home.church.name, "string");
+  const joined = reads.join("\n");
+  assert.equal(/from announcements/i.test(joined), true);
+  assert.equal(/from gifts|from people|from audit_log|from sessions/i.test(joined), false);
 });

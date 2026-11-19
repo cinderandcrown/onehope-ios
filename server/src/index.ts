@@ -19,8 +19,19 @@ export {
   SAMPLE_TOTP_BASE32,
 } from "./sample-accounts";
 export { ChurchStore } from "./store";
-export { databaseUrl, runRequest, seedTenantIfEmpty, withStore, UnknownTenantError } from "./persist";
-export { ADAPTERS, assertTruthful, projectCapabilities } from "./adapter-registry";
+export {
+  databaseUrl,
+  isWriteConflict,
+  retryWrite,
+  runRequest,
+  seedTenantIfEmpty,
+  storeErrorResponse,
+  withStore,
+  UnknownTenantError,
+} from "./persist";
+export { ADAPTERS, assertTruthful, projectCapabilities, sourceRoot } from "./adapter-registry";
+export { tablesFor } from "./request-tables";
+export { WriteConflictError } from "./document-store";
 export { localAuthProvider } from "./auth-provider";
 export { emptyDocument, loadDocument, saveDocumentDiff } from "./document-store";
 export { enqueueJob, claimJobs, finishJob } from "./outbox";

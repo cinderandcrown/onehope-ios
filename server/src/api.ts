@@ -1,4 +1,4 @@
-import { assertTruthful } from "./adapter-registry";
+import { assertTruthful, sourceRoot } from "./adapter-registry";
 import { CAPABILITIES } from "./capabilities";
 import { AccessError, assertNever, assertNoCardData, isAccessError } from "./domain";
 import { originAllowed } from "./public-url";
@@ -350,7 +350,7 @@ async function route(
     return { proposal: store.proposeMasterAdmin(need(), parse(proposalBodySchema, body)) };
   }
   if (method === "GET" && path === "/api/capabilities") {
-    assertTruthful();
+    assertTruthful(new Set(), sourceRoot());
     return {
       capabilities: CAPABILITIES,
       facebook: facebookLive({ pageId: store.config.facebookPageId, token: store.config.facebookPageToken }),

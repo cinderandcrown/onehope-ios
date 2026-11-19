@@ -1,7 +1,13 @@
 import { Pool, type PoolClient, neonConfig } from "@neondatabase/serverless";
 
 import { ChurchStore } from "./store";
-import { emptyDocument, loadDocument, saveDocumentDiff, type LoadOptions } from "./document-store";
+import {
+  emptyDocument,
+  loadDocument,
+  saveDocumentDiff,
+  WriteConflictError,
+  type LoadOptions,
+} from "./document-store";
 import { loadConfig } from "./config";
 import type { SqlClient } from "./migrate";
 import { assumeService } from "./service-role";
@@ -30,6 +36,8 @@ export type StoreScope = {
   host?: string | null;
   token?: string | null;
   profile?: RequestProfile;
+  /** Omit to load every table. An empty list loads nothing. */
+  tables?: readonly string[];
 };
 
 /**
@@ -48,6 +56,7 @@ export async function withStore<T>(
     return await runRequest(clientSql(client), fn, scope.host ?? null, process.env, {
       profile: scope.profile ?? "request",
       sessionToken: scope.token ?? null,
+      tables: scope.tables,
     });
   } finally {
     client.release();
@@ -83,12 +92,49 @@ export async function seedTenantIfEmpty(
   }
 }
 
+export function isWriteConflict(error: unknown): boolean {
+  return error instanceof WriteConflictError || (error instanceof Error && error.name === "WriteConflictError");
+}
+
+/** Runs once, and a second time when the first attempt loses a row version. */
+export async function retryWrite<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isWriteConflict(error)) throw error;
+  }
+  return run();
+}
+
+export function storeErrorResponse(error: unknown): { status: number; body: Record<string, unknown> } | null {
+  if (isWriteConflict(error)) {
+    return {
+      status: 409,
+      body: { ok: false, error: "This page changed. Reload and try again.", code: "conflict" },
+    };
+  }
+  if (error instanceof UnknownTenantError || (error instanceof Error && error.name === "UnknownTenantError")) {
+    return { status: 404, body: { ok: false, error: error.message, code: "not_found" } };
+  }
+  return null;
+}
+
 export async function runRequest<T>(
   sql: SqlClient,
   fn: (store: ChurchStore) => Promise<T> | T,
   host: string | null,
   env: NodeJS.ProcessEnv = process.env,
-  options: { profile?: RequestProfile; sessionToken?: string | null } = {},
+  options: { profile?: RequestProfile; sessionToken?: string | null; tables?: readonly string[] } = {},
+): Promise<T> {
+  return retryWrite(() => runRequestOnce(sql, fn, host, env, options));
+}
+
+async function runRequestOnce<T>(
+  sql: SqlClient,
+  fn: (store: ChurchStore) => Promise<T> | T,
+  host: string | null,
+  env: NodeJS.ProcessEnv,
+  options: { profile?: RequestProfile; sessionToken?: string | null; tables?: readonly string[] },
 ): Promise<T> {
   const mode = env.TENANT_MODE ?? "pooled";
   await sql.query("BEGIN");
@@ -120,6 +166,7 @@ export async function runRequest<T>(
       includeAudit: options.profile === "audit",
       sessionToken: options.sessionToken ?? null,
       platformKey: loadConfig(env).fieldEncryptionKey,
+      tables: options.tables,
     };
     const loaded = await loadDocument(sql, tenantId, loadOptions);
     store.replaceDocument(structuredClone(loaded));
@@ -128,6 +175,7 @@ export async function runRequest<T>(
     await saveDocumentDiff(sql, tenantId, loaded, store.toDocument(), {
       syncModules: false,
       platformKey: loadConfig(env).fieldEncryptionKey,
+      onlyTables: options.tables,
     });
     await sql.query("COMMIT");
     return result;
