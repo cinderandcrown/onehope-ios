@@ -81,6 +81,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var daily: DailyWord?
     /// The member's synced Daily Word streak. Nil for guests, who keep theirs on the phone.
     public var dailyStreak: Int?
+    /// Toolkit, Recovery, and the Support/Assistance form. Nil until the server sends them.
+    public var growth: GrowthInfo?
     public var offlineNote: String
     public var churchName: String
     public var address: String
@@ -119,6 +121,7 @@ public struct ChurchSnapshot: Equatable, Sendable {
             journey: [],
             daily: nil,
             dailyStreak: nil,
+            growth: nil,
             offlineNote: offline ? "We couldn't reach the church just now." : "Loading the church…",
             churchName: SampleChurch.name,
             address: SampleChurch.address,
@@ -183,6 +186,8 @@ public struct KidLine: Equatable, Sendable, Identifiable {
     public let displayName: String
     public let classroom: String
     public let sample: Bool
+    /// True from check-in until a verified guardian picks up with the code.
+    public let checkedIn: Bool
 }
 
 public struct ServingLine: Equatable, Sendable, Identifiable {
@@ -223,6 +228,10 @@ public enum MemberAction: Sendable {
     case pickup(String, String)
     /// Works for guests too.
     case followUp(FollowUpRequest)
+    /// Works for guests too.
+    case support(SupportRequest)
+    /// Confirms the password, then gives. Only offered when giving is switched on.
+    case gift(GiftRequest, password: String)
     case readDailyWord
 }
 
@@ -307,7 +316,9 @@ public struct ChurchClient: Sendable {
         let groups: GroupsReply = try await send("/api/groups", method: "GET", token: token, json: nil)
         let knowJesus: KnowJesusReply = try await send("/api/know-jesus", method: "GET", token: nil, json: nil)
         let daily: DailyWordReply = try await send("/api/daily-word", method: "GET", token: token, json: nil)
-        return PublicParts(home: home, sermons: sermons, groups: groups, knowJesus: knowJesus, daily: daily)
+        // Older servers have no growth content; the rest of the app still loads.
+        let growth: GrowthInfo? = try? await send("/api/growth", method: "GET", token: nil, json: nil)
+        return PublicParts(home: home, sermons: sermons, groups: groups, knowJesus: knowJesus, daily: daily, growth: growth)
     }
 
     func send<Response: Decodable>(
