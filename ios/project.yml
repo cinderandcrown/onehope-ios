@@ -54,7 +54,6 @@ targets:
         DEVELOPMENT_TEAM: GDNRT9DJ58
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: OneHope/OneHope.entitlements
         VERSIONING_SYSTEM: apple-generic
     configFiles:
       Debug: Config/Debug.xcconfig
