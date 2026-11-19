@@ -44,7 +44,7 @@ struct RootView: View {
             KnowJesusView(snapshot: snapshot, perform: perform)
                 .tabItem { Label(L10n.text(.knowJesus), systemImage: "cross") }
                 .tag("jesus")
-            GiveView(snapshot: snapshot, onRefresh: load)
+            GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
                 .tabItem { Label(L10n.text(.give), systemImage: "heart") }
                 .tag("give")
             ConnectView(snapshot: snapshot, onRefresh: load, perform: perform) {

@@ -50,6 +50,10 @@ final class ChurchLogicTests: XCTestCase {
     {"ok":true,"church":{"name":"One Hope","address":"1251 S. Sherman St.","leadPastors":["Derek Miller","Jen Miller"]},"countdown":{"service":"2026-11-22T16:30:00.000Z"},"announcements":[{"id":"a","title":"Sunday","body":"10:30","sample":false}],"events":[{"id":"e","title":"Sunday gathering","location":"Richardson","sample":false,"start":1795365000000,"end":1795370400000,"url":null},{"id":"cc-1","title":"Giving Tree 2026","location":"Dallas","sample":false,"url":"https://weareonehope.churchcenter.com/registrations/events/3990859"}],"visit":{"welcome":"We are excited to meet you!","directions":"Just off of US 75","serviceTime":"Sundays at 10:30 a.m.","arrival":"Come early","kids":"Kids","address":"1251 S. Sherman St.","mapsUrl":"https://maps.apple.com/","calendarPath":"/api/events/e/ics","websiteUrl":"https://www.weareonehope.com/plan-your-visit"},"giving":{"message":"Generosity","verse":{"reference":"2 Corinthians 9:7","text":"cheerful giver"},"online":{"url":"https://weareonehope.churchcenter.com/giving","note":"Online"},"text":{"number":"84321","note":"Text"},"mail":{"address":"PO Box 211926, Dallas, TX 75211","note":"Mail"},"seasonal":{"title":"Christmas Giving Tree","note":"Choose Christmas Giving Tree","until":1798264800000}},"invite":{"title":"Come sit with me","body":"Sundays","url":"https://www.weareonehope.com/plan-your-visit","mapsUrl":"https://maps.apple.com/"},"sampleSermon":{"title":""}}
     """
 
+    private static let growthJSON = """
+    {"toolkit":{"title":"Toolkit for Spiritual Growth","readingPlan":{"title":"Bible Reading Plan","url":"https://docs.google.com/document/d/x/edit"},"staffReads":[{"title":"Unoffendable","author":"Brant Hansen"}],"podcasts":["Judah Smith"],"playlist":{"title":"Spotify Playlist","url":"https://spotify.link/x"},"scriptures":[{"reference":"2 Timothy 1:7","text":"For God hath not given us the spirit of fear"}],"proclamations":{"title":"Daily Proclamations","url":"https://hopecitydallas-my.sharepoint.com/x"}},"recovery":{"title":"Hope City Recovery","subtitle":"Unlocking Freedom","worksheet":{"title":"Life Evaluation Worksheet","prompt":"Rate each area.","areas":["Faith/Spirituality","Finances"],"pdfUrl":"https://drive.google.com/file/d/x/view"},"group":{"id":"unlocking-freedom","name":"Unlocking Freedom","schedule":"Sundays, 6–8 p.m.","area":"Revival Coffee Shop","leaders":["Allison Burke"],"url":"https://weareonehope.churchcenter.com/groups/year-around-groups/unlocking-freedom"}},"support":{"title":"Support and assistance","intro":"You will be contacted soon.","prompt":"Check each box.","needs":[{"id":"hospital","label":"Hospital visitation request"}]}}
+    """
+
     private static func publicReply(_ path: String) -> (Int, Data)? {
         switch path {
         case "/api/home":
@@ -60,6 +64,8 @@ final class ChurchLogicTests: XCTestCase {
             (200, Data(#"{"groups":[{"id":"unlocking-freedom","name":"Unlocking Freedom","summary":"","sample":false,"joined":false,"category":"Year Around Groups","schedule":"Sundays, 6–8 p.m.","area":"","leaders":["Allison Burke"],"joinType":"request","url":"https://weareonehope.churchcenter.com/groups/year-around-groups/unlocking-freedom"}]}"#.utf8))
         case "/api/know-jesus":
             (200, Data(#"{"gospel":{"intro":"Good news","steps":[{"title":"God loves you","reference":"John 3:16","text":"For God so loved the world"}],"prayer":"Lord Jesus","baptism":"Baptism","baptismVerse":{"reference":"Romans 6:4","text":"newness of life"},"growthTrack":"Growth Track"},"journey":[{"day":1,"title":"You are loved","reference":"John 3:17","text":"saved","prompt":"Thank God"}]}"#.utf8))
+        case "/api/growth":
+            (200, Data(growthJSON.utf8))
         case "/api/daily-word":
             (200, Data(#"{"reading":{"reference":"John 14:6","text":"I am the way","read":"John 14","prompt":"Follow","day":"2026-11-18"},"streak":null}"#.utf8))
         default:
@@ -83,6 +89,9 @@ final class ChurchLogicTests: XCTestCase {
         XCTAssertEqual(snapshot.gospel?.steps.first?.reference, "John 3:16")
         XCTAssertEqual(snapshot.daily?.day, "2026-11-18")
         XCTAssertNil(snapshot.dailyStreak)
+        XCTAssertEqual(snapshot.growth?.toolkit.scriptures.first?.reference, "2 Timothy 1:7")
+        XCTAssertEqual(snapshot.growth?.recovery.group?.name, "Unlocking Freedom")
+        XCTAssertEqual(snapshot.growth?.support.needs.map(\.label), ["Hospital visitation request"])
     }
 
     func testClientReadsTheMemberContract() async throws {
@@ -98,7 +107,7 @@ final class ChurchLogicTests: XCTestCase {
             case "/api/prayers":
                 return (200, Data(#"{"prayers":[{"id":"p","serve":"Pray for my family","body":"Need","contactRequested":true,"sample":false,"approved":false,"mine":true}]}"#.utf8))
             default:
-                return (200, Data(#"{"token":"abc","people":[],"person":{"displayName":"Avery Sample","email":"avery@sample.onehope"},"kids":[{"id":"child-remy","displayName":"Remy Sample","classroom":"Preschool","sample":true}],"assignments":[],"steps":[{"id":"baptism","title":"Baptism","status":"in-progress"}],"funds":[{"id":"general","name":"General"}],"open":false}"#.utf8))
+                return (200, Data(#"{"token":"abc","people":[],"person":{"displayName":"Avery Sample","email":"avery@sample.onehope"},"kids":[{"id":"child-remy","displayName":"Remy Sample","classroom":"Preschool","sample":true,"checkedIn":true}],"assignments":[],"steps":[{"id":"baptism","title":"Baptism","status":"in-progress"}],"funds":[{"id":"general","name":"General"}],"open":false}"#.utf8))
             }
         }
         let client = try ChurchClient(baseURL: XCTUnwrap(URL(string: "http://127.0.0.1:8787")), transport: transport)
@@ -111,6 +120,7 @@ final class ChurchLogicTests: XCTestCase {
         XCTAssertTrue(snapshot.needsStepUp)
         XCTAssertTrue(snapshot.gifts.isEmpty)
         XCTAssertEqual(snapshot.kids.first?.displayName, "Remy Sample")
+        XCTAssertEqual(snapshot.kids.first?.checkedIn, true)
         XCTAssertEqual(snapshot.pathway.first?.title, "Baptism")
         XCTAssertEqual(snapshot.events.first?.registered, true)
         XCTAssertEqual(snapshot.prayers.first?.serve, "Pray for my family")
