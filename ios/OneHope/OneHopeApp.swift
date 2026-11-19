@@ -35,8 +35,7 @@ struct RootView: View {
     @State private var tab = "home"
     @State private var videoId: String?
 
-    /// Home, Watch, Know Jesus, and Prayer are open to guests. Giving is inside Connect.
-    /// iPhone shows five tab-bar items, so Give is not a sixth tab.
+    /// Home, Watch, Prayer, Give, and Connect. Know Jesus is a card on Home and a link in Connect.
     var body: some View {
         TabView(selection: $tab) {
             HomeView(snapshot: snapshot, onRefresh: load, perform: perform) { id in
@@ -48,18 +47,18 @@ struct RootView: View {
             WatchView(snapshot: snapshot, selected: $videoId, onRefresh: load)
                 .tabItem { Label(L10n.text(.watch), systemImage: "play.rectangle") }
                 .tag("watch")
-            KnowJesusView(snapshot: snapshot, perform: perform)
-                .tabItem { Label(L10n.text(.knowJesus), systemImage: "cross") }
-                .tag("jesus")
             PrayerView(snapshot: snapshot, onRefresh: load, perform: perform)
                 .tabItem { Label(L10n.text(.prayer), systemImage: "hands.sparkles") }
                 .tag("prayer")
+            GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
+                .tabItem { Label(L10n.text(.give), systemImage: "heart") }
+                .tag("give")
             ConnectView(
                 snapshot: snapshot,
                 onRefresh: load,
                 perform: perform,
-                give: {
-                    GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
+                knowJesus: {
+                    KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
                 },
                 account: {
                     account

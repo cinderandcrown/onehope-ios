@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS demo_runtime_backup (
   backed_up_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE households ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
-ALTER TABLE people ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE households ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS password_hash text;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS totp_secret text;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS listed_in_directory boolean NOT NULL DEFAULT false;
@@ -71,22 +71,22 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS last_ip text;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS last_user_agent text;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS sample boolean NOT NULL DEFAULT false;
 ALTER TABLE people ADD COLUMN IF NOT EXISTS record text;
-ALTER TABLE gifts ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE gifts ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE gifts ADD COLUMN IF NOT EXISTS record text;
-ALTER TABLE kids ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE kids ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE kids ADD COLUMN IF NOT EXISTS record text;
-ALTER TABLE care_notes ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE care_notes ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE care_notes ADD COLUMN IF NOT EXISTS author_id text;
 ALTER TABLE care_notes ADD COLUMN IF NOT EXISTS sample boolean NOT NULL DEFAULT false;
 ALTER TABLE care_notes ADD COLUMN IF NOT EXISTS record text;
-ALTER TABLE care_note_shares ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
-ALTER TABLE prayers ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE care_note_shares ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
+ALTER TABLE prayers ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE prayers ADD COLUMN IF NOT EXISTS sample boolean NOT NULL DEFAULT false;
 ALTER TABLE prayers ADD COLUMN IF NOT EXISTS record text;
-ALTER TABLE background_checks ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE background_checks ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE background_checks ADD COLUMN IF NOT EXISTS sample boolean NOT NULL DEFAULT false;
 ALTER TABLE background_checks ADD COLUMN IF NOT EXISTS record text;
-ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'onehope';
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL;
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'app';
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS at_ms text;
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS record text;
@@ -134,7 +134,7 @@ CREATE INDEX IF NOT EXISTS audit_log_tenant_idx ON audit_log (tenant_id);
 
 CREATE TABLE IF NOT EXISTS memberships (
   id text NOT NULL,
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   account_id text NOT NULL,
   person_id text NOT NULL,
   role text NOT NULL,
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS memberships (
 
 CREATE TABLE IF NOT EXISTS sessions (
   token text PRIMARY KEY,
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   person_id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_tenant_idx ON sessions (tenant_id);
 
 CREATE TABLE IF NOT EXISTS alerts (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   person_id text,
   record text,
@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 
 CREATE TABLE IF NOT EXISTS proposals (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -176,14 +176,14 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 
 CREATE TABLE IF NOT EXISTS station_duty (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   person_id text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, person_id)
 );
 
 CREATE TABLE IF NOT EXISTS groups (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS groups (
 );
 
 CREATE TABLE IF NOT EXISTS group_messages (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   group_id text,
   author_id text,
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS group_messages (
 );
 
 CREATE TABLE IF NOT EXISTS events (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -212,7 +212,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE TABLE IF NOT EXISTS registrations (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   event_id text,
   person_id text,
@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS registrations (
 );
 
 CREATE TABLE IF NOT EXISTS announcements (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS announcements (
 );
 
 CREATE TABLE IF NOT EXISTS schedule_assignments (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   person_id text,
   record text,
@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS schedule_assignments (
 );
 
 CREATE TABLE IF NOT EXISTS volunteers (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   person_id text NOT NULL,
   record text,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -251,7 +251,7 @@ CREATE TABLE IF NOT EXISTS volunteers (
 );
 
 CREATE TABLE IF NOT EXISTS rooms (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -269,7 +269,7 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   person_id text,
   record text,
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 
 CREATE TABLE IF NOT EXISTS pathways (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   person_id text NOT NULL,
   record text,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS pathways (
 );
 
 CREATE TABLE IF NOT EXISTS visitors (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -296,7 +296,7 @@ CREATE TABLE IF NOT EXISTS visitors (
 );
 
 CREATE TABLE IF NOT EXISTS care_requests (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   person_id text,
   record text,
@@ -306,7 +306,7 @@ CREATE TABLE IF NOT EXISTS care_requests (
 );
 
 CREATE TABLE IF NOT EXISTS message_drafts (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS message_drafts (
 );
 
 CREATE TABLE IF NOT EXISTS member_invites (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   token_hash text NOT NULL,
   email text NOT NULL DEFAULT '',
   expires_ms text,
@@ -324,7 +324,7 @@ CREATE TABLE IF NOT EXISTS member_invites (
 );
 
 CREATE TABLE IF NOT EXISTS follow_ups (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   person_id text,
   record text,
@@ -334,7 +334,7 @@ CREATE TABLE IF NOT EXISTS follow_ups (
 );
 
 CREATE TABLE IF NOT EXISTS streaks (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   person_id text NOT NULL,
   record text,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -342,7 +342,7 @@ CREATE TABLE IF NOT EXISTS streaks (
 );
 
 CREATE TABLE IF NOT EXISTS rate_limits (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   bucket_key text NOT NULL,
   record text,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -350,14 +350,14 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 );
 
 CREATE TABLE IF NOT EXISTS prayer_amens (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   prayer_id text NOT NULL,
   person_id text NOT NULL,
   PRIMARY KEY (tenant_id, prayer_id, person_id)
 );
 
 CREATE TABLE IF NOT EXISTS my_five (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   person_id text NOT NULL,
   record text,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -365,7 +365,7 @@ CREATE TABLE IF NOT EXISTS my_five (
 );
 
 CREATE TABLE IF NOT EXISTS testimonies (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   author_id text,
   record text,
@@ -375,7 +375,7 @@ CREATE TABLE IF NOT EXISTS testimonies (
 );
 
 CREATE TABLE IF NOT EXISTS milestones (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -384,7 +384,7 @@ CREATE TABLE IF NOT EXISTS milestones (
 );
 
 CREATE TABLE IF NOT EXISTS outreach_events (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -393,7 +393,7 @@ CREATE TABLE IF NOT EXISTS outreach_events (
 );
 
 CREATE TABLE IF NOT EXISTS outreach_rsvps (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   outreach_id text,
   person_id text,
@@ -404,7 +404,7 @@ CREATE TABLE IF NOT EXISTS outreach_rsvps (
 );
 
 CREATE TABLE IF NOT EXISTS coffee_orders (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   person_id text,
   record text,
@@ -414,7 +414,7 @@ CREATE TABLE IF NOT EXISTS coffee_orders (
 );
 
 CREATE TABLE IF NOT EXISTS social_links (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   record text,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -422,7 +422,7 @@ CREATE TABLE IF NOT EXISTS social_links (
 );
 
 CREATE TABLE IF NOT EXISTS tenant_modules (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   module_id text NOT NULL,
   enabled boolean NOT NULL DEFAULT false,
   PRIMARY KEY (tenant_id, module_id)
@@ -434,7 +434,7 @@ CREATE TABLE IF NOT EXISTS tenant_themes (
 );
 
 CREATE TABLE IF NOT EXISTS tenant_integrations (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   provider text NOT NULL,
   mode text NOT NULL DEFAULT 'dry_run',
   credentials_ciphertext text,
@@ -457,7 +457,7 @@ CREATE TABLE IF NOT EXISTS tenant_links (
 );
 
 CREATE TABLE IF NOT EXISTS locations (
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   id text NOT NULL,
   name text NOT NULL DEFAULT '',
   timezone text NOT NULL DEFAULT 'America/Chicago',
@@ -466,7 +466,7 @@ CREATE TABLE IF NOT EXISTS locations (
 
 CREATE TABLE IF NOT EXISTS outbox_jobs (
   id text NOT NULL,
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   job_name text NOT NULL,
   idempotency_key text NOT NULL,
   payload text NOT NULL DEFAULT '{}',
@@ -482,7 +482,7 @@ CREATE TABLE IF NOT EXISTS outbox_jobs (
 
 CREATE TABLE IF NOT EXISTS webhook_inbox (
   id text NOT NULL,
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   provider text NOT NULL,
   event_id text NOT NULL,
   payload text NOT NULL DEFAULT '{}',
@@ -493,7 +493,7 @@ CREATE TABLE IF NOT EXISTS webhook_inbox (
 
 CREATE TABLE IF NOT EXISTS exports (
   id text NOT NULL,
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   schema_version text NOT NULL DEFAULT '2',
   row_counts text NOT NULL DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -502,7 +502,7 @@ CREATE TABLE IF NOT EXISTS exports (
 
 CREATE TABLE IF NOT EXISTS operator_grants (
   id text NOT NULL,
-  tenant_id text NOT NULL DEFAULT 'onehope' REFERENCES tenants (id),
+  tenant_id text NOT NULL REFERENCES tenants (id),
   account_id text NOT NULL,
   approved_by text,
   tier3 boolean NOT NULL DEFAULT false,
@@ -586,7 +586,7 @@ BEGIN
     'gift',
     COALESCE(NEW.id, OLD.id),
     3,
-    COALESCE(NULLIF(current_setting('app.tenant_id', true), ''), NEW.tenant_id, OLD.tenant_id, 'onehope'),
+    COALESCE(NULLIF(current_setting('app.tenant_id', true), ''), NEW.tenant_id, OLD.tenant_id),
     'trigger'
   );
   RETURN COALESCE(NEW, OLD);
@@ -857,3 +857,84 @@ GRANT SELECT ON tenant_runtime TO app_user;
 DROP POLICY IF EXISTS runtime_user ON tenant_runtime;
 CREATE POLICY runtime_user ON tenant_runtime FOR SELECT TO app_user
   USING (tenant_id = current_setting('app.tenant_id', true));
+
+-- Optimistic concurrency. The request updates a row only when this version still matches.
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'households', 'people', 'gifts', 'kids', 'care_notes', 'prayers', 'background_checks',
+    'memberships', 'sessions', 'alerts', 'proposals', 'groups', 'group_messages', 'events',
+    'registrations', 'announcements', 'schedule_assignments', 'volunteers', 'rooms', 'bookings',
+    'expenses', 'pathways', 'visitors', 'care_requests', 'message_drafts', 'member_invites', 'follow_ups',
+    'streaks', 'rate_limits', 'my_five', 'testimonies', 'milestones', 'outreach_events',
+    'outreach_rsvps', 'coffee_orders', 'social_links'
+  ]
+  LOOP
+    EXECUTE format('ALTER TABLE %I ADD COLUMN IF NOT EXISTS row_version integer NOT NULL DEFAULT 1', t);
+  END LOOP;
+END
+$$;
+
+-- Accounts are global login rows. app_service cannot read the table directly.
+-- link_membership and tenant_passwords are the only paths, and they refuse another tenant.
+REVOKE SELECT, UPDATE, DELETE ON accounts FROM app_service;
+GRANT INSERT ON accounts TO app_service;
+
+CREATE OR REPLACE FUNCTION link_membership(
+  p_email text,
+  p_password text,
+  p_tenant text,
+  p_person text,
+  p_role text,
+  p_status text
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  acct text;
+  wrote integer := 0;
+  owned boolean;
+BEGIN
+  IF p_tenant IS DISTINCT FROM NULLIF(current_setting('app.tenant_id', true), '') THEN
+    RAISE EXCEPTION 'membership tenant does not match the request';
+  END IF;
+  INSERT INTO accounts (id, email, password_hash)
+  VALUES ('acct_' || md5(p_email), p_email, p_password)
+  ON CONFLICT (email) DO NOTHING;
+  GET DIAGNOSTICS wrote = ROW_COUNT;
+  SELECT id INTO acct FROM accounts WHERE email = p_email;
+  SELECT EXISTS (
+    SELECT 1 FROM memberships
+    WHERE tenant_id = p_tenant AND person_id = p_person AND account_id = acct
+  ) INTO owned;
+  INSERT INTO memberships (id, tenant_id, account_id, person_id, role, status)
+  VALUES ('mem_' || p_tenant || '_' || p_person, p_tenant, acct, p_person, p_role, p_status)
+  ON CONFLICT (tenant_id, person_id) DO UPDATE
+    SET role = EXCLUDED.role, status = EXCLUDED.status, account_id = EXCLUDED.account_id, updated_at = now();
+  IF p_password IS NOT NULL AND (wrote > 0 OR owned) THEN
+    UPDATE accounts SET password_hash = p_password, updated_at = now() WHERE id = acct;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION tenant_passwords(p_tenant text)
+RETURNS TABLE (person_id text, password_hash text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT m.person_id, a.password_hash
+  FROM memberships m
+  JOIN accounts a ON a.id = m.account_id
+  WHERE m.tenant_id = p_tenant
+    AND p_tenant = NULLIF(current_setting('app.tenant_id', true), '');
+$$;
+
+REVOKE ALL ON FUNCTION link_membership(text, text, text, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION tenant_passwords(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION link_membership(text, text, text, text, text, text) TO app_service;
+GRANT EXECUTE ON FUNCTION tenant_passwords(text) TO app_service;

@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
 export type AdapterMode = "live" | "dry_run" | "not_built";
 
 /**
@@ -238,8 +241,15 @@ export function projectCapabilities(connectedProviders: ReadonlySet<string>): Ca
 }
 
 /** Fails when a live row has no backing module or no required credential. */
-export function assertTruthful(connectedProviders: ReadonlySet<string> = new Set()): void {
+export function assertTruthful(
+  connectedProviders: ReadonlySet<string> = new Set(),
+  root?: string,
+): void {
   for (const adapter of ADAPTERS) {
+    if (root && adapter.backing) {
+      const file = resolve(root, adapter.backing);
+      if (!existsSync(file)) throw new Error(`${adapter.id} backing file is missing.`);
+    }
     const connected =
       adapter.credentialProvider !== null && connectedProviders.has(adapter.credentialProvider);
     const status = adapterMode(adapter, connected);

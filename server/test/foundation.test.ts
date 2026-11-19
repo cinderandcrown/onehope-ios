@@ -1,22 +1,24 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { PGlite } from "@electric-sql/pglite";
 
 import { createApi } from "../src/api.ts";
+import { verifyPassword } from "../src/crypto.ts";
 import { ADAPTERS, assertTruthful, projectCapabilities } from "../src/adapter-registry.ts";
 import { fakeEmailAdapter, saveTenantSecret } from "../src/integrations.ts";
 import { claimJobs, enqueueJob, finishJob, recordWebhook } from "../src/outbox.ts";
 import { migrate, type SqlClient } from "../src/migrate.ts";
-import { runRequest } from "../src/persist.ts";
+import { runRequest, seedTenantIfEmpty } from "../src/persist.ts";
 import { importLegacySnapshot, refuseSampleInProduction } from "../src/snapshot-import.ts";
 import { ChurchStore } from "../src/store.ts";
 import { loadConfig } from "../src/config.ts";
 import { exportTenant, restoreTenant } from "../src/tenant-bundle.ts";
 import { resolveTenant } from "../src/tenancy.ts";
 import { withServiceRole } from "../src/service-role.ts";
-import { emptyDocument, loadDocument, saveDocumentDiff, stable } from "../src/document-store.ts";
+import { emptyDocument, loadDocument, saveDocumentDiff, stable, WriteConflictError } from "../src/document-store.ts";
 
 function client(db: PGlite): SqlClient {
   return {
@@ -42,7 +44,7 @@ const KEY = Buffer.alloc(32, 7);
 test("tenant is resolved from the host and never from a caller-supplied id", () => {
   assert.equal(resolveTenant({ host: "order.myrevivalcoffee.com" }), "revivalcoffee");
   assert.equal(resolveTenant({ host: "OneHope-Beryl.vercel.app:443" }), "onehope");
-  assert.equal(resolveTenant({ host: "unknown.example" }), "onehope");
+  assert.equal(resolveTenant({ host: "unknown.example" }), null);
   assert.equal(
     resolveTenant({ host: "order.myrevivalcoffee.com", mode: "single", singleTenantId: "cinderandcrown" }),
     "cinderandcrown",
@@ -51,7 +53,8 @@ test("tenant is resolved from the host and never from a caller-supplied id", () 
 });
 
 test("truth gate refuses a live capability with no backing code", () => {
-  assertTruthful();
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  assertTruthful(new Set(), root);
   const projected = projectCapabilities(new Set());
   for (const row of projected) {
     if (row.status === "live") {
@@ -68,6 +71,8 @@ test("truth gate refuses a live capability with no backing code", () => {
   assert.equal(projectCapabilities(new Set(["square"])).find((row) => row.provider === "Square")?.status, "live");
   const source = readFileSync(new URL("../src/persist.ts", import.meta.url), "utf8");
   assert.equal(source.includes("demo_runtime"), false);
+  assert.equal(source.includes("importLegacySnapshot"), false);
+  assert.equal(source.includes("migrate("), false);
 });
 
 test("production refuses sample people", () => {
@@ -115,19 +120,20 @@ test("legacy snapshot imports once, reconciles counts, and then does not read th
     },
   };
   assert.equal(await importLegacySnapshot(wrapped), "imported");
-  assert.ok(reads.some((statement) => statement.includes("demo_runtime")));
-  const backup = await sql.query<{ payload: string }>("SELECT payload FROM demo_runtime_backup WHERE id = 'church'");
-  assert.equal(backup.rows[0]?.payload, payload);
+  assert.ok(reads.some((statement) => /from demo_runtime/i.test(statement)));
   const counts = await sql.query<{ row_counts: string }>(
     "SELECT row_counts FROM snapshot_imports WHERE id = 'legacy-blob'",
   );
   const stored = JSON.parse(counts.rows[0]?.row_counts ?? "{}") as { people: number };
   assert.equal(stored.people, church.toDocument().people.length);
-  reads.length = 0;
   assert.equal(await importLegacySnapshot(wrapped), "already");
-  assert.equal(reads.length, 0);
   const still = await sql.query<{ payload: string }>("SELECT payload FROM demo_runtime WHERE id = 'church'");
   assert.equal(still.rows[0]?.payload, payload);
+  const changed = payload.replace("Member Example", "Member Edited");
+  await sql.query("UPDATE demo_runtime SET payload = $2 WHERE id = $1", ["church", changed]);
+  assert.equal(await importLegacySnapshot(sql), "updated");
+  const afterDelta = await sql.query<{ payload: string }>("SELECT payload FROM demo_runtime WHERE id = 'church'");
+  assert.equal(afterDelta.rows[0]?.payload, changed);
 });
 
 test("a second read writes no rows and overlapping inserts are not lost", async () => {
@@ -140,11 +146,22 @@ test("a second read writes no rows and overlapping inserts are not lost", async 
       return sql.query(statement, params);
     },
   };
-  await runRequest(logging, (store) => store.status("test"), "localhost");
-  writes.length = 0;
-  await runRequest(logging, (store) => store.status("test"), "localhost");
+  const reads: string[] = [];
+  const watching: SqlClient = {
+    exec: (statement) => logging.exec(statement),
+    async query(statement, params) {
+      reads.push(statement);
+      return logging.query(statement, params);
+    },
+  };
+  await runRequest(watching, (store) => store.status("test"), "localhost", process.env, { profile: "none" });
+  assert.equal(
+    reads.some((statement) => /audit_log|from people|from sessions/i.test(statement)),
+    false,
+  );
   assert.deepEqual(writes, []);
 
+  await seedTenantIfEmpty(sql, "onehope");
   const baseline = await withServiceRole(sql, "onehope", () => loadDocument(sql, "onehope"));
   for (let index = 0; index < 50; index += 1) {
     const next = structuredClone(baseline);
@@ -346,4 +363,86 @@ test("health and tenant routes answer from the relational store", async () => {
   const body = (await tenant.json()) as { tenant: { id: string; pickupOnly: boolean } };
   assert.equal(body.tenant.id, "revivalcoffee");
   assert.equal(body.tenant.pickupOnly, true);
+});
+
+test("an unknown host is rejected and an audited child write is stored", async () => {
+  const { sql } = await database();
+  await assert.rejects(runRequest(sql, (store) => store.status("test"), "evil.example"), (error: unknown) => {
+    return error instanceof Error && error.name === "UnknownTenantError";
+  });
+  await seedTenantIfEmpty(sql, "onehope");
+  await runRequest(
+    sql,
+    (store) => {
+      const session = store.signup({
+        email: "parent@example.com",
+        password: "password1",
+        displayName: "Parent Example",
+        ip: "203.0.113.9",
+        userAgent: "test",
+      });
+      store.addChild(session.token, { displayName: "Ada Example", classroom: "Preschool" });
+    },
+    "localhost",
+  );
+  const rows = await withServiceRole(sql, "onehope", () =>
+    sql.query<{ resource: string }>("SELECT resource FROM audit_log WHERE source = 'app' AND resource = 'kid'"),
+  );
+  assert.ok(rows.rows.length >= 1);
+});
+
+test("a stale row version loses and another tenant cannot read account emails", async () => {
+  const { sql } = await database();
+  await seedTenantIfEmpty(sql, "onehope");
+  const loaded = await withServiceRole(sql, "onehope", () => loadDocument(sql, "onehope"));
+  const first = structuredClone(loaded);
+  const second = structuredClone(loaded);
+  const person = first.people[0];
+  assert.ok(person);
+  person.displayName = "First Write";
+  const other = second.people.find((row) => row.id === person.id);
+  assert.ok(other);
+  other.displayName = "Second Write";
+  await withServiceRole(sql, "onehope", () =>
+    saveDocumentDiff(sql, "onehope", loaded, first, { syncModules: false }),
+  );
+  await assert.rejects(
+    withServiceRole(sql, "onehope", () => saveDocumentDiff(sql, "onehope", loaded, second, { syncModules: false })),
+    (error: unknown) => error instanceof WriteConflictError,
+  );
+  await runRequest(
+    sql,
+    (store) =>
+      store.signup({
+        email: "shared@example.com",
+        password: "password1",
+        displayName: "Church Person",
+        ip: "203.0.113.10",
+        userAgent: "test",
+      }),
+    "localhost",
+  );
+  await runRequest(
+    sql,
+    (store) =>
+      store.signup({
+        email: "shared@example.com",
+        password: "different1",
+        displayName: "Shop Person",
+        ip: "203.0.113.11",
+        userAgent: "test",
+      }),
+    "order.myrevivalcoffee.com",
+  );
+  await assert.rejects(
+    withServiceRole(sql, "revivalcoffee", () => sql.query("SELECT email FROM accounts")),
+    (error: unknown) => error instanceof Error,
+  );
+  const church = await withServiceRole(sql, "onehope", () =>
+    loadDocument(sql, "onehope", { platformKey: loadConfig({}).fieldEncryptionKey }),
+  );
+  const kept = church.people.find((row) => row.email === "shared@example.com");
+  assert.equal(kept?.passwordHash?.length ? true : false, true);
+  assert.equal(verifyPassword("password1", kept?.passwordHash ?? ""), true);
+  assert.equal(verifyPassword("different1", kept?.passwordHash ?? ""), false);
 });

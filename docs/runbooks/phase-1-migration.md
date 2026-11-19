@@ -1,58 +1,60 @@
 # Phase 1 migration and rollback
 
-Do this before the new server is the one answering production traffic. Do not run it against production from a laptop that prints `DATABASE_URL`.
+Do this in a maintenance window. The request path does not migrate and does not import the blob. Nothing in this runbook is a copy of the database into itself.
 
-## What changes
+## Where the connection string is
 
-`0004_tenancy.sql` adds tenants, accounts, memberships, and the tables that hold the live church. Row level security is forced. The request path stops reading `demo_runtime`.
+Production `DATABASE_URL` is in the Vercel project **onehope**, Settings, Environment Variables, Production. Neon shows the same string under the project that Vercel attached. Do not copy it into git, a shell history you share, or this repository. Preview deployments must not use the production URL. That split is a separate change.
 
-The importer copies that blob once:
+## Backup, before anything else
 
-1. It writes a copy to `demo_runtime_backup` and leaves `demo_runtime` in place.
-2. It upserts rows for tenant `onehope`.
-3. It checks people, gifts, children, sessions, prayers, groups, events, and notes counts.
-4. It records the result in `snapshot_imports`. A later request does not read the blob.
+1. In the Neon console, create a branch of the production database, or set a PITR restore point and write down the timestamp.
+2. Or, from a machine that already has the URL in its environment and does not print it:
 
-Sample people (`sample: true` or `@sample.onehope`) are refused when `ONEHOPE_ENV=production`.
+   ```bash
+   pg_dump --format=custom --file=onehope-pre-phase1.dump "$DATABASE_URL"
+   ```
 
-## Apply
+3. Confirm the dump or branch exists before you continue. `demo_runtime_backup` is not a backup.
+
+## Freeze writes
+
+Pause the Vercel production deployment, or put the app in maintenance, so the old server stops writing `demo_runtime` while you import. If you cannot pause, run the import twice: once now, and again immediately before the new deployment starts. The second run upserts rows whose blob checksum changed and does not delete rows that exist only in the tables.
+
+## Import
 
 ```bash
 npm ci
 node --import tsx server/scripts/seed.ts
 ```
 
-`seed.ts` applies migrations and imports the blob when `DATABASE_URL` or `POSTGRES_URL` is set. It does not print the URL. Run it once, then deploy this release. Deploying first is safe only if `snapshot_imports` is written before members use the new server: the first request also imports, under an advisory lock, and will not import a second time.
+The script applies `0004_tenancy.sql`, takes an advisory lock, reads `demo_runtime`, and upserts tenant `onehope`. It does not update `demo_runtime`.
 
-After import, `SELECT status, row_counts FROM snapshot_imports WHERE id = 'legacy-blob';` should show `imported` and the counts you expect. `demo_runtime` should still hold the original payload.
+Verify:
+
+```sql
+SELECT status, source_checksum, row_counts FROM snapshot_imports WHERE id = 'legacy-blob';
+SELECT md5(payload) FROM demo_runtime WHERE id = 'church';
+```
+
+The payload checksum must match the value you recorded before the import. `md5` here is only a spot check; the script stores a sha256 of the exact payload and refuses to finish if the payload changes mid-import.
+
+Unknown hosts do not map to One Hope. `onehope-beryl.vercel.app`, `weareonehope.com`, and `localhost` do.
+
+`CONTENT_SALVATION_BAPTISM_APPROVED` stays unset until a pastor approves that wording.
 
 ## Tenants
 
 | Slug | What it is |
 | --- | --- |
-| `onehope` | The church. Hosts include `onehope-beryl.vercel.app`, `weareonehope.com`, and `localhost`. |
-| `revivalcoffee` | The shop. Pickup only. Linked from One Hope. No church rows. |
-| `cinderandcrown` | The platform operator's own tenant. Generic modules only. |
-
-`TENANT_MODE=single` and `TENANT_ID` pin one deployment to one tenant. Otherwise the tenant comes from the `Host` header. A client-sent tenant id is ignored.
-
-`CONTENT_SALVATION_BAPTISM_APPROVED` stays unset until a pastor approves that wording. Scripture still shows.
+| `onehope` | The church |
+| `revivalcoffee` | The shop. Pickup only. Linked from One Hope. No church rows |
+| `cinderandcrown` | The platform operator's tenant. Generic modules only |
 
 ## Rollback
 
-The previous release reads `demo_runtime` and ignores the new tables.
+1. Restore the Neon branch or the `pg_dump` if the new tables must disappear. That is the real undo.
+2. Or point Vercel back at the previous deployment. The previous release reads `demo_runtime`, which this import does not change. Signups that exist only in the new tables are not in the blob. Export them first if you need them.
+3. `server/migrations/rollback/0004_tenancy_down.sql` deletes the `0004_tenancy` row from `schema_migrations`, drops the new tables, drops forced RLS and the new policies on the original tables, and restores the original policies. `migrate()` does not run it. Run it only after the backup restore decision above.
 
-1. Point Vercel back at the previous deployment. Do not delete the database.
-2. If this release has taken new signups you need to keep, they exist only in the tenant tables. Export them first (`exportTenant` in `server/src/tenant-bundle.ts`) or accept that a code rollback returns to the blob from before those signups.
-3. If `demo_runtime` was edited by hand after the backup, restore it from `demo_runtime_backup` before the old release serves traffic:
-
-   ```sql
-   UPDATE demo_runtime AS live
-   SET payload = backup.payload, updated_at = now()
-   FROM demo_runtime_backup AS backup
-   WHERE live.id = backup.id;
-   ```
-
-4. `server/migrations/rollback/0004_tenancy_down.sql` drops the new tables and the append-only trigger. Run it only when you intend to remove the tenant schema. It is not applied by `migrate()`. The audit trigger rejects `UPDATE` and `DELETE` until that file drops the trigger.
-
-Secrets are not in a tenant export. Reconnect each provider after a restore.
+Passwords for the relational store live on `accounts`, not in the person JSON. `app_service` cannot select that table. TOTP secrets are encrypted in `people.totp_secret` and are not copied into `record`.

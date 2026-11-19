@@ -53,12 +53,22 @@ export function normalizeHost(host: string | null | undefined): string {
  * Tenant comes from TENANT_MODE=single or from the Host header.
  * There is no parameter for a client-supplied tenant id. Do not add one.
  */
+export class UnknownTenantError extends Error {
+  constructor(host: string) {
+    super("This host is not a church on this platform.");
+    this.name = "UnknownTenantError";
+    this.host = host;
+  }
+
+  readonly host: string;
+}
+
 export function resolveTenant(input: {
   host: string | null;
   mode?: string | null;
   singleTenantId?: string | null;
   domains?: readonly { host: string; tenantId: string }[];
-}): string {
+}): string | null {
   if ((input.mode ?? "pooled") === "single") {
     const id = input.singleTenantId?.trim();
     if (!id) throw new Error("TENANT_ID is required when TENANT_MODE=single.");
@@ -66,5 +76,5 @@ export function resolveTenant(input: {
   }
   const host = normalizeHost(input.host);
   const domains = input.domains ?? BUILTIN_DOMAINS;
-  return domains.find((row) => row.host === host)?.tenantId ?? "onehope";
+  return domains.find((row) => row.host === host)?.tenantId ?? null;
 }

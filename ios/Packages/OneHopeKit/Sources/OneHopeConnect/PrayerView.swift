@@ -82,10 +82,13 @@ public struct PrayerView: View {
                     return
                 }
                 Task {
-                    notice = await perform(.prayer(serve: serveText, contact: contact, body: body))
-                    serve = ""
-                    prayer = ""
-                    contact = false
+                    let reply = await perform(.prayer(serve: serveText, contact: contact, body: body))
+                    notice = reply
+                    if reply == "Your prayer request was sent to the pastors." {
+                        serve = ""
+                        prayer = ""
+                        contact = false
+                    }
                 }
             }
         }

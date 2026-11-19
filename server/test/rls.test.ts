@@ -36,26 +36,26 @@ test("migrations apply once and Postgres RLS isolates households", async () => {
 
   await db.exec("RESET ROLE");
   await db.exec(`
-    INSERT INTO households (id, name) VALUES ('hh-a', 'Avery'), ('hh-c', 'Casey');
-    INSERT INTO people (id, household_id, role, display_name, email, email_public, phone, phone_public)
+    INSERT INTO households (id, name, tenant_id) VALUES ('hh-a', 'Avery', 'onehope'), ('hh-c', 'Casey', 'onehope');
+    INSERT INTO people (id, household_id, role, display_name, email, email_public, phone, phone_public, tenant_id)
     VALUES
-      ('person-a', 'hh-a', 'member', 'Avery', 'avery@sample.onehope', true, '111', false),
-      ('person-c', 'hh-c', 'member', 'Casey', 'casey@sample.onehope', false, '222', false);
-    INSERT INTO gifts (id, household_id, person_id, amount_ciphertext, sample)
+      ('person-a', 'hh-a', 'member', 'Avery', 'avery@sample.onehope', true, '111', false, 'onehope'),
+      ('person-c', 'hh-c', 'member', 'Casey', 'casey@sample.onehope', false, '222', false, 'onehope');
+    INSERT INTO gifts (id, household_id, person_id, amount_ciphertext, sample, tenant_id)
     VALUES
-      ('gift-a', 'hh-a', 'person-a', 'cipher-a', true),
-      ('gift-c', 'hh-c', 'person-c', 'cipher-c', true);
-    INSERT INTO kids (id, household_id, display_name, medical_ciphertext, restricted)
-    VALUES ('kid-a', 'hh-a', 'Remy', 'cipher-medical', false);
-    INSERT INTO care_notes (id, subject_person_id, body_ciphertext) VALUES
-      ('note-a', 'person-a', 'cipher-note'),
-      ('note-c', 'person-c', 'cipher-note-c');
-    INSERT INTO care_note_shares (note_id, person_id) VALUES ('note-c', 'person-harper');
-    INSERT INTO prayers (id, author_id, body, visibility, approved) VALUES
-      ('prayer-public', 'person-a', 'public prayer', 'public', true),
-      ('prayer-c', 'person-c', 'casey private', 'private', false);
-    INSERT INTO background_checks (id, person_id, status, notes_ciphertext)
-    VALUES ('bg-c', 'person-c', 'pending', 'cipher-bg');
+      ('gift-a', 'hh-a', 'person-a', 'cipher-a', true, 'onehope'),
+      ('gift-c', 'hh-c', 'person-c', 'cipher-c', true, 'onehope');
+    INSERT INTO kids (id, household_id, display_name, medical_ciphertext, restricted, tenant_id)
+    VALUES ('kid-a', 'hh-a', 'Remy', 'cipher-medical', false, 'onehope');
+    INSERT INTO care_notes (id, subject_person_id, body_ciphertext, tenant_id) VALUES
+      ('note-a', 'person-a', 'cipher-note', 'onehope'),
+      ('note-c', 'person-c', 'cipher-note-c', 'onehope');
+    INSERT INTO care_note_shares (note_id, person_id, tenant_id) VALUES ('note-c', 'person-harper', 'onehope');
+    INSERT INTO prayers (id, author_id, body, visibility, approved, tenant_id) VALUES
+      ('prayer-public', 'person-a', 'public prayer', 'public', true, 'onehope'),
+      ('prayer-c', 'person-c', 'casey private', 'private', false, 'onehope');
+    INSERT INTO background_checks (id, person_id, status, notes_ciphertext, tenant_id)
+    VALUES ('bg-c', 'person-c', 'pending', 'cipher-bg', 'onehope');
   `);
 
   await asUser(db, {

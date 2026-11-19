@@ -1,11 +1,14 @@
 import { Pool, type PoolClient, neonConfig } from "@neondatabase/serverless";
 
 import { ChurchStore } from "./store";
-import { emptyDocument, loadDocument, saveDocumentDiff } from "./document-store";
-import { migrate, type SqlClient } from "./migrate";
+import { emptyDocument, loadDocument, saveDocumentDiff, type LoadOptions } from "./document-store";
+import { loadConfig } from "./config";
+import type { SqlClient } from "./migrate";
 import { assumeService } from "./service-role";
-import { importLegacySnapshot, refuseSampleInProduction } from "./snapshot-import";
-import { resolveTenant, tenantProfile } from "./tenancy";
+import { refuseSampleInProduction } from "./snapshot-import";
+import { resolveTenant, tenantProfile, UnknownTenantError } from "./tenancy";
+
+export { UnknownTenantError };
 
 if (typeof WebSocket !== "undefined") neonConfig.webSocketConstructor = WebSocket;
 
@@ -21,12 +24,18 @@ function sharedPool(url: string): Pool {
   return pool;
 }
 
-export type StoreScope = { host?: string | null };
+export type RequestProfile = "none" | "request" | "audit";
+
+export type StoreScope = {
+  host?: string | null;
+  token?: string | null;
+  profile?: RequestProfile;
+};
 
 /**
  * Serves one request from tenant tables.
+ * Migrations and the blob import are not run here. Use server/scripts/seed.ts.
  * With no database URL, tests keep the in-memory store.
- * This function does not read or write the legacy JSON snapshot.
  */
 export async function withStore<T>(
   fn: (store: ChurchStore) => Promise<T> | T,
@@ -36,12 +45,41 @@ export async function withStore<T>(
   if (!url) return fn(getMemoryStore());
   const client = await sharedPool(url).connect();
   try {
-    const sql = clientSql(client);
-    await migrate(sql);
-    await importLegacySnapshot(sql);
-    return await runRequest(sql, fn, scope.host ?? null);
+    return await runRequest(clientSql(client), fn, scope.host ?? null, process.env, {
+      profile: scope.profile ?? "request",
+      sessionToken: scope.token ?? null,
+    });
   } finally {
     client.release();
+  }
+}
+
+export async function seedTenantIfEmpty(
+  sql: SqlClient,
+  tenantId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  await sql.query("BEGIN");
+  try {
+    await sql.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+    await assumeService(sql);
+    const ready = await sql.query<{ tenant_id: string }>(
+      "SELECT tenant_id FROM tenant_runtime WHERE tenant_id = $1",
+      [tenantId],
+    );
+    if (ready.rows.length === 0) {
+      const seeded = tenantId === "onehope" ? ChurchStore.demo(env).toDocument() : emptyDocument();
+      refuseSampleInProduction(seeded, env);
+      await saveDocumentDiff(sql, tenantId, emptyDocument(), seeded, {
+        syncModules: tenantId === "onehope",
+        platformKey: loadConfig(env).fieldEncryptionKey,
+      });
+      await sql.query("INSERT INTO tenant_runtime (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING", [tenantId]);
+    }
+    await sql.query("COMMIT");
+  } catch (error) {
+    await sql.query("ROLLBACK");
+    throw error;
   }
 }
 
@@ -50,43 +88,47 @@ export async function runRequest<T>(
   fn: (store: ChurchStore) => Promise<T> | T,
   host: string | null,
   env: NodeJS.ProcessEnv = process.env,
+  options: { profile?: RequestProfile; sessionToken?: string | null } = {},
 ): Promise<T> {
   const mode = env.TENANT_MODE ?? "pooled";
-  let tenantId = resolveTenant({ host, mode, singleTenantId: env.TENANT_ID ?? null });
   await sql.query("BEGIN");
   try {
-    await sql.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     await assumeService(sql);
-    if (mode !== "single") {
-      const domains = await sql.query<{ host: string; tenant_id: string }>(
-        "SELECT host, tenant_id FROM tenant_domains",
-      );
-      const resolved = resolveTenant({
-        host,
-        domains: domains.rows.map((row) => ({ host: row.host, tenantId: row.tenant_id })),
-      });
-      if (resolved !== tenantId) {
-        tenantId = resolved;
-        await sql.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-      }
-    }
+    const domains =
+      mode === "single"
+        ? []
+        : (
+            await sql.query<{ host: string; tenant_id: string }>("SELECT host, tenant_id FROM tenant_domains")
+          ).rows.map((row) => ({ host: row.host, tenantId: row.tenant_id }));
+    const tenantId = resolveTenant({
+      host,
+      mode,
+      singleTenantId: env.TENANT_ID ?? null,
+      domains: domains.length > 0 ? domains : undefined,
+    });
+    if (!tenantId) throw new UnknownTenantError(host ?? "");
+    await sql.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
     const profile = tenantProfile(tenantId);
-    const ready = await sql.query<{ tenant_id: string }>("SELECT tenant_id FROM tenant_runtime WHERE tenant_id = $1", [
-      tenantId,
-    ]);
-    if (ready.rows.length === 0) {
-      const seeded = tenantId === "onehope" ? ChurchStore.demo(env).toDocument() : emptyDocument();
-      refuseSampleInProduction(seeded, env);
-      await saveDocumentDiff(sql, tenantId, emptyDocument(), seeded, { syncModules: tenantId === "onehope" });
-      await sql.query("INSERT INTO tenant_runtime (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING", [tenantId]);
-    }
-    const loaded = await loadDocument(sql, tenantId);
     const store = ChurchStore.demo(env);
-    if (tenantId === "onehope") store.installDocument(structuredClone(loaded));
-    else store.replaceDocument(structuredClone(loaded));
+    store.bindTenant(profile);
+    if ((options.profile ?? "request") === "none") {
+      const result = await fn(store);
+      await sql.query("COMMIT");
+      return result;
+    }
+    const loadOptions: LoadOptions = {
+      includeAudit: options.profile === "audit",
+      sessionToken: options.sessionToken ?? null,
+      platformKey: loadConfig(env).fieldEncryptionKey,
+    };
+    const loaded = await loadDocument(sql, tenantId, loadOptions);
+    store.replaceDocument(structuredClone(loaded));
     store.bindTenant(profile);
     const result = await fn(store);
-    await saveDocumentDiff(sql, tenantId, loaded, store.toDocument(), { syncModules: tenantId === "onehope" });
+    await saveDocumentDiff(sql, tenantId, loaded, store.toDocument(), {
+      syncModules: false,
+      platformKey: loadConfig(env).fieldEncryptionKey,
+    });
     await sql.query("COMMIT");
     return result;
   } catch (error) {

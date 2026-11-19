@@ -1,6 +1,40 @@
+import { decryptString, encryptString } from "./crypto";
 import { MODULES, type ModuleId } from "./domain";
 import type { SqlClient } from "./migrate";
 import type { StoreDocument } from "./store";
+
+export class WriteConflictError extends Error {
+  constructor(table: string) {
+    super(`Write conflict on ${table}. Reload and try again.`);
+    this.name = "WriteConflictError";
+  }
+}
+
+const versions = new WeakMap<StoreDocument, Map<string, number>>();
+
+export function rowVersions(doc: StoreDocument): Map<string, number> {
+  let map = versions.get(doc);
+  if (!map) {
+    map = new Map();
+    versions.set(doc, map);
+  }
+  return map;
+}
+
+export type LoadOptions = {
+  includeAudit?: boolean;
+  /** Load every session. Request paths pass sessionToken instead. */
+  allSessions?: boolean;
+  sessionToken?: string | null;
+  platformKey?: Buffer | null;
+};
+
+export type SaveOptions = {
+  syncModules: boolean;
+  platformKey?: Buffer | null;
+  /** Import path: do not delete rows that exist only in the tables. */
+  retainExtras?: boolean;
+};
 
 type Row = Record<string, unknown>;
 
@@ -10,10 +44,12 @@ type SyncSpec = {
   columns: readonly string[];
   appendOnly?: boolean;
   rows: (doc: StoreDocument) => Row[];
-  values: (row: Row) => unknown[];
+  values: (row: Row, ctx: SaveContext) => unknown[];
   identity: (row: Row) => { column: string; value: unknown }[];
   assign: (doc: StoreDocument, rows: Row[]) => void;
 };
+
+type SaveContext = { platformKey: Buffer | null };
 
 const IDENT = /^[a-z_]+$/;
 
@@ -109,6 +145,13 @@ function recordColumn(row: Row): string {
   return JSON.stringify(canonicalize(row));
 }
 
+function secretFree(row: Row): string {
+  const copy = { ...row };
+  delete copy.passwordHash;
+  delete copy.totpSecret;
+  return JSON.stringify(canonicalize(copy));
+}
+
 function idKey(row: Row): { column: string; value: unknown }[] {
   return [{ column: "id", value: required(row, "id") }];
 }
@@ -162,7 +205,7 @@ const SPECS: readonly SyncSpec[] = [
       "record",
     ],
     rows: (doc) => objects(doc.people),
-    values: (row) => [
+    values: (row, ctx) => [
       required(row, "id"),
       text(row, "householdId"),
       required(row, "role"),
@@ -171,14 +214,16 @@ const SPECS: readonly SyncSpec[] = [
       bool(row, "emailPublic"),
       text(row, "phone"),
       bool(row, "phonePublic"),
-      text(row, "passwordHash"),
-      text(row, "totpSecret"),
+      null,
+      ctx.platformKey && text(row, "totpSecret")
+        ? encryptString(String(row.totpSecret), ctx.platformKey)
+        : null,
       bool(row, "listedInDirectory"),
       bool(row, "deleted"),
       text(row, "lastIp"),
       text(row, "lastUserAgent"),
       bool(row, "sample"),
-      recordColumn(row),
+      secretFree(row),
     ],
     identity: idKey,
     assign: assignArray("people"),
@@ -406,18 +451,30 @@ function keyOf(parts: { column: string; value: unknown }[]): string {
   return parts.map((part) => `${part.column}=${String(part.value)}`).join("|");
 }
 
-async function syncSpec(sql: SqlClient, tenantId: string, spec: SyncSpec, before: StoreDocument, after: StoreDocument) {
+async function syncSpec(
+  sql: SqlClient,
+  tenantId: string,
+  spec: SyncSpec,
+  before: StoreDocument,
+  after: StoreDocument,
+  ctx: SaveContext,
+  retainExtras = false,
+) {
   let writes = 0;
+  const known = rowVersions(before);
   const previous = new Map(spec.rows(before).map((row) => [keyOf(spec.identity(row)), row]));
   const next = new Map(spec.rows(after).map((row) => [keyOf(spec.identity(row)), row]));
   for (const [key, row] of next) {
     const prior = previous.get(key);
     if (prior && stable(prior) === stable(row)) continue;
     if (prior && spec.appendOnly) continue;
-    await upsert(sql, tenantId, spec, row);
+    await upsert(sql, tenantId, spec, row, ctx, {
+      prior: Boolean(prior),
+      expectedVersion: known.get(`${spec.table}:${key}`) ?? 1,
+    });
     writes += 1;
   }
-  if (!spec.appendOnly) {
+  if (!spec.appendOnly && !retainExtras) {
     for (const [key, row] of previous) {
       if (next.has(key)) continue;
       await remove(sql, tenantId, spec, row);
@@ -427,20 +484,46 @@ async function syncSpec(sql: SqlClient, tenantId: string, spec: SyncSpec, before
   return writes;
 }
 
-async function upsert(sql: SqlClient, tenantId: string, spec: SyncSpec, row: Row) {
+async function upsert(
+  sql: SqlClient,
+  tenantId: string,
+  spec: SyncSpec,
+  row: Row,
+  ctx: SaveContext,
+  change: { prior: boolean; expectedVersion: number },
+) {
   const columns = spec.columns.map(assertIdent);
-  const values = [tenantId, ...spec.values(row)];
+  const values = [tenantId, ...spec.values(row, ctx)];
   if (values.length !== columns.length) {
     throw new Error(`${spec.table} expected ${columns.length} values and got ${values.length}.`);
   }
+  const table = assertIdent(spec.table);
   const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
+  if (spec.appendOnly || !change.prior) {
+    const inserted = await sql.query(
+      `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT (${spec.conflict}) DO NOTHING RETURNING 1 AS ok`,
+      values,
+    );
+    if (!spec.appendOnly && inserted.rows.length === 0) throw new WriteConflictError(table);
+    return;
+  }
   const keys = new Set(spec.conflict.split(",").map((part) => part.trim()));
-  const assignments = columns.filter((column) => !keys.has(column)).map((column) => `${column} = EXCLUDED.${column}`);
-  const action = assignments.length === 0 ? "DO NOTHING" : `DO UPDATE SET ${assignments.join(", ")}`;
-  await sql.query(
-    `INSERT INTO ${assertIdent(spec.table)} (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT (${spec.conflict}) ${action}`,
-    values,
+  const pairs = columns
+    .map((column, index) => ({ column, value: values[index] }))
+    .filter((pair) => !keys.has(pair.column));
+  const assignments = pairs.map((pair, index) => `${pair.column} = $${index + 1}`);
+  const assignedValues = pairs.map((pair) => pair.value);
+  const identity = spec.identity(row);
+  const where = [
+    "tenant_id = $" + (assignedValues.length + 1),
+    ...identity.map((part, index) => `${assertIdent(part.column)} = $${assignedValues.length + 2 + index}`),
+    `row_version = $${assignedValues.length + 2 + identity.length}`,
+  ];
+  const updated = await sql.query(
+    `UPDATE ${table} SET ${assignments.join(", ")}, row_version = row_version + 1 WHERE ${where.join(" AND ")} RETURNING row_version`,
+    [...assignedValues, tenantId, ...identity.map((part) => part.value), change.expectedVersion],
   );
+  if (updated.rows.length === 0) throw new WriteConflictError(table);
 }
 
 async function remove(sql: SqlClient, tenantId: string, spec: SyncSpec, row: Row) {
@@ -452,25 +535,60 @@ async function remove(sql: SqlClient, tenantId: string, spec: SyncSpec, row: Row
   ]);
 }
 
-async function loadRecords(sql: SqlClient, tenantId: string, spec: SyncSpec): Promise<Row[]> {
-  if (spec.table === "audit_log") {
-    const found = await sql.query<{ record: string }>(
-      `SELECT record FROM audit_log WHERE tenant_id = $1 AND source = 'app' AND record IS NOT NULL`,
-      [tenantId],
-    );
-    return found.rows.map((row) => JSON.parse(row.record) as Row);
-  }
-  const found = await sql.query<{ record: string }>(
-    `SELECT record FROM ${assertIdent(spec.table)} WHERE tenant_id = $1 AND record IS NOT NULL`,
-    [tenantId],
+async function loadRecords(
+  sql: SqlClient,
+  tenantId: string,
+  spec: SyncSpec,
+  doc: StoreDocument,
+  platformKey: Buffer | null,
+  extraWhere = "",
+  extraParams: readonly unknown[] = [],
+): Promise<Row[]> {
+  const versionColumn = spec.table === "audit_log" ? "" : ", row_version";
+  const totpColumn = spec.table === "people" ? ", totp_secret" : "";
+  const found = await sql.query<{ record: string; row_version?: number; totp_secret?: string | null }>(
+    `SELECT record${versionColumn}${totpColumn} FROM ${assertIdent(spec.table)}
+     WHERE tenant_id = $1 AND record IS NOT NULL${extraWhere}`,
+    [tenantId, ...extraParams],
   );
-  return found.rows.map((row) => JSON.parse(row.record) as Row);
+  const known = rowVersions(doc);
+  return found.rows.map((row) => {
+    const parsed = JSON.parse(row.record) as Row;
+    if (typeof row.row_version === "number") {
+      const key = `${spec.table}:${keyOf(spec.identity(parsed))}`;
+      known.set(key, row.row_version);
+    }
+    if (spec.table === "people" && row.totp_secret && platformKey) {
+      parsed.totpSecret = decryptString(row.totp_secret, platformKey);
+    }
+    return parsed;
+  });
 }
 
-export async function loadDocument(sql: SqlClient, tenantId: string): Promise<StoreDocument> {
+export async function loadDocument(
+  sql: SqlClient,
+  tenantId: string,
+  options: LoadOptions = {},
+): Promise<StoreDocument> {
   const doc = emptyDocument();
+  const platformKey = options.platformKey ?? null;
   for (const spec of SPECS) {
-    spec.assign(doc, await loadRecords(sql, tenantId, spec));
+    if (spec.table === "audit_log" && !options.includeAudit) {
+      spec.assign(doc, []);
+      continue;
+    }
+    if (spec.table === "sessions" && !options.allSessions && !options.sessionToken) {
+      spec.assign(doc, []);
+      continue;
+    }
+    const extra =
+      spec.table === "sessions" && options.sessionToken
+        ? " AND token = $2"
+        : spec.table === "audit_log"
+          ? " AND source = 'app'"
+          : "";
+    const params = spec.table === "sessions" && options.sessionToken ? [options.sessionToken] : [];
+    spec.assign(doc, await loadRecords(sql, tenantId, spec, doc, platformKey, extra, params));
   }
   const duty = await sql.query<{ person_id: string }>(`SELECT person_id FROM station_duty WHERE tenant_id = $1`, [
     tenantId,
@@ -509,6 +627,7 @@ export async function loadDocument(sql: SqlClient, tenantId: string): Promise<St
   for (const row of modules.rows) {
     if (MODULES.includes(row.module_id as ModuleId)) doc.flags[row.module_id as ModuleId] = row.enabled;
   }
+  await hydratePasswords(sql, tenantId, doc);
   return doc;
 }
 
@@ -517,10 +636,13 @@ export async function saveDocumentDiff(
   tenantId: string,
   before: StoreDocument,
   after: StoreDocument,
-  options: { syncModules: boolean },
+  options: SaveOptions,
 ): Promise<number> {
   let writes = 0;
-  for (const spec of SPECS) writes += await syncSpec(sql, tenantId, spec, before, after);
+  const ctx: SaveContext = { platformKey: options.platformKey ?? null };
+  for (const spec of SPECS) {
+    writes += await syncSpec(sql, tenantId, spec, before, after, ctx, options.retainExtras === true);
+  }
   writes += await syncStation(sql, tenantId, before.station, after.station);
   writes += await syncAmens(sql, tenantId, before.amens ?? [], after.amens ?? []);
   writes += await syncShares(sql, tenantId, before.notes, after.notes);
@@ -650,6 +772,18 @@ async function syncSecrets(
   return writes;
 }
 
+async function hydratePasswords(sql: SqlClient, tenantId: string, doc: StoreDocument) {
+  const found = await sql.query<{ person_id: string; password_hash: string | null }>(
+    "SELECT person_id, password_hash FROM tenant_passwords($1)",
+    [tenantId],
+  );
+  const hashes = new Map(found.rows.map((row) => [row.person_id, row.password_hash]));
+  doc.people = doc.people.map((person) => ({
+    ...person,
+    passwordHash: hashes.get(person.id) ?? null,
+  }));
+}
+
 async function syncHouseholds(sql: SqlClient, tenantId: string, doc: StoreDocument) {
   const ids = new Set<string>();
   for (const person of doc.people) if (person.householdId) ids.add(person.householdId);
@@ -658,7 +792,7 @@ async function syncHouseholds(sql: SqlClient, tenantId: string, doc: StoreDocume
   for (const id of ids) {
     await sql.query(
       `INSERT INTO households (id, name, tenant_id) VALUES ($1, $2, $3)
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, tenant_id = EXCLUDED.tenant_id`,
+       ON CONFLICT (id) DO NOTHING`,
       [id, id, tenantId],
     );
     writes += 1;
@@ -673,28 +807,14 @@ async function syncAccounts(sql: SqlClient, tenantId: string, before: StoreDocum
   for (const person of after.people) {
     const email = person.email?.trim().toLowerCase();
     if (!email) continue;
-    const saved = await sql.query<{ id: string }>(
-      `INSERT INTO accounts (id, email, password_hash) VALUES ($1, $2, $3)
-       ON CONFLICT (email) DO UPDATE SET password_hash = COALESCE(EXCLUDED.password_hash, accounts.password_hash)
-       RETURNING id`,
-      [`acct_${email}`, email, person.passwordHash],
-    );
-    const accountId = saved.rows[0]?.id;
-    if (!accountId) continue;
-    await sql.query(
-      `INSERT INTO memberships (id, tenant_id, account_id, person_id, role, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (tenant_id, person_id) DO UPDATE
-         SET role = EXCLUDED.role, status = EXCLUDED.status, account_id = EXCLUDED.account_id, updated_at = now()`,
-      [
-        `mem_${tenantId}_${person.id}`,
-        tenantId,
-        accountId,
-        person.id,
-        person.role,
-        person.deleted ? "disabled" : "active",
-      ],
-    );
+    await sql.query(`SELECT link_membership($1, $2, $3, $4, $5, $6)`, [
+      email,
+      person.passwordHash,
+      tenantId,
+      person.id,
+      person.role,
+      person.deleted ? "disabled" : "active",
+    ]);
     writes += 1;
   }
   for (const personId of removed) {

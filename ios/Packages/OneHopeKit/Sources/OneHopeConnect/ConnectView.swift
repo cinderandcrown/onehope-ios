@@ -3,27 +3,27 @@ import OneHopeCore
 import OneHopeDesign
 import SwiftUI
 
-/// Groups, events, Toolkit, Recovery, care, and giving. Prayer is its own tab.
+/// Groups, events, Toolkit, Recovery, and care. Know Jesus is linked from here. Prayer and Give are their own tabs.
 /// `account` is the sign-in screen for a guest, or account and directory settings for a member.
-public struct ConnectView<Account: View, Give: View>: View {
+public struct ConnectView<Account: View, KnowJesus: View>: View {
     private let snapshot: ChurchSnapshot
     private let onRefresh: () async -> Void
     private let perform: (MemberAction) async -> String
     private let account: Account
-    private let give: Give
+    private let knowJesus: KnowJesus
     @State private var notice = ""
 
     public init(
         snapshot: ChurchSnapshot,
         onRefresh: @escaping () async -> Void = {},
         perform: @escaping (MemberAction) async -> String = { _ in "" },
-        @ViewBuilder give: () -> Give,
+        @ViewBuilder knowJesus: () -> KnowJesus,
         @ViewBuilder account: () -> Account
     ) {
         self.snapshot = snapshot
         self.onRefresh = onRefresh
         self.perform = perform
-        self.give = give()
+        self.knowJesus = knowJesus()
         self.account = account()
     }
 
@@ -41,11 +41,11 @@ public struct ConnectView<Account: View, Give: View>: View {
                     }
                     .accessibilityIdentifier("connect-account")
                     NavigationLink {
-                        give
+                        knowJesus
                     } label: {
-                        Text(L10n.text(.give))
+                        Text(L10n.text(.knowJesus))
                     }
-                    .accessibilityIdentifier("connect-give")
+                    .accessibilityIdentifier("connect-know-jesus")
                 } footer: {
                     if !snapshot.signedIn {
                         Text("Sign in to join groups and check in kids. Prayer has its own tab.")
