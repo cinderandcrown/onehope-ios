@@ -294,7 +294,8 @@
           "403": {
             "description": "Not allowed"
           }
-        }
+        },
+        "summary": "Church groups from Church Center. Public; a signed-in member also sees which ones they joined."
       },
       "post": {
         "operationId": "post__api_groups_create",
@@ -384,7 +385,8 @@
           "403": {
             "description": "Not allowed"
           }
-        }
+        },
+        "summary": "Prayer request with Church Center's fields: serve, contact (Please contact me), and body (the need)."
       }
     },
     "/api/kids/mine": {
@@ -849,6 +851,179 @@
             "description": "Not allowed"
           }
         }
+      }
+    },
+    "/api/know-jesus": {
+      "get": {
+        "operationId": "get__api_know_jesus",
+        "summary": "The gospel in KJV Scripture and the 7-day new-believer journey. Public.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/daily-word": {
+      "get": {
+        "operationId": "get__api_daily_word",
+        "summary": "Today's KJV reading. A signed-in member also gets their streak. Public.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/daily-word/read": {
+      "post": {
+        "operationId": "post__api_daily_word_read",
+        "summary": "Mark today's reading as read and return the member's streak.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/follow-ups": {
+      "post": {
+        "operationId": "post__api_follow_ups",
+        "summary": "A next step (salvation, baptism, new, growth_track, visit) into the staff follow-up queue. Public; rate limited per client.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          },
+          "400": {
+            "description": "Invalid input, or contact details without consent"
+          },
+          "429": {
+            "description": "Too many requests from this client"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "consent"],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["salvation", "baptism", "new", "growth_track", "visit"]
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 254
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "consent": {
+                    "type": "boolean",
+                    "description": "Required true when email or phone is sent"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/care/follow-ups": {
+      "get": {
+        "operationId": "get__api_care_follow_ups",
+        "summary": "Staff follow-up queue. Requires care access and step-up; every read is audited.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
+    "/api/care/follow-ups/{id}": {
+      "post": {
+        "operationId": "post__api_care_follow_ups_id",
+        "summary": "Set a follow-up's status.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["new", "contacted", "closed"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   }
