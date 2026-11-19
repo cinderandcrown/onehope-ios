@@ -17,7 +17,7 @@ let package = Package(
         .target(name: "OneHopeCore"),
         .target(name: "OneHopeDesign", dependencies: ["OneHopeCore"], resources: [.process("Resources")]),
         .target(name: "OneHopeHome", dependencies: ["OneHopeCore", "OneHopeDesign"]),
-        .target(name: "OneHopeWatch", dependencies: ["OneHopeCore", "OneHopeDesign"]),
+        .target(name: "OneHopeWatch", dependencies: ["OneHopeCore", "OneHopeDesign", "OneHopeHome"]),
         .target(name: "OneHopeGive", dependencies: ["OneHopeCore", "OneHopeDesign"]),
         .target(name: "OneHopeConnect", dependencies: ["OneHopeCore", "OneHopeDesign"]),
         .target(name: "OneHopeMore", dependencies: ["OneHopeCore", "OneHopeDesign"]),
