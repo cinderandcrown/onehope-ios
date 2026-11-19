@@ -26,44 +26,54 @@ struct RootView: View {
     @State private var token: String? = SessionKeychain.load()
     @State private var snapshot = ChurchSnapshot.bundled()
     @State private var authError = ""
+    @State private var tab = "home"
+    @State private var videoId: String?
 
+    /// Home, Watch, Know Jesus, Plan a Visit, and Give are open to guests. Connect asks for an account.
     var body: some View {
-        Group {
-            if token != nil {
-                TabView {
-                    HomeView(snapshot: snapshot, onRefresh: load)
-                        .tabItem { Label(L10n.text(.home), systemImage: "house") }
-                    WatchView(snapshot: snapshot, onRefresh: load)
-                        .tabItem { Label(L10n.text(.watch), systemImage: "play.rectangle") }
-                    GiveView(snapshot: snapshot, onRefresh: load)
-                        .tabItem { Label(L10n.text(.give), systemImage: "heart") }
-                    ConnectView(snapshot: snapshot, onRefresh: load) { action in
-                        await perform(action)
-                    }
-                    .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
-                    MoreView(
-                        snapshot: snapshot,
-                        onRefresh: load,
-                        onSignOut: { signOut() },
-                        onPrivacy: { emailPublic, phonePublic, listed in
-                            await updatePrivacy(emailPublic: emailPublic, phonePublic: phonePublic, listed: listed)
-                        },
-                        onDelete: { password in
-                            await deleteAccount(password)
-                        }
-                    )
-                    .tabItem { Label(L10n.text(.more), systemImage: "ellipsis") }
-                }
-            } else {
-                AccountGate(error: authError) { email, password, name in
-                    await authenticate(email: email, password: password, name: name)
-                }
+        TabView(selection: $tab) {
+            HomeView(snapshot: snapshot, onRefresh: load, perform: perform) { id in
+                videoId = id
+                tab = "watch"
             }
+            .tabItem { Label(L10n.text(.home), systemImage: "house") }
+            .tag("home")
+            WatchView(snapshot: snapshot, selected: $videoId, onRefresh: load)
+                .tabItem { Label(L10n.text(.watch), systemImage: "play.rectangle") }
+                .tag("watch")
+            KnowJesusView(snapshot: snapshot, perform: perform)
+                .tabItem { Label(L10n.text(.knowJesus), systemImage: "cross") }
+                .tag("jesus")
+            GiveView(snapshot: snapshot, onRefresh: load)
+                .tabItem { Label(L10n.text(.give), systemImage: "heart") }
+                .tag("give")
+            ConnectView(snapshot: snapshot, onRefresh: load, perform: perform) {
+                account
+            }
+            .id(token != nil)
+            .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
+            .tag("connect")
         }
         .background(BrandColor.paper)
-        .task(id: token) {
-            if token != nil {
-                await load()
+        .task(id: token) { await load() }
+    }
+
+    @ViewBuilder private var account: some View {
+        if token != nil {
+            MoreView(
+                snapshot: snapshot,
+                onRefresh: load,
+                onSignOut: { signOut() },
+                onPrivacy: { emailPublic, phonePublic, listed in
+                    await updatePrivacy(emailPublic: emailPublic, phonePublic: phonePublic, listed: listed)
+                },
+                onDelete: { password in
+                    await deleteAccount(password)
+                }
+            )
+        } else {
+            AccountGate(error: authError) { email, password, name in
+                await authenticate(email: email, password: password, name: name)
             }
         }
     }
@@ -92,16 +102,19 @@ struct RootView: View {
     private func load() async {
         guard let client else {
             authLog.error("API client is missing. Info.plist API_BASE_URL is empty.")
-            signOut(message: "App is misconfigured")
+            snapshot = ChurchSnapshot.bundled(offline: true)
             return
         }
-        guard let token else { return }
         do {
-            snapshot = try await client.loadMember(token: token)
-        } catch let error as ChurchAPIError where error.status == 401 {
+            if let token {
+                snapshot = try await client.loadMember(token: token)
+            } else {
+                snapshot = try await client.loadGuest()
+            }
+        } catch let error as ChurchAPIError where error.status == 401 && token != nil {
             signOut(message: "Please sign in again.")
         } catch {
-            if snapshot.accountEmail.isEmpty {
+            if !snapshot.fromAPI {
                 snapshot = ChurchSnapshot.bundled(offline: true)
             }
         }
@@ -112,38 +125,10 @@ struct RootView: View {
             authLog.error("API client is missing. Info.plist API_BASE_URL is empty.")
             return "App is misconfigured"
         }
-        guard let token else { return "Please sign in again." }
         do {
-            switch action {
-            case let .join(id):
-                try await client.join(token: token, groupId: id)
-                await load()
-                return "You're in that group."
-            case let .message(id, body):
-                try await client.postMessage(token: token, groupId: id, body: body)
-                await load()
-                return "Your note was sent."
-            case let .register(id):
-                try await client.register(token: token, eventId: id)
-                await load()
-                return "You're registered."
-            case let .prayer(body):
-                try await client.submitPrayer(token: token, body: body)
-                await load()
-                return "Your prayer was sent to the pastors."
-            case let .addChild(name, classroom):
-                _ = try await client.addChild(token: token, displayName: name, classroom: classroom)
-                await load()
-                return "\(name) was added."
-            case let .checkIn(id):
-                let code = try await client.checkIn(token: token, childId: id)
-                await load()
-                return "Security code \(code)"
-            case let .pickup(id, code):
-                let reason = try await client.householdPickup(token: token, childId: id, code: code)
-                await load()
-                return reason
-            }
+            let reply = try await client.run(action, token: token)
+            await load()
+            return reply
         } catch {
             return friendly(error)
         }

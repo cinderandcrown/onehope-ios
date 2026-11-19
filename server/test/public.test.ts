@@ -13,7 +13,7 @@ test("the public church has real gathering facts and accounts only after sign-up
     home.announcements.some((item) => item.title.toLowerCase().includes("sample")),
     false,
   );
-  assert.equal(home.events[0]?.title, "Sunday gathering");
+  assert.ok(home.events.some((event) => event.title === "Sunday gathering"));
   const handle = createApi({ store });
   const signup = await handle(
     new Request("http://localhost/api/auth/signup", {
@@ -163,7 +163,9 @@ test("a configured key re-reads fields saved with the demo key", () => {
   const cipher = source.storedGiftCiphertext("gift-avery");
   assert.ok(cipher);
   const key = Buffer.alloc(32, 9);
-  const next = new ChurchStore(loadConfig({ FIELD_ENCRYPTION_KEY: key.toString("base64") }), { fixture: true });
+  const next = new ChurchStore(loadConfig({ FIELD_ENCRYPTION_KEY: key.toString("base64") }), {
+    fixture: true,
+  });
   next.installDocument(source.toDocument());
   const rotated = next.storedGiftCiphertext("gift-avery");
   assert.notEqual(rotated, cipher);
@@ -186,10 +188,22 @@ test("seats stay behind staff sign-in and deletion removes owned rows", async ()
   store.stepUp(member.token, { password: "hope-sample" });
   store.deleteSelf(member.token);
   const doc = store.toDocument();
-  assert.equal(doc.registrations.some((row) => row.personId === "person-avery"), false);
-  assert.equal(doc.notes.some((row) => row.subjectPersonId === "person-avery" || row.authorId === "person-avery"), false);
-  assert.equal(doc.groups.some((group) => group.memberIds.includes("person-avery")), false);
+  assert.equal(
+    doc.registrations.some((row) => row.personId === "person-avery"),
+    false,
+  );
+  assert.equal(
+    doc.notes.some((row) => row.subjectPersonId === "person-avery" || row.authorId === "person-avery"),
+    false,
+  );
+  assert.equal(
+    doc.groups.some((group) => group.memberIds.includes("person-avery")),
+    false,
+  );
   const copy = new ChurchStore(loadConfig({}));
   copy.installDocument(doc);
-  assert.equal(copy.toDocument().prayers.some((row) => row.authorId === "person-avery"), false);
+  assert.equal(
+    copy.toDocument().prayers.some((row) => row.authorId === "person-avery"),
+    false,
+  );
 });

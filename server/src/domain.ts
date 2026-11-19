@@ -147,13 +147,28 @@ export class AccessError extends Error {
     | "sends_disabled"
     | "seat_empty"
     | "two_person"
-    | "session_expired";
+    | "session_expired"
+    | "rate_limited";
 
   constructor(code: AccessError["code"], message: string) {
     super(message);
     this.name = "AccessError";
     this.code = code;
   }
+}
+
+/**
+ * Next can bundle this package into more than one server chunk. The in-memory
+ * store may then come from a different copy than the API route, so
+ * `instanceof` alone misses errors thrown by that store.
+ */
+export function isAccessError(error: unknown): error is AccessError {
+  return (
+    error instanceof AccessError ||
+    (error instanceof Error &&
+      error.name === "AccessError" &&
+      typeof (error as { code?: unknown }).code === "string")
+  );
 }
 
 export type Actor = {
@@ -525,6 +540,8 @@ export type YoutubeVideo = {
   published: string;
   link: string;
   thumbnail: string | null;
+  /** Full Sunday messages and clips are listed apart. */
+  kind: "message" | "short";
 };
 
 function firstMatch(source: string, pattern: RegExp): string {
@@ -539,12 +556,15 @@ export function parseYoutubeRss(xml: string): YoutubeVideo[] {
       const id =
         firstMatch(entry, /<yt:videoId>([^<]+)<\/yt:videoId>/) ||
         firstMatch(entry, /<id>yt:video:([^<]+)<\/id>/);
-      const title = decodeXml(firstMatch(entry, /<title>([^<]*)<\/title>/));
+      const rawTitle = decodeXml(firstMatch(entry, /<title>([^<]*)<\/title>/));
       const published = firstMatch(entry, /<published>([^<]+)<\/published>/);
       const link =
         firstMatch(entry, /<link[^>]*href="([^"]+)"/) || (id ? `https://www.youtube.com/watch?v=${id}` : "");
       const thumbnail = firstMatch(entry, /<media:thumbnail[^>]*url="([^"]+)"/) || null;
-      return { id, title, published, link, thumbnail };
+      const short = link.includes("/shorts/") || /#shorts\b/i.test(rawTitle);
+      const title = rawTitle.replace(/\s*#shorts\b/gi, "").trim();
+      const kind: YoutubeVideo["kind"] = short ? "short" : "message";
+      return { id, title, published, link, thumbnail, kind };
     })
     .filter((video) => video.id.length > 0);
 }

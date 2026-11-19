@@ -32,6 +32,10 @@ test("sample pastor can walk the command center without sending or charging", as
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(/saved=1/);
 
+  await page.goto("/care");
+  await expect(page.getByRole("heading", { name: "Next steps from the app" })).toBeVisible();
+  await page.screenshot({ path: `${shots}/command-care.png`, fullPage: true });
+
   await page.goto("/people");
   await expect(page.getByRole("cell", { name: "Hidden" }).first()).toBeVisible();
   await page.screenshot({ path: `${shots}/command-people.png`, fullPage: true });

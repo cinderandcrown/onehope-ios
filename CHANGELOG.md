@@ -1,5 +1,24 @@
 # Changelog
 
+## Build 6 - 2026-11-18
+
+### Added
+
+- Guests can use Home, Watch, Know Jesus, Plan a Visit, and Give on the phone and at `/member` without an account. Connect lists groups and events for everyone and asks for sign-in to join, send a prayer request, or check in kids.
+- Know Jesus: the gospel in five KJV passages, a prayer, and next-step buttons (follow Jesus, baptism, new, Growth Track) that land in the staff care queue. A decision opens a 7-day new-believer journey.
+- `POST /api/follow-ups` (guest or member, rate limited, contact details only with consent), `GET /api/care/follow-ups`, `POST /api/care/follow-ups/{id}`, `GET /api/know-jesus`, `GET /api/daily-word`, `POST /api/daily-word/read`.
+- Daily Word with a streak, kept on the phone for guests and synced for members.
+- New accounts start on the default next-steps pathway.
+- Plan a Visit from weareonehope.com, with an "I'm coming" heads-up for the welcome team, and a shareable Sunday invite.
+- Watch shows thumbnails and dates, keeps Shorts apart from messages, and shares each video. Home features the latest message.
+- Give lists Church Center online giving, text 84321, mail, and the Christmas Giving Tree until Christmas. The in-app card form stays behind `GIVING_LIVE`.
+- The church's 13 open Church Center groups and its two open registrations replace the placeholder groups. Request-to-join groups and Church Center events link out instead of signing people up in the app.
+- Prayer requests ask Church Center's questions. "Please contact me" adds a care-queue row for the pastors.
+
+### Changed
+
+- Snapshots saved by earlier builds load unchanged. On load the placeholder groups (`group-kids`, `group-small`, `group-growth`) and their notes are removed, real groups are upserted by id with memberships kept, and the Sunday event moves to the next Sunday once it has passed.
+
 ## 1.0.0 - 2026-11-17
 
 ### Added

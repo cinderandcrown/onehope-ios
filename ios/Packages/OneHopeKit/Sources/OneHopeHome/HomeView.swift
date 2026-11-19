@@ -5,10 +5,19 @@ import SwiftUI
 public struct HomeView: View {
     private let snapshot: ChurchSnapshot
     private let onRefresh: () async -> Void
+    private let perform: (MemberAction) async -> String
+    private let onWatch: (String) -> Void
 
-    public init(snapshot: ChurchSnapshot, onRefresh: @escaping () async -> Void = {}) {
+    public init(
+        snapshot: ChurchSnapshot,
+        onRefresh: @escaping () async -> Void = {},
+        perform: @escaping (MemberAction) async -> String = { _ in "" },
+        onWatch: @escaping (String) -> Void = { _ in }
+    ) {
         self.snapshot = snapshot
         self.onRefresh = onRefresh
+        self.perform = perform
+        self.onWatch = onWatch
     }
 
     public var body: some View {
@@ -16,46 +25,35 @@ public struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Wordmark()
-                    PhotoCard("hero")
-                    Text(snapshot.churchName).font(.largeTitle).foregroundStyle(BrandColor.ink)
-                    Text(snapshot.address).font(.body)
+                    HeroPhoto("hero", title: "Welcome home", subtitle: snapshot.visit.serviceTime)
                     if !snapshot.offlineNote.isEmpty {
                         Text(snapshot.offlineNote).font(.footnote)
                     }
-                    if let date = Self.serviceDate(snapshot.serviceISO) {
-                        Text(date, style: .relative)
-                            .font(.title2)
-                            .accessibilityLabel("Time until the Sunday gathering")
+                    callsToAction
+                    latestMessage
+                    thisSunday
+                    InviteCard(invite: snapshot.invite)
+                    DailyWordCard(snapshot: snapshot, perform: perform)
+                    NavigationLink {
+                        PlanVisitView(snapshot: snapshot, perform: perform)
+                    } label: {
+                        PictureLink(photo: "about", title: "Plan a Visit", detail: snapshot.visit.arrival)
                     }
-                    Text("Come early for donuts and coffee. Gathering at 10:30.")
-                    Text("Lead pastors \(snapshot.pastors.joined(separator: " and ")).")
-                    if !snapshot.events.isEmpty {
-                        Text("Upcoming").font(.headline)
+                    .buttonStyle(.plain)
+                    NavigationLink {
+                        KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
+                    } label: {
+                        PictureLink(photo: "video", title: "Know Jesus", detail: "The good news, straight from the Bible.")
                     }
-                    ForEach(snapshot.events) { event in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(event.title).font(.headline)
-                            Text(event.detail)
-                            if let start = event.start {
-                                Text(start.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.footnote)
-                            }
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(BrandColor.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                    }
+                    .buttonStyle(.plain)
                     ForEach(snapshot.announcements) { item in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(item.title).font(.headline)
                             Text(item.body)
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(BrandColor.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .churchCard()
                     }
+                    Text("Lead pastors \(snapshot.pastors.joined(separator: " and ")).").font(.footnote)
                 }
                 .padding()
             }
@@ -65,14 +63,102 @@ public struct HomeView: View {
         }
     }
 
-    private static func serviceDate(_ iso: String) -> Date? {
-        guard !iso.isEmpty else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) {
-            return date
+    private var callsToAction: some View {
+        HStack(spacing: 12) {
+            NavigationLink {
+                PlanVisitView(snapshot: snapshot, perform: perform)
+            } label: {
+                Text("Plan a Visit").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("home-plan-visit")
+            NavigationLink {
+                KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
+            } label: {
+                Text("Know Jesus").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("home-know-jesus")
         }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: iso)
+    }
+
+    @ViewBuilder private var latestMessage: some View {
+        if let latest = snapshot.sermons.first(where: { !$0.isShort }) {
+            Button {
+                onWatch(latest.id)
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Latest message").font(.caption.weight(.semibold)).foregroundStyle(BrandColor.olive)
+                    VideoThumbnail(sermon: latest, height: 190)
+                    Text(latest.title).font(.headline).foregroundStyle(BrandColor.ink).multilineTextAlignment(.leading)
+                    if let published = latest.published {
+                        Text(published.formatted(date: .abbreviated, time: .omitted)).font(.footnote)
+                    }
+                }
+                .churchCard()
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home-latest-message")
+        }
+    }
+
+    private var thisSunday: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("This Sunday").font(.caption.weight(.semibold)).foregroundStyle(BrandColor.olive)
+            if let date = parseISODate(snapshot.serviceISO) {
+                Text(date.formatted(.dateTime.weekday(.wide).month().day().hour().minute())).font(.title3.bold())
+                Text(date, style: .relative).font(.footnote).accessibilityLabel("Time until the Sunday gathering")
+            } else {
+                Text(snapshot.visit.serviceTime).font(.title3.bold())
+            }
+            Text(snapshot.visit.arrival)
+            Text(snapshot.visit.address).font(.footnote)
+            if let maps = URL(string: snapshot.visit.mapsUrl) {
+                Link("Directions", destination: maps)
+            }
+        }
+        .churchCard()
+    }
+}
+
+/// A photo card that opens another screen.
+struct PictureLink: View {
+    let photo: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PhotoCard(photo, height: 140)
+            Text(title).font(.title3.bold()).foregroundStyle(BrandColor.ink)
+            Text(detail).font(.footnote).foregroundStyle(BrandColor.ink)
+        }
+        .churchCard()
+    }
+}
+
+/// A YouTube thumbnail, or a bundled photo while it loads or when there is none.
+public struct VideoThumbnail: View {
+    private let sermon: SermonLine
+    private let height: CGFloat
+
+    public init(sermon: SermonLine, height: CGFloat) {
+        self.sermon = sermon
+        self.height = height
+    }
+
+    public var body: some View {
+        AsyncImage(url: sermon.thumbnail.flatMap(URL.init(string:))) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            PhotoCard("video", height: height)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            Image(systemName: "play.circle.fill").font(.system(size: 44)).foregroundStyle(.white.opacity(0.9))
+        }
+        .accessibilityHidden(true)
     }
 }

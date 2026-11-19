@@ -1,6 +1,6 @@
 "use server";
 
-import { AccessError, withStore } from "@onehope/server";
+import { AccessError, FOLLOW_UP_STATUSES, type FollowUpStatus, withStore } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -76,7 +76,9 @@ export async function createEventAction(formData: FormData) {
   const location = String(formData.get("location") ?? "").trim();
   if (!title || !location) redirect("/events?error=1");
   const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  await withStore((store) => store.createEvent(token, { title, location, start, end: start + 90 * 60 * 1000 }));
+  await withStore((store) =>
+    store.createEvent(token, { title, location, start, end: start + 90 * 60 * 1000 }),
+  );
   redirect("/events");
 }
 
@@ -91,4 +93,24 @@ export async function savePush(formData: FormData) {
   if (!title || !body) redirect("/push?error=1");
   await withStore((store) => store.sendPush(token, { title, body, segment }));
   redirect("/push?saved=1");
+}
+
+function isFollowUpStatus(value: unknown): value is FollowUpStatus {
+  return typeof value === "string" && (FOLLOW_UP_STATUSES as readonly string[]).includes(value);
+}
+
+export async function updateFollowUpAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const id = String(formData.get("id") ?? "");
+  const status = formData.get("status");
+  if (!id || !isFollowUpStatus(status)) redirect("/care?error=1");
+  try {
+    await withStore((store) => store.updateFollowUp(token, id, status));
+  } catch (error) {
+    if (error instanceof AccessError) redirect("/care?error=1");
+    throw error;
+  }
+  redirect("/care");
 }

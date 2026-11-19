@@ -6,6 +6,8 @@ export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
 export { loadConfig } from "./config";
 export * from "./contracts";
 export * from "./domain";
+export * from "./faith";
+export * from "./church-copy";
 export { createLogger, redact, noopReporter } from "./logger";
 export {
   SAMPLE_MEMBER_EMAIL,

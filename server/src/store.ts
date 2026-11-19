@@ -1,8 +1,25 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
+import {
+  CHURCH_EVENTS,
+  CHURCH_GROUPS,
+  GIVING_WAYS,
+  INVITE,
+  RETIRED_GROUP_IDS,
+  VISIT,
+  type PublicGroup,
+} from "./church-copy";
 import type { AppConfig } from "./config";
 import { demoFieldKey, loadConfig } from "./config";
-import type { GiftView, PersonView, PickupBody, ProposalBody, PushBody, RoleChangeBody } from "./contracts";
+import type {
+  FollowUpBody,
+  GiftView,
+  PersonView,
+  PickupBody,
+  ProposalBody,
+  PushBody,
+  RoleChangeBody,
+} from "./contracts";
 import { decryptString, encryptString, hashPassword, newId, verifyPassword } from "./crypto";
 import {
   type Actor,
@@ -28,6 +45,18 @@ import {
   transitionExpense,
   zebraLabel,
 } from "./domain";
+import {
+  DEFAULT_PATHWAY,
+  FOLLOW_UP_LABELS,
+  FOLLOW_UP_PATHWAY,
+  GOSPEL,
+  NEW_BELIEVER_JOURNEY,
+  type FollowUpKind,
+  type FollowUpStatus,
+  currentStreak,
+  dailyReading,
+  nextStreak,
+} from "./faith";
 import { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "./sample-accounts";
 import { decodeBase32, totpCode, totpMatches } from "./totp";
 
@@ -92,6 +121,64 @@ type Proposal = ProposalBody & {
   executed: boolean;
 };
 
+type FollowUpRow = {
+  id: string;
+  kind: FollowUpKind;
+  /** Null when a guest sent it without an account. */
+  personId: string | null;
+  /** Encrypted `{ name, email, phone }`. */
+  ciphertext: string;
+  contactConsent: boolean;
+  status: FollowUpStatus;
+  createdAt: number;
+  sample: boolean;
+};
+
+/** Church Center fields are optional so groups staff create, and snapshots from builds 1–5, still load. */
+type GroupRow = {
+  id: string;
+  name: string;
+  summary: string;
+  sample: boolean;
+  memberIds: string[];
+} & Partial<Omit<PublicGroup, "id" | "name" | "summary">>;
+
+type EventRow = {
+  id: string;
+  title: string;
+  start: number;
+  end: number;
+  location: string;
+  description: string;
+  capacity: number | null;
+  sample: boolean;
+  /** Registration that lives on Church Center. */
+  url?: string;
+};
+
+type PrayerRow = {
+  id: string;
+  authorId: string;
+  body: string;
+  visibility: "public" | "private";
+  approved: boolean;
+  sample: boolean;
+  /** Church Center's "How can we serve you!" answer. Added in build 6. */
+  serve?: string;
+  /** "Please contact me" rather than "Just pray for me". Added in build 6. */
+  contactRequested?: boolean;
+};
+
+type StreakRow = { personId: string; lastDay: string; count: number };
+
+/** Request times per hashed client key, kept in the snapshot so every serverless instance shares them. */
+type ThrottleRow = { key: string; hits: number[] };
+
+const HOUR_MS = 60 * 60 * 1000;
+const GUEST_LIMIT_PER_CLIENT = 5;
+const GUEST_LIMIT_TOTAL = 120;
+const MEMBER_LIMIT = 10;
+
 type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret: string | null };
 
 export type StoreDocument = {
@@ -106,28 +193,12 @@ export type StoreDocument = {
   secrets: { provider: string; ciphertext: string; last4: string }[];
   station: string[];
   flags: Record<ModuleId, boolean>;
-  groups: { id: string; name: string; summary: string; sample: boolean; memberIds: string[] }[];
+  groups: GroupRow[];
   messages: { id: string; groupId: string; authorId: string; body: string; sample: boolean }[];
-  events: {
-    id: string;
-    title: string;
-    start: number;
-    end: number;
-    location: string;
-    description: string;
-    capacity: number | null;
-    sample: boolean;
-  }[];
+  events: EventRow[];
   registrations: { id: string; eventId: string; personId: string; status: "registered" | "waitlist" }[];
   announcements: { id: string; title: string; body: string; sample: boolean }[];
-  prayers: {
-    id: string;
-    authorId: string;
-    body: string;
-    visibility: "public" | "private";
-    approved: boolean;
-    sample: boolean;
-  }[];
+  prayers: PrayerRow[];
   notes: {
     id: string;
     subjectPersonId: string;
@@ -160,6 +231,10 @@ export type StoreDocument = {
   requests: { id: string; kind: string; personId: string; ciphertext: string; sample: boolean }[];
   drafts: { id: string; title: string; segment: string; sample: boolean }[];
   invites?: { tokenHash: string; email: string; expires: number }[];
+  /** Added in build 6. Older snapshots do not have these and load as empty. */
+  followUps?: FollowUpRow[];
+  streaks?: StreakRow[];
+  throttle?: ThrottleRow[];
 };
 
 export type StoreOptions = {
@@ -207,13 +282,7 @@ export class ChurchStore {
   private readonly secrets = new Map<string, { ciphertext: string; last4: string }>();
   private readonly station = new Set<string>();
   private readonly flags: Record<ModuleId, boolean>;
-  private readonly groups: {
-    id: string;
-    name: string;
-    summary: string;
-    sample: boolean;
-    memberIds: string[];
-  }[];
+  private readonly groups: GroupRow[];
   private readonly messages: {
     id: string;
     groupId: string;
@@ -221,16 +290,7 @@ export class ChurchStore {
     body: string;
     sample: boolean;
   }[];
-  private readonly events: {
-    id: string;
-    title: string;
-    start: number;
-    end: number;
-    location: string;
-    description: string;
-    capacity: number | null;
-    sample: boolean;
-  }[];
+  private readonly events: EventRow[];
   private readonly registrations: {
     id: string;
     eventId: string;
@@ -238,14 +298,7 @@ export class ChurchStore {
     status: "registered" | "waitlist";
   }[];
   private readonly announcements: { id: string; title: string; body: string; sample: boolean }[];
-  private readonly prayers: {
-    id: string;
-    authorId: string;
-    body: string;
-    visibility: "public" | "private";
-    approved: boolean;
-    sample: boolean;
-  }[];
+  private readonly prayers: PrayerRow[];
   private readonly notes: {
     id: string;
     subjectPersonId: string;
@@ -290,13 +343,20 @@ export class ChurchStore {
     sample: boolean;
   }[];
   private readonly drafts: { id: string; title: string; segment: string; sample: boolean }[] = [];
+  private readonly followUps: FollowUpRow[] = [];
+  private readonly streaks = new Map<string, StreakRow>();
+  private readonly throttle = new Map<string, number[]>();
 
   static demo(env: NodeJS.ProcessEnv = process.env): ChurchStore {
     return new ChurchStore(loadConfig(env), { fixture: env.ONEHOPE_SAMPLE_DATA === "true" });
   }
 
   constructor(config: AppConfig, options: StoreOptions = {}) {
-    if (config.env === "production" && config.fieldEncryptionMode !== "configured" && !options.memoryForTests) {
+    if (
+      config.env === "production" &&
+      config.fieldEncryptionMode !== "configured" &&
+      !options.memoryForTests
+    ) {
       throw new Error("Refusing to boot without a configured encryption key in production.");
     }
     if (config.env === "production" && (options.passwordOverrides || options.totpOverrides)) {
@@ -413,7 +473,10 @@ export class ChurchStore {
     if (isReservedName(displayName)) throw new AccessError("invalid", "Choose a different name.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
     if (this.byEmail(email)) {
-      throw new AccessError("invalid", "We couldn't create that account. Check the name, email, and password.");
+      throw new AccessError(
+        "invalid",
+        "We couldn't create that account. Check the name, email, and password.",
+      );
     }
     const id = newId("person");
     const person = this.makePerson({
@@ -430,6 +493,7 @@ export class ChurchStore {
     person.passwordHash = hashPassword(input.password);
     person.displayName = displayName;
     this.people.set(id, person);
+    this.ensurePathway(id);
     return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
   }
 
@@ -440,11 +504,20 @@ export class ChurchStore {
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     const inviteToken = newId("invite");
-    this.invites.set(hashInvite(inviteToken), { email: cleaned, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
+    this.invites.set(hashInvite(inviteToken), {
+      email: cleaned,
+      expires: this.now() + 7 * 24 * 60 * 60 * 1000,
+    });
     return { email: cleaned, inviteToken };
   }
 
-  claimInvite(input: { email: string; inviteToken: string; password: string; ip: string; userAgent: string }) {
+  claimInvite(input: {
+    email: string;
+    inviteToken: string;
+    password: string;
+    ip: string;
+    userAgent: string;
+  }) {
     const email = input.email.trim().toLowerCase();
     const invite = this.invites.get(hashInvite(input.inviteToken));
     if (!invite || invite.email !== email || invite.expires < this.now()) {
@@ -538,9 +611,15 @@ export class ChurchStore {
         youtubeHandle: CHURCH.youtubeHandle,
         mapsUrl: CHURCH.mapsUrl,
       },
+      visit: { ...VISIT },
+      giving: {
+        ...GIVING_WAYS,
+        seasonal: this.now() < GIVING_WAYS.seasonal.until ? GIVING_WAYS.seasonal : null,
+      },
+      invite: { ...INVITE },
       countdown: { preService: when.preService.toISOString(), service: when.service.toISOString() },
       announcements: this.announcements.map((item) => ({ ...item })),
-      events: this.events.map((event) => this.eventView(event)),
+      events: this.upcomingEvents().map((event) => this.eventView(event)),
       sampleSermon: {
         sample: false as const,
         title: "",
@@ -566,7 +645,13 @@ export class ChurchStore {
 
   updateProfile(
     token: string,
-    input: { emailPublic?: boolean; phonePublic?: boolean; displayName?: string; phone?: string; listedInDirectory?: boolean },
+    input: {
+      emailPublic?: boolean;
+      phonePublic?: boolean;
+      displayName?: string;
+      phone?: string;
+      listedInDirectory?: boolean;
+    },
   ) {
     const actor = this.actor(token);
     authorize(actor, "edit_own_profile", this.now());
@@ -626,7 +711,8 @@ export class ChurchStore {
     const child = this.requireChild(actor, childId);
     const prior = this.readJson(child.ciphertext);
     const code = String(1000 + Math.floor(Math.random() * 9000));
-    const body = prior && typeof prior === "object" ? { ...(prior as Record<string, unknown>), code } : { code };
+    const body =
+      prior && typeof prior === "object" ? { ...(prior as Record<string, unknown>), code } : { code };
     child.ciphertext = encryptString(JSON.stringify(body), this.key);
     this.record(actor, "write", "kid_checkin", child.id, 3);
     return { childId: child.id, displayName: child.displayName, code };
@@ -772,14 +858,21 @@ export class ChurchStore {
     return `id,fund,amountCents,charged\n${lines.join("\n")}\n`;
   }
 
-  listGroups(token: string) {
-    const actor = this.actor(token);
+  /** Anyone can browse groups. Signed-in members also see which ones they joined. */
+  listGroups(token: string | null) {
+    const actor = this.optionalActor(token);
     return this.groups.map((group) => ({
       id: group.id,
       name: group.name,
       summary: group.summary,
       sample: group.sample,
-      joined: group.memberIds.includes(actor.personId),
+      joined: actor ? group.memberIds.includes(actor.personId) : false,
+      category: group.category ?? null,
+      schedule: group.schedule ?? "",
+      area: group.area ?? "",
+      leaders: [...(group.leaders ?? [])],
+      joinType: group.joinType ?? ("open" as const),
+      url: group.url ?? null,
     }));
   }
 
@@ -787,6 +880,9 @@ export class ChurchStore {
     const actor = this.actor(token);
     const group = this.groups.find((item) => item.id === groupId);
     if (!group) throw new AccessError("not_found", "That group isn't here.");
+    if (group.joinType === "request") {
+      throw new AccessError("invalid", "This group's leaders approve each request on Church Center.");
+    }
     if (!group.memberIds.includes(actor.personId)) group.memberIds.push(actor.personId);
     return { id: group.id, joined: true as const };
   }
@@ -819,6 +915,7 @@ export class ChurchStore {
     const actor = this.actor(token);
     const event = this.events.find((item) => item.id === eventId);
     if (!event) throw new AccessError("not_found", "That event isn't here.");
+    if (event.url) throw new AccessError("invalid", "Sign up for this event on Church Center.");
     const existing = this.registrations.find(
       (item) => item.eventId === eventId && item.personId === actor.personId,
     );
@@ -895,21 +992,44 @@ export class ChurchStore {
           sample: prayer.sample,
           mine: own,
           body: showBody ? prayer.body : "",
+          serve: showBody && (own || staffReader) ? (prayer.serve ?? "") : "",
+          contactRequested: (own || staffReader) && prayer.contactRequested === true,
         };
       });
   }
 
-  submitPrayer(token: string, input: { body: string; visibility: "public" | "private" }) {
+  submitPrayer(
+    token: string,
+    input: { body: string; visibility: "public" | "private"; serve?: string; contact?: boolean },
+  ) {
     const actor = this.actor(token);
     if (input.visibility === "private") authorize(actor, "view_household_tier3", this.now());
-    const prayer = {
+    const prayer: PrayerRow = {
       id: newId("prayer"),
       authorId: actor.personId,
       body: input.body,
       visibility: input.visibility,
       approved: false,
       sample: false,
+      serve: input.serve ?? "",
+      contactRequested: input.contact ?? false,
     };
+    if (prayer.contactRequested) {
+      const person = this.requirePerson(actor.personId);
+      this.followUps.push({
+        id: newId("followup"),
+        kind: "prayer",
+        personId: actor.personId,
+        ciphertext: encryptString(
+          JSON.stringify({ name: person.displayName, email: person.email, phone: "" }),
+          this.key,
+        ),
+        contactConsent: true,
+        status: "new",
+        createdAt: this.now(),
+        sample: false,
+      });
+    }
     this.prayers.push(prayer);
     if (input.visibility === "private") this.record(actor, "write", "prayer", prayer.id, 3);
     return { id: prayer.id, approved: false as const };
@@ -926,6 +1046,7 @@ export class ChurchStore {
 
   myPathway(token: string) {
     const actor = this.actor(token);
+    this.ensurePathway(actor.personId);
     const view = this.pathwayView(actor.personId);
     return { sample: false as const, ...view };
   }
@@ -1153,6 +1274,7 @@ export class ChurchStore {
                 sample: request.sample,
                 detail: textField(this.readJson(request.ciphertext), "detail"),
               })),
+              followUps: this.followUpViews(actor),
             }
           : { locked: true as const },
       },
@@ -1287,6 +1409,86 @@ export class ChurchStore {
     };
   }
 
+  knowJesus() {
+    return { gospel: GOSPEL, journey: NEW_BELIEVER_JOURNEY, journeyEditableBy: "pastors" as const };
+  }
+
+  /** Today's reading. A member also gets their synced streak; a guest keeps theirs on the device. */
+  dailyWord(token: string | null) {
+    const reading = dailyReading(this.now());
+    const actor = this.optionalActor(token);
+    const streak = actor ? currentStreak(this.streaks.get(actor.personId) ?? null, reading.day) : null;
+    return { reading, streak };
+  }
+
+  markDailyWordRead(token: string) {
+    const actor = this.actor(token);
+    const today = dailyReading(this.now()).day;
+    const count = nextStreak(this.streaks.get(actor.personId) ?? null, today);
+    this.streaks.set(actor.personId, { personId: actor.personId, lastDay: today, count });
+    return { streak: count, day: today };
+  }
+
+  /**
+   * A next step from the Know Jesus page or Plan a Visit. Guests give a name
+   * and, only with consent, an email or phone. Members use their account.
+   * Nothing is sent; the row waits in the staff follow-up queue.
+   */
+  submitFollowUp(token: string | null, input: FollowUpBody, client: string) {
+    const actor = this.optionalActor(token);
+    const now = this.now();
+    this.pruneThrottle(now);
+    if (actor) {
+      this.hit(`person:${actor.personId}`, MEMBER_LIMIT, now);
+    } else {
+      this.hit(`client:${this.clientKey(client)}`, GUEST_LIMIT_PER_CLIENT, now);
+      this.hit("guests", GUEST_LIMIT_TOTAL, now);
+    }
+    const person = actor ? this.requirePerson(actor.personId) : null;
+    const name = (person?.displayName ?? input.name ?? "").trim();
+    if (!name) throw new AccessError("invalid", "Please tell us your name.");
+    const consent = input.consent === true;
+    const contact = {
+      name,
+      email: consent ? (input.email ?? person?.email ?? "").trim().toLowerCase() : "",
+      phone: consent ? (input.phone ?? "").trim() : "",
+    };
+    const row: FollowUpRow = {
+      id: newId("followup"),
+      kind: input.kind,
+      personId: actor?.personId ?? null,
+      ciphertext: encryptString(JSON.stringify(contact), this.key),
+      contactConsent: consent,
+      status: "new",
+      createdAt: now,
+      sample: false,
+    };
+    this.followUps.push(row);
+    const step = FOLLOW_UP_PATHWAY[input.kind];
+    if (actor && step) {
+      const steps = this.ensurePathway(actor.personId);
+      const target = steps.find((item) => item.id === step.stepId);
+      if (target && target.status !== "done") target.status = step.status;
+    }
+    return { id: row.id, kind: row.kind, journey: input.kind === "salvation" };
+  }
+
+  followUpsFor(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return this.followUpViews(actor);
+  }
+
+  updateFollowUp(token: string, id: string, status: FollowUpStatus) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    const row = this.followUps.find((item) => item.id === id);
+    if (!row) throw new AccessError("not_found", "That follow-up isn't here.");
+    row.status = status;
+    this.record(actor, "write", "follow_up", row.id, 3);
+    return { id: row.id, status: row.status };
+  }
+
   exportSelf(token: string) {
     const actor = this.actor(token);
     const person = this.requirePerson(actor.personId);
@@ -1342,14 +1544,84 @@ export class ChurchStore {
 
   listEvents(token: string) {
     const actor = this.actor(token);
-    return this.events.map((event) => ({
+    return this.upcomingEvents().map((event) => ({
       ...this.eventView(event),
-      registered: this.registrations.some((row) => row.eventId === event.id && row.personId === actor.personId),
+      registered: this.registrations.some(
+        (row) => row.eventId === event.id && row.personId === actor.personId,
+      ),
     }));
   }
 
   storedGiftCiphertext(id: string) {
     return this.gifts.get(id)?.ciphertext ?? "";
+  }
+
+  private followUpViews(actor: Actor) {
+    return [...this.followUps]
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .map((row) => {
+        this.record(actor, "read", "follow_up", row.id, 3);
+        const contact = this.readJson(row.ciphertext);
+        return {
+          id: row.id,
+          kind: row.kind,
+          label: FOLLOW_UP_LABELS[row.kind],
+          name: textField(contact, "name"),
+          email: textField(contact, "email"),
+          phone: textField(contact, "phone"),
+          contactConsent: row.contactConsent,
+          member: row.personId !== null,
+          status: row.status,
+          createdAt: row.createdAt,
+          sample: row.sample,
+        };
+      });
+  }
+
+  private ensurePathway(personId: string) {
+    const existing = this.pathways.get(personId);
+    if (existing && existing.length > 0) return existing;
+    const steps = DEFAULT_PATHWAY.map((step) => ({ id: step.id, title: step.title, status: "not-started" }));
+    this.pathways.set(personId, steps);
+    return steps;
+  }
+
+  /** A signed-out caller, or one whose saved session ended, is treated as a guest. */
+  private optionalActor(token: string | null): Actor | null {
+    if (!token) return null;
+    try {
+      return this.actor(token);
+    } catch (error) {
+      if (error instanceof AccessError) return null;
+      throw error;
+    }
+  }
+
+  /** The raw IP never reaches the snapshot. */
+  private clientKey(client: string): string {
+    return createHmac("sha256", this.key)
+      .update(client || "unknown")
+      .digest("hex")
+      .slice(0, 32);
+  }
+
+  private pruneThrottle(now: number) {
+    for (const [key, hits] of this.throttle) {
+      const recent = hits.filter((at) => now - at < HOUR_MS);
+      if (recent.length === 0) this.throttle.delete(key);
+      else this.throttle.set(key, recent);
+    }
+  }
+
+  private hit(key: string, limit: number, now: number) {
+    const hits = this.throttle.get(key) ?? [];
+    if (hits.length >= limit) {
+      throw new AccessError(
+        "rate_limited",
+        "We received several requests already. Please try again in an hour.",
+      );
+    }
+    this.throttle.set(key, [...hits, now]);
   }
 
   private finishProposal(proposal: Proposal, actor: Actor) {
@@ -1559,7 +1831,14 @@ export class ChurchStore {
       description: event.description,
       capacity: event.capacity,
       sample: event.sample,
+      url: event.url ?? null,
     };
+  }
+
+  /** Events that have not ended, soonest first. */
+  private upcomingEvents() {
+    const now = this.now();
+    return this.events.filter((event) => event.end >= now).sort((left, right) => left.start - right.start);
   }
 
   private requireGroup(groupId: string, personId: string) {
@@ -1677,54 +1956,58 @@ export class ChurchStore {
         listed: false,
       }),
     );
-    const service = nextSundayService(new Date(this.now()));
-    this.announcements.push(
-      {
-        id: "ann-sunday",
-        title: "Sunday gathering",
-        body: "10:30 a.m. Come early for donuts and coffee.",
-        sample: false,
-      },
-      {
-        id: "ann-kids",
-        title: "One Hope Kids",
-        body: "Kids ministry is open during the Sunday gathering, from 3 months through 5th grade.",
-        sample: false,
-      },
-    );
-    this.events.push({
-      id: "event-sunday",
+    this.syncPublicCatalog();
+  }
+
+  /**
+   * Public church content from weareonehope.com and Church Center, upserted by
+   * id on every load so a saved snapshot picks up corrections without losing
+   * memberships or registrations. Placeholder groups from builds 1–5 are retired.
+   */
+  private syncPublicCatalog() {
+    const upsert = <T extends { id: string }>(rows: T[], row: T) => {
+      const index = rows.findIndex((item) => item.id === row.id);
+      if (index === -1) rows.push(row);
+      else rows[index] = row;
+    };
+    upsert(this.announcements, {
+      id: "ann-sunday",
       title: "Sunday gathering",
-      start: service.service.getTime(),
-      end: service.service.getTime() + 90 * 60 * 1000,
-      location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
-      description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
-      capacity: null,
+      body: "10:30 a.m. Come early for donuts and coffee.",
       sample: false,
     });
-    this.groups.push(
-      {
-        id: "group-kids",
-        name: "One Hope Kids",
-        summary: "During Sunday for ages 3 months through 5th grade. Kids meet friends and learn about God.",
+    upsert(this.announcements, {
+      id: "ann-kids",
+      title: "One Hope Kids",
+      body: "Kids ministry is open during the Sunday gathering, from 3 months through 5th grade.",
+      sample: false,
+    });
+    const sunday = this.events.find((event) => event.id === "event-sunday");
+    if (!sunday || sunday.end < this.now()) {
+      const service = nextSundayService(new Date(this.now())).service.getTime();
+      upsert(this.events, {
+        id: "event-sunday",
+        title: "Sunday gathering",
+        start: service,
+        end: service + 90 * 60 * 1000,
+        location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
+        description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
+        capacity: null,
         sample: false,
-        memberIds: [],
-      },
-      {
-        id: "group-small",
-        name: "Small Groups",
-        summary: "Grow your faith and build friendships through the week.",
-        sample: false,
-        memberIds: [],
-      },
-      {
-        id: "group-growth",
-        name: "Growth Track",
-        summary: "Hear the vision of One Hope, discover your purpose, and find a place to serve.",
-        sample: false,
-        memberIds: [],
-      },
+      });
+    }
+    for (const event of CHURCH_EVENTS) upsert(this.events, { ...event, capacity: null, sample: false });
+    const retired = new Set(RETIRED_GROUP_IDS);
+    this.groups.splice(0, this.groups.length, ...this.groups.filter((group) => !retired.has(group.id)));
+    this.messages.splice(
+      0,
+      this.messages.length,
+      ...this.messages.filter((message) => !retired.has(message.groupId)),
     );
+    for (const group of CHURCH_GROUPS) {
+      const memberIds = this.groups.find((item) => item.id === group.id)?.memberIds ?? [];
+      upsert(this.groups, { ...group, leaders: [...group.leaders], sample: false, memberIds });
+    }
   }
 
   private loadSample() {
@@ -2127,6 +2410,9 @@ export class ChurchStore {
       requests: this.requests.map((request) => ({ ...request })),
       drafts: this.drafts.map((draft) => ({ ...draft })),
       invites: [...this.invites.entries()].map(([tokenHash, invite]) => ({ tokenHash, ...invite })),
+      followUps: this.followUps.map((row) => ({ ...row })),
+      streaks: [...this.streaks.values()].map((row) => ({ ...row })),
+      throttle: [...this.throttle.entries()].map(([key, hits]) => ({ key, hits: [...hits] })),
     };
   }
 
@@ -2177,6 +2463,11 @@ export class ChurchStore {
     for (const invite of document.invites ?? []) {
       this.invites.set(invite.tokenHash, { email: invite.email, expires: invite.expires });
     }
+    this.followUps.splice(0, this.followUps.length, ...(document.followUps ?? []));
+    this.streaks.clear();
+    for (const row of document.streaks ?? []) this.streaks.set(row.personId, row);
+    this.throttle.clear();
+    for (const row of document.throttle ?? []) this.throttle.set(row.key, row.hits);
     this.rekeyStoredSecrets();
     this.scrubFormerMembers();
     if (this.fixture) this.ensureDemoSessions();
@@ -2194,6 +2485,7 @@ export class ChurchStore {
     for (const check of this.checks.values()) check.ciphertext = rotate(check.ciphertext);
     for (const secret of this.secrets.values()) secret.ciphertext = rotate(secret.ciphertext);
     for (const request of this.requests) request.ciphertext = rotate(request.ciphertext);
+    for (const row of this.followUps) row.ciphertext = rotate(row.ciphertext);
   }
 
   private scrubFormerMembers() {
@@ -2205,19 +2497,46 @@ export class ChurchStore {
 
   private eraseOwnedData(personId: string, householdId: string | null) {
     const others = [...this.people.values()].filter(
-      (item) => item.id !== personId && householdId !== null && item.householdId === householdId && !item.deleted,
+      (item) =>
+        item.id !== personId && householdId !== null && item.householdId === householdId && !item.deleted,
     );
     this.prayers.splice(0, this.prayers.length, ...this.prayers.filter((row) => row.authorId !== personId));
-    this.registrations.splice(0, this.registrations.length, ...this.registrations.filter((row) => row.personId !== personId));
-    this.messages.splice(0, this.messages.length, ...this.messages.filter((row) => row.authorId !== personId));
+    this.registrations.splice(
+      0,
+      this.registrations.length,
+      ...this.registrations.filter((row) => row.personId !== personId),
+    );
+    this.messages.splice(
+      0,
+      this.messages.length,
+      ...this.messages.filter((row) => row.authorId !== personId),
+    );
     this.notes.splice(
       0,
       this.notes.length,
       ...this.notes.filter((row) => row.authorId !== personId && row.subjectPersonId !== personId),
     );
-    this.schedule.splice(0, this.schedule.length, ...this.schedule.filter((row) => row.personId !== personId));
-    this.volunteers.splice(0, this.volunteers.length, ...this.volunteers.filter((row) => row.personId !== personId));
-    this.requests.splice(0, this.requests.length, ...this.requests.filter((row) => row.personId !== personId));
+    this.schedule.splice(
+      0,
+      this.schedule.length,
+      ...this.schedule.filter((row) => row.personId !== personId),
+    );
+    this.volunteers.splice(
+      0,
+      this.volunteers.length,
+      ...this.volunteers.filter((row) => row.personId !== personId),
+    );
+    this.requests.splice(
+      0,
+      this.requests.length,
+      ...this.requests.filter((row) => row.personId !== personId),
+    );
+    this.followUps.splice(
+      0,
+      this.followUps.length,
+      ...this.followUps.filter((row) => row.personId !== personId),
+    );
+    this.streaks.delete(personId);
     this.checks.delete(personId);
     this.pathways.delete(personId);
     for (const group of this.groups) group.memberIds = group.memberIds.filter((id) => id !== personId);
@@ -2261,16 +2580,8 @@ export class ChurchStore {
     for (const [id, child] of [...this.children.entries()]) {
       if (child.sample) this.children.delete(id);
     }
-    if (!this.groups.some((group) => group.id === "group-kids")) {
-      const saved = [...this.people.values()];
-      this.announcements.splice(0, this.announcements.length);
-      this.events.splice(0, this.events.length);
-      this.groups.splice(0, this.groups.length);
-      this.loadPublic();
-      for (const person of saved) {
-        if (person.id !== "person-nicholas") this.people.set(person.id, person);
-      }
-    }
+    if (this.people.has("person-nicholas")) this.syncPublicCatalog();
+    else this.loadPublic();
   }
 
   private ensureDemoSessions() {
