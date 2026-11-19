@@ -10,7 +10,7 @@ const MARK: Record<string, string> = {
 export function FollowAlong({ links, heading = "Follow along" }: { links: SocialLink[]; heading?: string }) {
   if (links.length === 0) return null;
   return (
-    <section>
+    <section className="follow">
       <h2>{heading}</h2>
       <div className="follow-row">
         {links.map((link) => (

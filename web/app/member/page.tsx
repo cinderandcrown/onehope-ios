@@ -33,27 +33,32 @@ export default async function MemberPage({
           hour: "numeric",
           minute: "2-digit",
         }).format(new Date(home.countdown.service)),
-        announcements: home.announcements,
-        events: home.events.map((event) => ({
-          id: event.id,
-          title: event.title,
-          detail: event.location,
-          start: event.start,
-          end: event.end,
-          url: event.url,
-        })),
-        groups: store.listGroups(token).map((group) => ({
-          id: group.id,
-          name: group.name,
-          summary: group.summary,
-          category: group.category,
-          schedule: group.schedule,
-          area: group.area,
-          leaders: group.leaders,
-          joinType: group.joinType,
-          url: group.url,
-          joined: group.joined,
-        })),
+        announcements: home.announcements.filter((item) => !item.sample && !item.title.startsWith("Sample")),
+        events: home.events
+          .filter((event) => !event.sample)
+          .map((event) => ({
+            id: event.id,
+            title: event.title,
+            detail: event.location,
+            start: event.start,
+            end: event.end,
+            url: event.url,
+          })),
+        groups: store
+          .listGroups(token)
+          .filter((group) => !group.sample)
+          .map((group) => ({
+            id: group.id,
+            name: group.name,
+            summary: group.summary,
+            category: group.category,
+            schedule: group.schedule,
+            area: group.area,
+            leaders: group.leaders,
+            joinType: group.joinType,
+            url: group.url,
+            joined: group.joined,
+          })),
         videos: videos.map((video) => ({
           id: video.id,
           title: video.title,

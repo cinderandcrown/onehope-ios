@@ -122,45 +122,47 @@ export function MemberTabs({
   const go = (next: View) => {
     setNotice("");
     setView(next);
-    window.scrollTo({ top: 0 });
+    document.querySelector(".member")?.scrollTo({ top: 0 });
   };
   return (
-    <main className="member">
-      <h1>{HEADINGS[view]}</h1>
-      {notice ? <p role="status">{notice}</p> : null}
-      {view === "Home" ? (
-        <Home
-          church={church}
-          signedIn={member !== null}
-          onNotice={setNotice}
-          onGo={go}
-          onWatch={(id) => {
-            setVideoId(id);
-            go("Watch");
-          }}
-        />
-      ) : null}
-      {view === "Watch" ? (
-        <Watch church={church} selected={videoId} onSelect={setVideoId} onNotice={setNotice} />
-      ) : null}
-      {view === "Jesus" ? (
-        <KnowJesusView church={church} signedIn={member !== null} onNotice={setNotice} />
-      ) : null}
-      {view === "Give" ? <Give church={church} signedIn={member !== null} onNotice={setNotice} /> : null}
-      {view === "Visit" ? (
-        <PlanVisit church={church} signedIn={member !== null} onNotice={setNotice} />
-      ) : null}
-      {view === "Connect" ? (
-        member ? (
-          <Connect church={church} member={member} onNotice={setNotice} />
-        ) : (
-          <>
-            <Gatherings church={church} member={null} onNotice={setNotice} />
-            <Grow growth={church.growth} signedIn={false} onNotice={setNotice} />
-            <SignIn error={authError} onGo={go} />
-          </>
-        )
-      ) : null}
+    <div className="phone">
+      <main className="member">
+        <h1>{HEADINGS[view]}</h1>
+        {notice ? <p role="status">{notice}</p> : null}
+        {view === "Home" ? (
+          <Home
+            church={church}
+            signedIn={member !== null}
+            onNotice={setNotice}
+            onGo={go}
+            onWatch={(id) => {
+              setVideoId(id);
+              go("Watch");
+            }}
+          />
+        ) : null}
+        {view === "Watch" ? (
+          <Watch church={church} selected={videoId} onSelect={setVideoId} onNotice={setNotice} />
+        ) : null}
+        {view === "Jesus" ? (
+          <KnowJesusView church={church} signedIn={member !== null} onNotice={setNotice} />
+        ) : null}
+        {view === "Give" ? <Give church={church} signedIn={member !== null} onNotice={setNotice} /> : null}
+        {view === "Visit" ? (
+          <PlanVisit church={church} signedIn={member !== null} onNotice={setNotice} />
+        ) : null}
+        {view === "Connect" ? (
+          member ? (
+            <Connect church={church} member={member} onNotice={setNotice} />
+          ) : (
+            <>
+              <Gatherings church={church} member={null} onNotice={setNotice} />
+              <Grow growth={church.growth} signedIn={false} onNotice={setNotice} />
+              <SignIn error={authError} onGo={go} />
+            </>
+          )
+        ) : null}
+      </main>
       <nav className="member-tabs" aria-label="Member sections" role="tablist">
         {TABS.map((tab) => (
           <button
@@ -174,7 +176,7 @@ export function MemberTabs({
           </button>
         ))}
       </nav>
-    </main>
+    </div>
   );
 }
 
@@ -405,9 +407,9 @@ function Home({
       <InviteCard church={church} onNotice={onNotice} />
       <DailyWord church={church} signedIn={signedIn} onNotice={onNotice} />
       <FollowAlong links={church.social} />
-      <Link className="card" href="/coffee">
+      <Link className="card coffee-card" href="/coffee">
         <strong>Revival Coffee</strong>
-        <span>The shop in our building. Menu, hours, and directions.</span>
+        <span>Menu, hours, and directions. The shop is in our building.</span>
       </Link>
       <button type="button" className="card photo-card" onClick={() => onGo("Jesus")}>
         <Image src="/photos/about.jpg" alt="" width={900} height={600} />

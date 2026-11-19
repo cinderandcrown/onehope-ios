@@ -38,12 +38,15 @@ function Desk({ store, token }: { store: ChurchStore; token: string }) {
       <h2>{desk.greeting}</h2>
       <div className="desk-grid">
         {desk.cards.map((card) => (
-          <a className="desk-card" key={card.id} href={card.href}>
+          <article className="desk-card" key={card.id}>
             <h3>{card.title}</h3>
             {card.count === null ? null : <p className="count">{card.count}</p>}
             <p>{card.detail}</p>
             <p className="help">{card.help}</p>
-          </a>
+            <a className="desk-open" href={card.href}>
+              Open
+            </a>
+          </article>
         ))}
       </div>
     </section>
@@ -81,6 +84,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       const seats = store.seats();
       return (
         <>
+          <Desk store={store} token={token} />
           <section className="hero">
             <div>
               <p className="muted">{home.church.address}</p>
@@ -121,20 +125,26 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               </article>
             ) : null}
           </div>
-          <Desk store={store} token={token} />
           <article className="panel">
             <h2>Follow along</h2>
             <p className="help">
               How do I change a link? Edit the row and save. Only https links. These show on Today, Connect,
               and the public invite page.
             </p>
-            <form className="form" action={saveSocialAction}>
+            <form className="form social-editor" action={saveSocialAction}>
               {store.socialLinks().map((link) => (
-                <fieldset key={link.id}>
-                  <input name="id" defaultValue={link.id} aria-label={`${link.name} id`} />
-                  <input name="name" defaultValue={link.name} aria-label={`${link.name} name`} />
-                  <input name="url" defaultValue={link.url} aria-label={`${link.name} link`} />
-                </fieldset>
+                <label key={link.id}>
+                  <span>{link.name}</span>
+                  <input type="hidden" name="id" value={link.id} />
+                  <input type="hidden" name="name" value={link.name} />
+                  <input
+                    name="url"
+                    type="url"
+                    defaultValue={link.url}
+                    aria-label={`${link.name} address`}
+                    required
+                  />
+                </label>
               ))}
               <button className="button" type="submit">
                 Save links

@@ -16,7 +16,11 @@ Buttons on the site are a flat color, a 1px ink border, 5px corners, and `scale(
 
 ## Type
 
-The site sets headlines in **Articulat CF** (600) and navigation in **Inter**. Articulat CF is a commercial font and is not embedded here. The app uses the system sans at the site's scale: a 40pt semibold display and a title for section names. Scripture stays in a serif italic so a verse is obviously a verse. That serif is not on the website.
+The site sets headlines in **Articulat CF** (600) and navigation in **Inter**. Articulat CF is a commercial font and is not embedded. The web app self-hosts [Inter](https://rsms.me/inter/) (`web/public/fonts/Inter-Variable.woff2`), a free grotesque close to Articulat, for both UI and headings. The iPhone uses SF at the same scale. Scripture stays in a serif italic so a verse reads as a verse. That serif is not on the website.
+
+## Elevation
+
+Cards are 20px corners with a soft shadow (`0 10px 28px` at 8% ink). Buttons are terracotta pills with a light terracotta glow, not a hard offset border. The website's own buttons are flatter (5px corners and a 1px ink stroke). The app keeps the same colors and presses in slightly (`scale 0.98`).
 
 ## Photography and marks
 

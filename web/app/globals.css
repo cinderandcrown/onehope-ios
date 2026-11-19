@@ -34,6 +34,14 @@
   --shadow: none;
 }
 
+@font-face {
+  font-family: Inter;
+  src: url("/fonts/Inter-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -46,7 +54,7 @@ body {
   min-height: 100vh;
   background: var(--paper);
   color: var(--ink);
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-family: Inter, "Avenir Next", "Segoe UI", sans-serif;
   font-size: 1.02rem;
   line-height: 1.5;
 }
@@ -122,16 +130,23 @@ button,
   text-align: left;
   padding: 0.35rem 0.7rem;
 }
-.nav-group a[aria-current="page"],
-.button {
+.nav-group a[aria-current="page"] {
   background: var(--orange);
   color: var(--ink);
-  border: 1px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 4px 4px 0 var(--ink);
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--orange);
+  color: var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 8px 18px rgb(223 128 82 / 28%);
+  font-weight: 650;
+  padding: 0.7rem 1rem;
 }
 .button:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 .main {
   padding: 1.25rem 1.5rem 3rem;
@@ -156,9 +171,10 @@ button,
 h1,
 h2,
 h3 {
-  font-family: Palatino, "Iowan Old Style", Georgia, serif;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: Inter, "Avenir Next", sans-serif;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  text-decoration: none;
 }
 h1 {
   font-size: clamp(2rem, 4vw, 3.4rem);
@@ -172,11 +188,16 @@ h1 {
 }
 .card,
 .panel {
+  display: block;
+  width: 100%;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  padding: 1rem;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgb(28 27 27 / 8%);
+  padding: 1.05rem 1.1rem;
+  margin: 0 0 0.85rem;
+  color: inherit;
+  text-decoration: none;
 }
 .hero {
   display: grid;
@@ -316,22 +337,38 @@ pre {
     background-position: -100% 0;
   }
 }
+.phone {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #caddf6 0%, #e5e4d0 22rem);
+}
 .member {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   max-width: 40rem;
+  width: 100%;
   margin: 0 auto;
-  padding: 1.25rem 1rem 6rem;
+  padding: 0 1rem 1.5rem;
 }
 .member-tabs {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: none;
   display: flex;
   gap: 0.25rem;
   justify-content: space-around;
-  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
-  background: var(--card);
-  border-top: 1px solid var(--line);
+  padding: 0.45rem 0.6rem calc(0.45rem + env(safe-area-inset-bottom));
+  background: rgb(247 244 234 / 94%);
+  border-top: 1px solid rgb(28 27 27 / 8%);
+  backdrop-filter: blur(10px);
+}
+.member > h1 {
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--olive);
+  margin: 0.85rem 0 0.45rem;
+  font-weight: 700;
 }
 .member-tabs button {
   flex: 1;
@@ -352,8 +389,36 @@ pre {
   .hero {
     grid-template-columns: 1fr;
   }
+  .shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
   .rail {
-    padding-bottom: 1rem;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 0.55rem 0.7rem;
+    gap: 0.35rem;
+  }
+  .rail .brand,
+  .rail > p {
+    display: none;
+  }
+  .rail > form {
+    display: flex;
+    margin-left: auto;
+  }
+  .rail nav {
+    display: flex;
+    gap: 0.2rem;
+  }
+  .nav-group {
+    display: flex;
+    margin: 0;
+  }
+  .main {
+    padding: 0.8rem 0.85rem 2rem;
   }
   .login-photo {
     min-height: 240px;
@@ -362,14 +427,15 @@ pre {
 .member-hero {
   position: relative;
   overflow: hidden;
-  border-radius: 1.25rem;
-  margin-bottom: 1rem;
-  box-shadow: var(--shadow);
+  border-radius: 0 0 28px 28px;
+  margin: 0 -1rem 1rem;
+  min-height: 22rem;
+  box-shadow: 0 16px 40px rgb(28 27 27 / 12%);
 }
 .member-hero img {
   display: block;
   width: 100%;
-  height: 16rem;
+  height: 22rem;
   object-fit: cover;
 }
 .member-hero div {
@@ -395,7 +461,8 @@ pre {
 .button.secondary {
   background: var(--card);
   color: var(--ink);
-  border: 1px solid var(--line);
+  border: 0;
+  box-shadow: 0 6px 16px rgb(28 27 27 / 8%);
 }
 .invite-card {
   background: var(--olive);
@@ -458,39 +525,89 @@ pre {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0.75rem 0 1rem;
+  margin: 0 0 1rem;
 }
 .follow-row a {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  border: 1px solid var(--ink);
+  border: 0;
   background: var(--sky);
   color: var(--ink);
-  border-radius: 12px;
-  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 650;
+}
+.coffee-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.coffee-card span,
+.coffee-card strong {
+  display: block;
 }
 .desk-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.85rem;
   margin-top: 1rem;
 }
 .desk-card {
   background: var(--card);
-  border: 1px solid var(--ink);
-  border-radius: 18px;
-  box-shadow: 6px 6px 0 var(--olive);
-  padding: 1rem 1.1rem;
-  min-height: 11rem;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 10px 28px rgb(28 27 27 / 8%);
+  padding: 1rem 1.1rem 0.9rem;
+  min-height: 0;
+}
+.desk-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
 }
 .desk-card .count {
-  font-family: Palatino, Georgia, serif;
-  font-size: 2.6rem;
+  font-family: Inter, sans-serif;
+  font-weight: 680;
+  font-size: 2.4rem;
   line-height: 1;
-  margin: 0.2rem 0;
+  margin: 0.15rem 0 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.desk-open {
+  display: inline-flex;
+  margin-top: 0.6rem;
+  text-decoration: none;
+  font-weight: 650;
+  color: var(--ink);
+  background: var(--orange);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+}
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.header-tools label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+.header-tools select,
+.header-tools .text-button {
+  background: var(--card);
+  border: 1px solid rgb(28 27 27 / 12%);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+}
+.social-editor label {
+  display: grid;
+  gap: 0.3rem;
+}
+.social-editor label span {
+  font-weight: 650;
 }
 .public-page {
   max-width: 42rem;
