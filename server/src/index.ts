@@ -19,7 +19,16 @@ export {
   SAMPLE_TOTP_BASE32,
 } from "./sample-accounts";
 export { ChurchStore } from "./store";
-export { databaseUrl, withStore } from "./persist";
+export { databaseUrl, runRequest, withStore } from "./persist";
+export { ADAPTERS, assertTruthful, projectCapabilities } from "./adapter-registry";
+export { localAuthProvider } from "./auth-provider";
+export { emptyDocument, loadDocument, saveDocumentDiff } from "./document-store";
+export { enqueueJob, claimJobs, finishJob } from "./outbox";
+export { fakeEmailAdapter, readTenantSecret, saveTenantSecret } from "./integrations";
+export { importLegacySnapshot } from "./snapshot-import";
+export { exportTenant, restoreTenant } from "./tenant-bundle";
+export { resolveTenant, tenantProfile } from "./tenancy";
+export { withServiceRole } from "./service-role";
 export { memorySyncStore, runSync } from "./sync";
 export { totpCode, decodeBase32 } from "./totp";
 export { VERSION } from "./version";

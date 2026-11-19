@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  hkdfSync,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "node:crypto";
 
 export function encryptString(plain: string, key: Buffer): string {
   const iv = randomBytes(12);
@@ -35,4 +42,9 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 export function newId(prefix: string): string {
   return `${prefix}_${randomBytes(9).toString("hex")}`;
+}
+
+/** Per-tenant data key, wrapped by the platform field key. The platform key never goes in a tenant bundle. */
+export function tenantDataKey(platformKey: Buffer, tenantId: string): Buffer {
+  return Buffer.from(hkdfSync("sha256", platformKey, Buffer.from("cinder-tenant-v1"), Buffer.from(tenantId), 32));
 }

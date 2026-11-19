@@ -63,6 +63,8 @@ public struct GospelInfo: Decodable, Equatable, Sendable {
     public let baptism: String
     public let baptismVerse: VerseLine
     public let growthTrack: String
+    /// "pending" until a pastor approves the church's salvation and baptism wording. Scripture is unaffected.
+    public let pastoralCopy: String?
 }
 
 public struct JourneyDay: Decodable, Equatable, Sendable, Identifiable {

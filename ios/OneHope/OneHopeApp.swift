@@ -22,14 +22,20 @@ struct OneHopeApp: App {
 }
 
 struct RootView: View {
-    private let client: ChurchClient? = APIEndpoint.resolve().map { ChurchClient(baseURL: $0, transport: URLSessionTransport()) }
+    private let client: ChurchClient? = {
+        guard let url = APIEndpoint.resolve() else { return nil }
+        let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("onehope-reads", isDirectory: true)
+        return ChurchClient(baseURL: url, transport: URLSessionTransport(), cache: folder.map { ResponseCache(directory: $0) })
+    }()
     @State private var token: String? = SessionKeychain.load()
     @State private var snapshot = ChurchSnapshot.bundled()
     @State private var authError = ""
     @State private var tab = "home"
     @State private var videoId: String?
 
-    /// Home, Watch, Know Jesus, Plan a Visit, and Give are open to guests. Connect asks for an account.
+    /// Home, Watch, Know Jesus, and Prayer are open to guests. Giving is inside Connect.
+    /// iPhone shows five tab-bar items, so Give is not a sixth tab.
     var body: some View {
         TabView(selection: $tab) {
             HomeView(snapshot: snapshot, onRefresh: load, perform: perform) { id in
@@ -44,10 +50,12 @@ struct RootView: View {
             KnowJesusView(snapshot: snapshot, perform: perform)
                 .tabItem { Label(L10n.text(.knowJesus), systemImage: "cross") }
                 .tag("jesus")
-            GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
-                .tabItem { Label(L10n.text(.give), systemImage: "heart") }
-                .tag("give")
-            ConnectView(snapshot: snapshot, onRefresh: load, perform: perform) {
+            PrayerView(snapshot: snapshot, onRefresh: load, perform: perform)
+                .tabItem { Label(L10n.text(.prayer), systemImage: "hands.sparkles") }
+                .tag("prayer")
+            ConnectView(snapshot: snapshot, onRefresh: load, perform: perform, give: {
+                GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
+            }) {
                 account
             }
             .id(token != nil)
@@ -110,6 +118,10 @@ struct RootView: View {
                 snapshot = try await client.loadMember(token: token)
             } else {
                 snapshot = try await client.loadGuest()
+            }
+            let note = await client.cacheAge.consume()
+            if !note.isEmpty {
+                snapshot.offlineNote = note
             }
         } catch let error as ChurchAPIError where error.status == 401 && token != nil {
             signOut(message: "Please sign in again.")

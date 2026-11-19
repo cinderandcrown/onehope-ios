@@ -29,4 +29,4 @@ try {
 }
 
 await withStore(async () => undefined);
-process.stdout.write("Labeled demo snapshot is ready. Lead Pastor email was not set.\n");
+process.stdout.write("Migrations are applied and the tenant tables are ready. Lead Pastor email was not set.\n");

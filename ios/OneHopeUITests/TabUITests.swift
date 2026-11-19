@@ -6,7 +6,7 @@ final class TabUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-apiBaseURL", "http://127.0.0.1:8787", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        let tabs = ["Home", "Watch", "Know Jesus", "Give", "Connect"]
+        let tabs = ["Home", "Watch", "Know Jesus", "Prayer", "Connect"]
         for name in tabs {
             let tab = app.tabBars.buttons[name]
             XCTAssertTrue(tab.waitForExistence(timeout: 20), "Missing \(name) tab")
@@ -17,11 +17,17 @@ final class TabUITests: XCTestCase {
             if name == "Know Jesus" {
                 XCTAssertTrue(app.buttons["decision-salvation"].waitForExistence(timeout: 10))
             }
-            if name == "Give" {
-                XCTAssertTrue(app.staticTexts["Text to give"].waitForExistence(timeout: 10))
+            if name == "Prayer" {
+                XCTAssertTrue(app.staticTexts["prayer-board"].waitForExistence(timeout: 10))
             }
             capture(app, name: "Guest \(name)")
         }
+        app.tabBars.buttons["Connect"].tap()
+        let give = app.buttons["connect-give"]
+        XCTAssertTrue(give.waitForExistence(timeout: 10))
+        give.tap()
+        XCTAssertTrue(app.staticTexts["Text to give"].waitForExistence(timeout: 10))
+        capture(app, name: "Guest Give")
         let account = app.buttons["connect-account"]
         XCTAssertTrue(account.waitForExistence(timeout: 10))
         account.tap()

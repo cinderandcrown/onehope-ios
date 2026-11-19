@@ -19,7 +19,8 @@ function client(db: PGlite): SqlClient {
 
 async function asUser(db: PGlite, settings: Record<string, string>) {
   await db.exec("RESET ROLE");
-  for (const [key, value] of Object.entries(settings)) {
+  const merged = { "app.tenant_id": "onehope", ...settings };
+  for (const [key, value] of Object.entries(merged)) {
     await db.query("SELECT set_config($1, $2, false)", [key, value]);
   }
   await db.exec("SET ROLE app_user");
@@ -30,7 +31,7 @@ test("migrations apply once and Postgres RLS isolates households", async () => {
   const sql = client(db);
   const first = await migrate(sql);
   const second = await migrate(sql);
-  assert.deepEqual(first, ["0001_init", "0002_retention", "0003_demo_runtime"]);
+  assert.deepEqual(first, ["0001_init", "0002_retention", "0003_demo_runtime", "0004_tenancy"]);
   assert.deepEqual(second, []);
 
   await db.exec("RESET ROLE");
@@ -142,5 +143,6 @@ test("migrations apply once and Postgres RLS isolates households", async () => {
   const memberAudit = await db.query("SELECT id FROM audit_log");
   assert.equal(memberAudit.rows.length, 0);
   await assert.rejects(db.exec("UPDATE audit_log SET action = 'tampered'"));
+  await assert.rejects(db.exec("DELETE FROM audit_log"));
   await db.close();
 });

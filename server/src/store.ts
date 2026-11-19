@@ -28,7 +28,8 @@ import type {
   RoleChangeBody,
   SupportBody,
 } from "./contracts";
-import { decryptString, encryptString, hashPassword, newId, verifyPassword } from "./crypto";
+import { localAuthProvider } from "./auth-provider";
+import { decryptString, encryptString, newId } from "./crypto";
 import {
   type Actor,
   type Booking,
@@ -58,9 +59,10 @@ import {
   DEFAULT_PATHWAY,
   FOLLOW_UP_LABELS,
   FOLLOW_UP_PATHWAY,
-  GOSPEL,
   JOURNEY_MONTH,
   NEW_BELIEVER_JOURNEY,
+  presentGospel,
+  presentJourney,
   type FollowUpKind,
   type FollowUpStatus,
   currentStreak,
@@ -429,6 +431,7 @@ export class ChurchStore {
   private readonly outreachRsvps: { id: string; outreachId: string; personId: string }[] = [];
   private readonly coffeeOrders: CoffeeOrderRow[] = [];
   private social: SocialLink[] = SITE_SOCIAL.map((link) => ({ ...link }));
+  private boundTenant: { id: string; name: string; timezone: string; pickupOnly: boolean } | null = null;
 
   static demo(env: NodeJS.ProcessEnv = process.env): ChurchStore {
     return new ChurchStore(loadConfig(env), { fixture: env.ONEHOPE_SAMPLE_DATA === "true" });
@@ -450,7 +453,7 @@ export class ChurchStore {
     this.fetchImpl = options.fetchImpl;
     this.key = config.fieldEncryptionKey;
     this.fixture = options.fixture ?? true;
-    this.dummyHash = hashPassword("not-a-real-password");
+    this.dummyHash = localAuthProvider.hashPassword("not-a-real-password");
     this.flags = Object.fromEntries(MODULES.map((id) => [id, true])) as Record<ModuleId, boolean>;
     this.groups = [];
     this.messages = [];
@@ -480,6 +483,21 @@ export class ChurchStore {
   /** Church clock, so pages don't call Date.now themselves. */
   clock(): number {
     return this.now();
+  }
+
+  bindTenant(tenant: { id: string; name: string; timezone: string; pickupOnly: boolean }): void {
+    this.boundTenant = tenant;
+  }
+
+  currentTenant(): { id: string; name: string; timezone: string; pickupOnly: boolean } {
+    return (
+      this.boundTenant ?? {
+        id: "onehope",
+        name: "One Hope",
+        timezone: "America/Chicago",
+        pickupOnly: false,
+      }
+    );
   }
 
   status(version: string) {
@@ -513,8 +531,8 @@ export class ChurchStore {
     const person = this.byEmail(input.email);
     const hash = person?.passwordHash;
     const valid = hash
-      ? verifyPassword(input.password, hash)
-      : (verifyPassword(input.password, this.dummyHash), false);
+      ? localAuthProvider.verifyPassword(input.password, hash)
+      : (localAuthProvider.verifyPassword(input.password, this.dummyHash), false);
     if (!person || person.deleted || !valid) {
       throw new AccessError("unauthenticated", "That email and password don't match.");
     }
@@ -578,7 +596,7 @@ export class ChurchStore {
       totp: false,
       listed: false,
     });
-    person.passwordHash = hashPassword(input.password);
+    person.passwordHash = localAuthProvider.hashPassword(input.password);
     person.displayName = displayName;
     this.people.set(id, person);
     this.ensurePathway(id);
@@ -615,7 +633,7 @@ export class ChurchStore {
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
-    person.passwordHash = hashPassword(input.password);
+    person.passwordHash = localAuthProvider.hashPassword(input.password);
     this.invites.delete(hashInvite(input.inviteToken));
     return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
   }
@@ -643,7 +661,7 @@ export class ChurchStore {
     } else if (
       !proof.password ||
       !person.passwordHash ||
-      !verifyPassword(proof.password, person.passwordHash)
+      !localAuthProvider.verifyPassword(proof.password, person.passwordHash)
     ) {
       throw new AccessError("unauthenticated", "The password didn't match.");
     }
@@ -1797,6 +1815,18 @@ export class ChurchStore {
         "Master Admin changes use the two-person proposal, not a direct edit.",
       );
     }
+    const churchRoles = [
+      "pastor",
+      "care_team",
+      "finance",
+      "kids_director",
+      "team_leader",
+      "volunteer",
+      "member",
+    ] as const;
+    if (!(churchRoles as readonly string[]).includes(input.role)) {
+      throw new AccessError("forbidden", "That role is not assigned from the church Command Center.");
+    }
     const staffMove =
       input.role === "pastor" ||
       input.role === "care_team" ||
@@ -2055,9 +2085,9 @@ export class ChurchStore {
 
   knowJesus() {
     return {
-      gospel: GOSPEL,
-      journey: NEW_BELIEVER_JOURNEY,
-      journeyMonth: JOURNEY_MONTH,
+      gospel: presentGospel(),
+      journey: presentJourney(NEW_BELIEVER_JOURNEY),
+      journeyMonth: presentJourney(JOURNEY_MONTH),
       journeyEditableBy: "pastors" as const,
     };
   }
@@ -2340,7 +2370,7 @@ export class ChurchStore {
   private applyOverrides(options: StoreOptions) {
     for (const [email, password] of Object.entries(options.passwordOverrides ?? {})) {
       const person = this.byEmail(email);
-      if (person) person.passwordHash = hashPassword(password);
+      if (person) person.passwordHash = localAuthProvider.hashPassword(password);
     }
     for (const [email, secret] of Object.entries(options.totpOverrides ?? {})) {
       const person = this.byEmail(email);
@@ -2678,7 +2708,7 @@ export class ChurchStore {
 
   private sharedSampleHash(): string {
     const g = globalThis as typeof globalThis & { __onehopeSampleHash?: string };
-    if (!g.__onehopeSampleHash) g.__onehopeSampleHash = hashPassword(SAMPLE_PASSWORD);
+    if (!g.__onehopeSampleHash) g.__onehopeSampleHash = localAuthProvider.hashPassword(SAMPLE_PASSWORD);
     return g.__onehopeSampleHash;
   }
 
@@ -3165,8 +3195,12 @@ export class ChurchStore {
     };
   }
 
-  installDocument(document: StoreDocument): void {
-    if (document.version !== 1) throw new Error("This demo snapshot version is not supported.");
+  /**
+   * Replaces in-memory rows and does not reseed church content.
+   * Used when a non-church tenant is loaded so One Hope's catalog cannot leak into it.
+   */
+  replaceDocument(document: StoreDocument): void {
+    if (document.version !== 1) throw new Error("This snapshot version is not supported.");
     this.people.clear();
     for (const person of document.people) {
       this.people.set(person.id, {
@@ -3228,6 +3262,10 @@ export class ChurchStore {
     this.social = document.social
       ? document.social.map((link) => ({ ...link }))
       : SITE_SOCIAL.map((link) => ({ ...link }));
+  }
+
+  installDocument(document: StoreDocument): void {
+    this.replaceDocument(document);
     this.rekeyStoredSecrets();
     this.scrubFormerMembers();
     if (this.fixture) this.ensureDemoSessions();
@@ -3330,7 +3368,7 @@ export class ChurchStore {
     const boot = process.env.MASTER_ADMIN_BOOT_PASSWORD ?? "";
     if (boot.length < 8) return;
     const person = this.byEmail(this.config.masterAdminPrimaryEmail);
-    if (person && !person.passwordHash && !person.deleted) person.passwordHash = hashPassword(boot);
+    if (person && !person.passwordHash && !person.deleted) person.passwordHash = localAuthProvider.hashPassword(boot);
   }
 
   private dropFixtureContent() {

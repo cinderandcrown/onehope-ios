@@ -1,7 +1,7 @@
 # Hosted demo state lives in Postgres
 
-The access rules are implemented and tested in `ChurchStore`. The SQL migrations are the same rules, tested with PGlite, but they do not yet execute every screen. A serverless host cannot keep the store in memory across requests.
+Superseded for the request path by [0007](0007-tenant-aware-platform.md). `demo_runtime` remains only as the import source and the rollback copy.
 
-When `DATABASE_URL` or `POSTGRES_URL` is set, each request loads a versioned snapshot from `demo_runtime`, runs the store, and writes the snapshot back under a transaction lock. The first time the relational tables exist and are empty, the same snapshot's labeled demo rows are inserted there too. Passwords and TOTP secrets stay in the snapshot, not in those tables. Medical and gift plaintext stay ciphertext.
+The access rules are still implemented in `ChurchStore`. With `DATABASE_URL` or `POSTGRES_URL`, each request loads and saves tenant rows. It does not rewrite a JSON snapshot. A read that changes nothing writes nothing.
 
-`ONEHOPE_ENV=production` still refuses this store. The public demo stays in demo mode until a real encryption key and a real cutover exist. The Lead Pastor seat stays empty unless `MASTER_ADMIN_SECONDARY_EMAIL` is set in the host environment.
+`ONEHOPE_ENV=production` boots when `FIELD_ENCRYPTION_KEY` is set. It refuses to boot without that key. It does not refuse the relational store. The Lead Pastor seat stays empty unless `MASTER_ADMIN_SECONDARY_EMAIL` is set.

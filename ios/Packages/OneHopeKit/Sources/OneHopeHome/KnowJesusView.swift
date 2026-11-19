@@ -30,6 +30,11 @@ public struct KnowJesusView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let gospel = snapshot.gospel {
+                    if gospel.pastoralCopy == "pending" {
+                        Text("Salvation and baptism wording is pending pastor approval.")
+                            .font(.footnote)
+                            .accessibilityIdentifier("pastoral-copy-pending")
+                    }
                     Text(gospel.intro)
                     ForEach(Array(gospel.steps.enumerated()), id: \.element.id) { index, step in
                         VStack(alignment: .leading, spacing: 6) {

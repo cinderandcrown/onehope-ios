@@ -565,3 +565,33 @@ export const JOURNEY_MONTH: readonly JourneyDay[] = [
     prompt: "Thank Jesus that He makes things new, including you.",
   },
 ];
+
+/** Shown instead of church-authored salvation and baptism wording until a pastor approves it. */
+export const PASTORAL_COPY_PENDING =
+  "Pending pastor approval. This wording is not shown until a pastor approves it.";
+
+/** Scripture stays. The church's own salvation prayer and baptism explanation do not, until this is true. */
+export function salvationBaptismApproved(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CONTENT_SALVATION_BAPTISM_APPROVED === "true";
+}
+
+export function presentGospel(env: NodeJS.ProcessEnv = process.env) {
+  const approved = salvationBaptismApproved(env);
+  return {
+    ...GOSPEL,
+    prayer: approved ? GOSPEL.prayer : PASTORAL_COPY_PENDING,
+    baptism: approved ? GOSPEL.baptism : PASTORAL_COPY_PENDING,
+    pastoralCopy: approved ? ("approved" as const) : ("pending" as const),
+  };
+}
+
+function gatePastoralPrompt(prompt: string, approved: boolean): string {
+  if (approved) return prompt;
+  if (/\b(baptism|baptized|salvation)\b/i.test(prompt)) return PASTORAL_COPY_PENDING;
+  return prompt;
+}
+
+export function presentJourney(days: readonly JourneyDay[], env: NodeJS.ProcessEnv = process.env): JourneyDay[] {
+  const approved = salvationBaptismApproved(env);
+  return days.map((day) => ({ ...day, prompt: gatePastoralPrompt(day.prompt, approved) }));
+}

@@ -27,6 +27,22 @@
         }
       }
     },
+    "/api/tenant": {
+      "get": {
+        "operationId": "get__api_tenant",
+        "responses": {
+          "200": {
+            "description": "Tenant resolved from the Host header. A client-sent tenant id is not accepted."
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "post__api_auth_login",

@@ -8,7 +8,7 @@ One church. One login. One data set. The iPhone app and the Staff Command Center
 
 | Path                     | What it is                                                                              |
 | ------------------------ | --------------------------------------------------------------------------------------- |
-| `ios/`                   | SwiftUI app, iOS 17+, XcodeGen. Bundle `com.cinderandcrown.onehope`, team `GDNRT9DJ58`. |
+| `ios/`                   | SwiftUI app, iOS 18+, XcodeGen. Bundle `com.cinderandcrown.onehope`, team `GDNRT9DJ58`. |
 | `web/`                   | Next.js Staff Command Center.                                                           |
 | `server/`                | Shared domain, access rules, demo store, SQL migrations.                                |
 | `contracts/openapi.json` | HTTP contract. A test fails if a route is missing from it.                              |

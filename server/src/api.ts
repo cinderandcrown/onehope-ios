@@ -48,6 +48,7 @@ import type { ZodType } from "zod";
 
 export const API_ROUTES = [
   ["GET", "/api/health"],
+  ["GET", "/api/tenant"],
   ["POST", "/api/auth/login"],
   ["POST", "/api/auth/signup"],
   ["POST", "/api/auth/claim"],
@@ -242,6 +243,7 @@ async function route(
     return token;
   };
   if (method === "GET" && path === "/api/health") return parseOut(healthSchema, store.status(VERSION));
+  if (method === "GET" && path === "/api/tenant") return { tenant: store.currentTenant() };
   if (method === "POST" && path === "/api/auth/login") {
     const input = parse(loginBodySchema, body);
     return store.login({ ...input, ip: "api", userAgent: "api" });

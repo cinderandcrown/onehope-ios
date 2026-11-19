@@ -3,24 +3,27 @@ import OneHopeCore
 import OneHopeDesign
 import SwiftUI
 
-/// Groups, events, Toolkit, Recovery, and care for everyone; next steps, prayer, and kids check-in for members.
+/// Groups, events, Toolkit, Recovery, care, and giving. Prayer is its own tab.
 /// `account` is the sign-in screen for a guest, or account and directory settings for a member.
-public struct ConnectView<Account: View>: View {
+public struct ConnectView<Account: View, Give: View>: View {
     private let snapshot: ChurchSnapshot
     private let onRefresh: () async -> Void
     private let perform: (MemberAction) async -> String
     private let account: Account
+    private let give: Give
     @State private var notice = ""
 
     public init(
         snapshot: ChurchSnapshot,
         onRefresh: @escaping () async -> Void = {},
         perform: @escaping (MemberAction) async -> String = { _ in "" },
+        @ViewBuilder give: () -> Give,
         @ViewBuilder account: () -> Account
     ) {
         self.snapshot = snapshot
         self.onRefresh = onRefresh
         self.perform = perform
+        self.give = give()
         self.account = account()
     }
 
@@ -37,9 +40,15 @@ public struct ConnectView<Account: View>: View {
                         Text(snapshot.signedIn ? "Account and directory" : "Sign in or create an account")
                     }
                     .accessibilityIdentifier("connect-account")
+                    NavigationLink {
+                        give
+                    } label: {
+                        Text(L10n.text(.give))
+                    }
+                    .accessibilityIdentifier("connect-give")
                 } footer: {
                     if !snapshot.signedIn {
-                        Text("Sign in to join groups, send a prayer request, and check in kids.")
+                        Text("Sign in to join groups and check in kids. Prayer has its own tab.")
                     }
                 }
                 if snapshot.signedIn {
@@ -134,14 +143,11 @@ public struct ConnectView<Account: View>: View {
     }
 }
 
-/// Next steps, serving, group note, prayer request, and kids check-in.
+/// Next steps, serving, group note, and kids check-in. Prayer lives on its own tab.
 private struct MemberSections: View {
     let snapshot: ChurchSnapshot
     let perform: (MemberAction) async -> String
     @Binding var notice: String
-    @State private var serve = ""
-    @State private var prayer = ""
-    @State private var contact = false
     @State private var message = ""
 
     var body: some View {
@@ -165,7 +171,6 @@ private struct MemberSections: View {
             }
         }
         groupNote
-        prayerRequest
         KidsSection(kids: snapshot.kids, perform: perform, notice: $notice)
     }
 
@@ -186,48 +191,6 @@ private struct MemberSections: View {
                 }
             } else {
                 Text("Join a group before sending a note.")
-            }
-        }
-    }
-
-    /// The same fields as the church's Prayer Request form on Church Center.
-    private var prayerRequest: some View {
-        Section("Prayer request") {
-            TextField("How can we serve you?", text: $serve)
-                .accessibilityIdentifier("prayer-serve")
-            Picker("Please check a box below", selection: $contact) {
-                Text("Just pray for me").tag(false)
-                Text("Please contact me").tag(true)
-            }
-            TextField("Please describe your prayer need", text: $prayer, axis: .vertical)
-                .accessibilityIdentifier("prayer-need")
-            Button("Send prayer request") {
-                let serveText = serve.trimmingCharacters(in: .whitespacesAndNewlines)
-                let body = prayer.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !serveText.isEmpty, !body.isEmpty else {
-                    notice = "Tell us how we can serve you and describe your prayer need."
-                    return
-                }
-                Task {
-                    notice = await perform(.prayer(serve: serveText, contact: contact, body: body))
-                    serve = ""
-                    prayer = ""
-                    contact = false
-                }
-            }
-            ForEach(snapshot.prayers) { item in
-                VStack(alignment: .leading) {
-                    if item.mine, !item.serve.isEmpty {
-                        Text(item.serve).font(.headline)
-                    }
-                    Text(item.body)
-                    if item.mine, item.contactRequested {
-                        Text("A pastor will contact you.").font(.footnote)
-                    }
-                    if item.mine, !item.approved {
-                        Text("Waiting for pastor approval").font(.footnote)
-                    }
-                }
             }
         }
     }

@@ -736,6 +736,9 @@ function KnowJesusView({
           <p className="muted">{step.reference} (KJV)</p>
         </article>
       ))}
+      {church.gospel.pastoralCopy === "pending" ? (
+        <p className="muted">Salvation and baptism wording is pending pastor approval.</p>
+      ) : null}
       <article className="card">
         <h2>A prayer you can pray</h2>
         <p>{church.gospel.prayer}</p>
