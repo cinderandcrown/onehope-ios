@@ -13,6 +13,15 @@ test("a guest can open Home, Watch, Know Jesus, Give, and Plan a Visit without a
 
   await page.getByRole("tab", { name: "Watch" }).click();
   await expect(page.getByRole("heading", { name: "Messages" })).toBeVisible();
+  // YouTube refuses embeds without a Referer (Error 153); the feed is live, so only check when a video loaded.
+  const player = page.locator("iframe.player");
+  if ((await player.count()) > 0) {
+    await expect(player).toHaveAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    await expect(page.getByRole("link", { name: "Play on YouTube" })).toHaveAttribute(
+      "href",
+      /^https:\/\/www\.youtube\.com\/watch\?v=/,
+    );
+  }
 
   await page.getByRole("tab", { name: "Give" }).click();
   await expect(page.getByRole("link", { name: "Give online" })).toHaveAttribute(
