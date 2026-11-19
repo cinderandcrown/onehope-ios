@@ -24,6 +24,8 @@ public enum SampleChurch {
         public let start: Date?
         public let end: Date?
         public let registered: Bool
+        /// Registration that lives on Church Center.
+        public let url: URL?
     }
 
     public static let announcements: [Announcement] = [
@@ -31,7 +33,7 @@ public enum SampleChurch {
     ]
 
     public static let events: [EventItem] = [
-        EventItem(id: "sunday", title: "Sunday gathering", detail: address, sample: false, start: nil, end: nil, registered: false),
+        EventItem(id: "sunday", title: "Sunday gathering", detail: address, sample: false, start: nil, end: nil, registered: false, url: nil),
     ]
 
     public static let viewer = DirectoryPerson(
@@ -68,7 +70,7 @@ public enum L10n {
     }
 
     public enum Key: String, Sendable {
-        case home, watch, give, connect, more
+        case home, watch, give, connect, knowJesus
         case sample
         case signIn
     }
@@ -78,7 +80,7 @@ public enum L10n {
         .watch: "Watch",
         .give: "Give",
         .connect: "Connect",
-        .more: "More",
+        .knowJesus: "Know Jesus",
         .sample: "Sample",
         .signIn: "Continue as sample member",
     ]
@@ -88,7 +90,7 @@ public enum L10n {
         .watch: "Ver",
         .give: "Dar",
         .connect: "Conectar",
-        .more: "Más",
+        .knowJesus: "Conoce a Jesús",
         .sample: "Muestra",
         .signIn: "Continuar como miembro de muestra",
     ]

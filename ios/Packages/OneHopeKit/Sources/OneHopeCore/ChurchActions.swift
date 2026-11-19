@@ -3,7 +3,8 @@ import Foundation
 private struct TokenReply: Decodable { let token: String }
 private struct EmptyBody: Encodable {}
 private struct TextBody: Encodable { let body: String }
-private struct PrayerBody: Encodable { let body: String; let visibility: String }
+private struct PrayerBody: Encodable { let serve: String; let contact: Bool; let body: String; let visibility: String }
+private struct StreakReply: Decodable { let streak: Int }
 private struct ChildBody: Encodable { let displayName: String; let classroom: String }
 private struct ChildCreated: Decodable { let id: String }
 private struct ChildReply: Decodable { let child: ChildCreated }
@@ -46,13 +47,24 @@ public extension ChurchClient {
         let _: EmptyReply = try await send("/api/events/\(eventId)/register", method: "POST", token: token, json: Data("{}".utf8))
     }
 
-    func submitPrayer(token: String, body: String) async throws {
+    func submitPrayer(token: String, serve: String, contact: Bool, body: String) async throws {
         let _: EmptyReply = try await send(
             "/api/prayers",
             method: "POST",
             token: token,
-            json: JSONEncoder().encode(PrayerBody(body: body, visibility: "public"))
+            json: JSONEncoder().encode(PrayerBody(serve: serve, contact: contact, body: body, visibility: "public"))
         )
+    }
+
+    /// Sends a next step to the staff follow-up queue. `token` is nil for a guest.
+    func submitFollowUp(token: String?, request: FollowUpRequest) async throws {
+        let _: EmptyReply = try await send("/api/follow-ups", method: "POST", token: token, json: JSONEncoder().encode(request))
+    }
+
+    /// Marks today's Daily Word read and returns the member's synced streak.
+    func markDailyWordRead(token: String) async throws -> Int {
+        let reply: StreakReply = try await send("/api/daily-word/read", method: "POST", token: token, json: Data("{}".utf8))
+        return reply.streak
     }
 
     func updateProfile(token: String, emailPublic: Bool, phonePublic: Bool, listed: Bool) async throws {
@@ -97,5 +109,59 @@ public extension ChurchClient {
             json: JSONEncoder().encode(PickupBody(childId: childId, code: code))
         )
         return reply.reason
+    }
+}
+
+public extension ChurchClient {
+    /// Runs one action and returns what to tell the person. Only a next step works without an account.
+    func run(_ action: MemberAction, token: String?) async throws -> String {
+        if case let .followUp(request) = action {
+            try await submitFollowUp(token: token, request: request)
+            return FollowUpKind(rawValue: request.kind)?.thanks ?? "Sent."
+        }
+        guard let token else {
+            throw ChurchAPIError(status: 401, code: "sign_in_needed", message: "Please sign in first, from the Connect tab.")
+        }
+        if let reply = try await runKids(action, token: token) {
+            return reply
+        }
+        return try await runChurch(action, token: token)
+    }
+
+    private func runChurch(_ action: MemberAction, token: String) async throws -> String {
+        switch action {
+        case let .join(id):
+            try await join(token: token, groupId: id)
+            return "You're in that group."
+        case let .message(id, body):
+            try await postMessage(token: token, groupId: id, body: body)
+            return "Your note was sent."
+        case let .register(id):
+            try await register(token: token, eventId: id)
+            return "You're registered."
+        case let .prayer(serve, contact, body):
+            try await submitPrayer(token: token, serve: serve, contact: contact, body: body)
+            return "Your prayer request was sent to the pastors."
+        case .readDailyWord:
+            let streak = try await markDailyWordRead(token: token)
+            return streak == 1 ? "1 day in a row" : "\(streak) days in a row"
+        case .followUp, .addChild, .checkIn, .pickup:
+            return ""
+        }
+    }
+
+    private func runKids(_ action: MemberAction, token: String) async throws -> String? {
+        switch action {
+        case let .addChild(name, classroom):
+            _ = try await addChild(token: token, displayName: name, classroom: classroom)
+            return "\(name) was added."
+        case let .checkIn(id):
+            let code = try await checkIn(token: token, childId: id)
+            return "Security code \(code)"
+        case let .pickup(id, code):
+            return try await householdPickup(token: token, childId: id, code: code)
+        default:
+            return nil
+        }
     }
 }
