@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ACTIONS, MODULES, ROLES } from "./domain";
+import { FOLLOW_UP_KINDS, FOLLOW_UP_STATUSES } from "./faith";
 
 export const roleSchema = z.enum(ROLES);
 export const moduleSchema = z.enum(MODULES);
@@ -134,6 +135,10 @@ export const prayerBodySchema = z
   .object({
     body: z.string().trim().min(1).max(1000),
     visibility: z.enum(["public", "private"]),
+    /** Church Center's Prayer Request form asks "How can we serve you!" first. */
+    serve: z.string().trim().max(300).optional(),
+    /** "Please contact me" (true) or "Just pray for me" (false). */
+    contact: z.boolean().optional(),
   })
   .strict();
 
@@ -211,6 +216,33 @@ export const giftViewSchema = z
   })
   .strict();
 
+/**
+ * A next step from Know Jesus or Plan a Visit. Guests send only a name and,
+ * with consent, an email or phone. Empty strings count as not given.
+ */
+export const followUpBodySchema = z
+  .object({
+    kind: z.enum(FOLLOW_UP_KINDS),
+    name: z.string().trim().max(80).optional(),
+    email: z.union([z.literal(""), z.string().trim().email().max(254)]).optional(),
+    phone: z
+      .union([
+        z.literal(""),
+        z
+          .string()
+          .trim()
+          .regex(/^[0-9+().\-\s]{7,20}$/),
+      ])
+      .optional(),
+    consent: z.boolean(),
+  })
+  .strict()
+  .refine((body) => body.consent || (!body.email && !body.phone), {
+    message: "Contact details need consent.",
+  });
+
+export const followUpStatusBodySchema = z.object({ status: z.enum(FOLLOW_UP_STATUSES) }).strict();
+
 export const healthSchema = z
   .object({
     service: z.literal("onehope"),
@@ -244,3 +276,4 @@ export type RoleChangeBody = z.infer<typeof roleChangeBodySchema>;
 export type BookingBody = z.infer<typeof bookingBodySchema>;
 export type IntegrationBody = z.infer<typeof integrationBodySchema>;
 export type StepUpBody = z.infer<typeof stepUpBodySchema>;
+export type FollowUpBody = z.infer<typeof followUpBodySchema>;

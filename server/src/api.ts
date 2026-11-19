@@ -1,5 +1,5 @@
 import { CAPABILITIES } from "./capabilities";
-import { AccessError, assertNever, assertNoCardData } from "./domain";
+import { AccessError, assertNever, assertNoCardData, isAccessError } from "./domain";
 import { facebookLive, loadSermons } from "./adapters";
 import {
   bookingBodySchema,
@@ -14,6 +14,8 @@ import {
   householdPickupBodySchema,
   childBodySchema,
   eventBodySchema,
+  followUpBodySchema,
+  followUpStatusBodySchema,
   groupBodySchema,
   loginBodySchema,
   moderateBodySchema,
@@ -86,6 +88,12 @@ export const API_ROUTES = [
   ["POST", "/api/integrations/{provider}"],
   ["GET", "/api/ministry"],
   ["POST", "/api/facilities/bookings"],
+  ["GET", "/api/know-jesus"],
+  ["GET", "/api/daily-word"],
+  ["POST", "/api/daily-word/read"],
+  ["POST", "/api/follow-ups"],
+  ["GET", "/api/care/follow-ups"],
+  ["POST", "/api/care/follow-ups/{id}"],
 ] as const;
 
 type Deps = {
@@ -115,11 +123,11 @@ export function createApi(deps: Deps) {
           },
         });
       }
-      const result = await route(deps, token, request.method, url.pathname, body);
+      const result = await route(deps, token, request.method, url.pathname, body, clientAddress(request));
       log.log("info", "request", { method: request.method, path: url.pathname, status: 200 });
       return Response.json({ ok: true, ...result });
     } catch (error) {
-      if (error instanceof AccessError) {
+      if (isAccessError(error)) {
         log.log("info", "request_denied", { method: request.method, path: url.pathname, code: error.code });
         return Response.json(
           { ok: false, error: friendlyError(error), code: error.code },
@@ -139,6 +147,7 @@ async function route(
   method: string,
   path: string,
   body: unknown,
+  client: string,
 ): Promise<Record<string, unknown>> {
   const store = deps.store;
   const need = () => {
@@ -169,7 +178,8 @@ async function route(
   if (method === "POST" && path === "/api/auth/sample-staff")
     return store.loginSampleStaff({ ip: "api", userAgent: "sample-preview" });
   if (method === "GET" && path === "/api/me") return { person: store.me(need()) };
-  if (method === "POST" && path === "/api/me") return { person: store.updateProfile(need(), parse(profileBodySchema, body)) };
+  if (method === "POST" && path === "/api/me")
+    return { person: store.updateProfile(need(), parse(profileBodySchema, body)) };
   if (method === "POST" && path === "/api/account/delete") return store.deleteSelf(need());
   if (method === "GET" && path === "/api/home") return store.publicHome();
   if (method === "GET" && path === "/api/sermons") {
@@ -187,7 +197,7 @@ async function route(
     return { gift: await store.createGift(need(), parse(giftBodySchema, body)) };
   if (method === "GET" && path === "/api/giving/mine") return { gifts: store.myGifts(need()) };
   if (method === "GET" && path === "/api/giving/all") return { gifts: store.allGifts(need()) };
-  if (method === "GET" && path === "/api/groups") return { groups: store.listGroups(need()) };
+  if (method === "GET" && path === "/api/groups") return { groups: store.listGroups(token) };
   const messages = path.match(/^\/api\/groups\/([^/]+)\/messages$/);
   if (messages?.[1] && method === "GET")
     return { messages: store.listMessages(need(), decodeURIComponent(messages[1])) };
@@ -209,7 +219,11 @@ async function route(
     return store.submitPrayer(need(), parse(prayerBodySchema, body));
   const moderate = path.match(/^\/api\/prayers\/([^/]+)\/moderate$/);
   if (method === "POST" && moderate?.[1]) {
-    return store.moderatePrayer(need(), decodeURIComponent(moderate[1]), parse(moderateBodySchema, body).approved);
+    return store.moderatePrayer(
+      need(),
+      decodeURIComponent(moderate[1]),
+      parse(moderateBodySchema, body).approved,
+    );
   }
   if (method === "GET" && path === "/api/kids/mine") return { kids: store.myKids(need()) };
   if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
@@ -263,7 +277,29 @@ async function route(
   if (method === "GET" && path === "/api/ministry") return { ministry: store.ministry(need()) };
   if (method === "POST" && path === "/api/facilities/bookings")
     return { booking: store.book(need(), parse(bookingBodySchema, body)) };
+  if (method === "GET" && path === "/api/know-jesus") return store.knowJesus();
+  if (method === "GET" && path === "/api/daily-word") return store.dailyWord(token);
+  if (method === "POST" && path === "/api/daily-word/read") return store.markDailyWordRead(need());
+  if (method === "POST" && path === "/api/follow-ups")
+    return { followUp: store.submitFollowUp(token, parse(followUpBodySchema, body), client) };
+  if (method === "GET" && path === "/api/care/follow-ups") return { followUps: store.followUpsFor(need()) };
+  const followUp = path.match(/^\/api\/care\/follow-ups\/([^/]+)$/);
+  if (method === "POST" && followUp?.[1]) {
+    return {
+      followUp: store.updateFollowUp(
+        need(),
+        decodeURIComponent(followUp[1]),
+        parse(followUpStatusBodySchema, body).status,
+      ),
+    };
+  }
   throw new AccessError("not_found", "That route isn't part of this API.");
+}
+
+/** Vercel sets x-forwarded-for to the caller; the first entry is the client. */
+function clientAddress(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for") ?? "";
+  return forwarded.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "";
 }
 
 function friendlyError(error: AccessError): string {
@@ -335,6 +371,8 @@ function statusFor(code: AccessError["code"]): number {
     case "seat_empty":
     case "two_person":
       return 409;
+    case "rate_limited":
+      return 429;
     default:
       return assertNever(code);
   }
