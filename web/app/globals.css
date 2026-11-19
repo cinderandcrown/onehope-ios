@@ -351,3 +351,98 @@ pre {
     min-height: 240px;
   }
 }
+.member-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+.member-hero img {
+  display: block;
+  width: 100%;
+  height: 16rem;
+  object-fit: cover;
+}
+.member-hero div {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 1.25rem;
+  color: #fbf8f1;
+  background: linear-gradient(transparent, rgb(28 27 27 / 78%));
+}
+.member-hero h2,
+.member-hero p {
+  margin: 0.15rem 0;
+  color: inherit;
+}
+.cta-row,
+.decisions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+.button.secondary {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.invite-card {
+  background: var(--olive);
+  color: var(--olive-ink);
+}
+.invite-card .muted {
+  color: inherit;
+  opacity: 0.85;
+}
+.verse blockquote {
+  margin: 0.4rem 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.1rem;
+}
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+.video-card,
+.photo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.video-card > button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.video-card img,
+.photo-card img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 0.75rem;
+}
+.video-card.short img {
+  aspect-ratio: 9 / 16;
+}
+.player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 1rem;
+}

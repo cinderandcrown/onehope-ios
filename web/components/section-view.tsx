@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { createEventAction, createGroupAction, savePush } from "@/app/actions";
+import { createEventAction, createGroupAction, savePush, updateFollowUpAction } from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
 import {
   AccessError,
@@ -15,14 +15,11 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-
 function Locked({ title }: { title: string }) {
   return (
     <section className="panel">
       <h2>{title}</h2>
-      <p>
-        Confirm it is you again before this opens.
-      </p>
+      <p>Confirm it is you again before this opens.</p>
     </section>
   );
 }
@@ -108,9 +105,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             <tbody>
               {people.map((person) => (
                 <tr key={person.id}>
-                  <td>
-                    {person.displayName}
-                  </td>
+                  <td>{person.displayName}</td>
                   <td>{person.email || "Hidden"}</td>
                   <td>{person.phone || "Hidden"}</td>
                 </tr>
@@ -128,9 +123,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           <h1>Next steps</h1>
           {rows.map((person) => (
             <article className="card" key={person.personId}>
-              <h2>
-                {person.displayName}
-              </h2>
+              <h2>{person.displayName}</h2>
               <p>{person.steps.map((step) => `${step.title}: ${step.status}`).join(" · ")}</p>
             </article>
           ))}
@@ -154,19 +147,77 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {care.queue.locked ? (
             <Locked title="Staff care queue" />
           ) : (
-            <article className="panel">
-              <h2>Follow-up</h2>
-              {care.queue.visitors.map((visitor) => (
-                <p key={visitor.id}>
-                  {visitor.name} · {visitor.state}
-                </p>
-              ))}
-              {care.queue.requests.map((request) => (
-                <p key={request.id}>
-                  {request.kind}: {request.detail}
-                </p>
-              ))}
-            </article>
+            <>
+              <article className="panel">
+                <h2>Next steps from the app</h2>
+                {care.queue.followUps.length === 0 ? (
+                  <p>
+                    No one has asked for a next step yet. Know Jesus, baptism, Growth Track, and Plan a Visit
+                    land here.
+                  </p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>Next step</th>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {care.queue.followUps.map((row) => (
+                        <tr key={row.id}>
+                          <td>
+                            {new Date(row.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago" })}
+                          </td>
+                          <td>{row.label}</td>
+                          <td>
+                            {row.name}
+                            {row.member ? " (member)" : " (guest)"}
+                          </td>
+                          <td>
+                            {[row.email, row.phone].filter(Boolean).join(" · ") ||
+                              (row.contactConsent ? "Account email" : "No contact shared")}
+                          </td>
+                          <td>
+                            <form action={updateFollowUpAction}>
+                              <input type="hidden" name="id" value={row.id} />
+                              <select
+                                name="status"
+                                defaultValue={row.status}
+                                aria-label={`Status for ${row.name}`}
+                              >
+                                <option value="new">New</option>
+                                <option value="contacted">Contacted</option>
+                                <option value="closed">Closed</option>
+                              </select>
+                              <button className="button" type="submit">
+                                Save
+                              </button>
+                            </form>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </article>
+              <article className="panel">
+                <h2>Follow-up</h2>
+                {care.queue.visitors.map((visitor) => (
+                  <p key={visitor.id}>
+                    {visitor.name} · {visitor.state}
+                  </p>
+                ))}
+                {care.queue.requests.map((request) => (
+                  <p key={request.id}>
+                    {request.kind}: {request.detail}
+                  </p>
+                ))}
+              </article>
+            </>
           )}
         </section>
       );
@@ -184,11 +235,14 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           </form>
           {store.listGroups(token).map((group) => (
             <article className="card" key={group.id}>
-              <h2>
-                {group.name}
-              </h2>
-              <p>{group.summary}</p>
-              <p>{group.joined ? "Joined" : "Not joined"}</p>
+              <h2>{group.name}</h2>
+              <p>{[group.schedule, group.summary].filter(Boolean).join(" · ")}</p>
+              {group.leaders.length > 0 ? <p>Led by {group.leaders.join(", ")}</p> : null}
+              {group.url ? (
+                <a href={group.url} target="_blank" rel="noreferrer">
+                  {group.joinType === "request" ? "Requests on Church Center" : "Church Center page"}
+                </a>
+              ) : null}
             </article>
           ))}
         </section>
@@ -207,9 +261,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           </form>
           {store.publicHome().events.map((event) => (
             <article className="card" key={event.id}>
-              <h2>
-                {event.title}
-              </h2>
+              <h2>{event.title}</h2>
               <p>{event.location}</p>
               <p>{event.capacity === null ? "Open" : `Capacity ${event.capacity}`}</p>
             </article>
@@ -237,9 +289,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             <tbody>
               {roster.map((child) => (
                 <tr key={child.id}>
-                  <td>
-                    {child.displayName}
-                  </td>
+                  <td>{child.displayName}</td>
                   <td>{child.classroom}</td>
                 </tr>
               ))}
@@ -287,9 +337,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           <h1>Worship</h1>
           {plan ? (
             <article className="card">
-              <h2>
-                {plan.title}
-              </h2>
+              <h2>{plan.title}</h2>
               <p>{plan.items.join(" · ")}</p>
               <p>
                 {plan.songs
@@ -319,9 +367,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {lessons.map((lesson) => (
             <article className="card" key={lesson.id}>
               <h2>{lesson.title}</h2>
-              <p>
-                {lesson.ages}
-              </p>
+              <p>{lesson.ages}</p>
             </article>
           ))}
           <p>Allergies, medical notes, and custody flags stay on the check-in record and require step-up.</p>
@@ -351,12 +397,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
             </label>
             <label>
               Body
-              <textarea
-                name="body"
-                required
-                maxLength={240}
-                defaultValue="Sunday at 10:30 a.m."
-              />
+              <textarea name="body" required maxLength={240} defaultValue="Sunday at 10:30 a.m." />
             </label>
             <label>
               Segment
@@ -415,9 +456,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <tbody>
                 {result.gifts.map((gift) => (
                   <tr key={gift.id}>
-                    <td>
-                      {gift.fundName}
-                    </td>
+                    <td>{gift.fundName}</td>
                     <td>{money(gift.amountCents)}</td>
                     <td>{gift.charged ? "Yes" : "No"}</td>
                   </tr>
@@ -468,9 +507,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           ) : (
             finance.budgets.map((budget) => (
               <article className="card" key={budget.id}>
-                <h2>
-                  {budget.name}
-                </h2>
+                <h2>{budget.name}</h2>
                 <p>
                   Budget {money(budget.budgetCents)} · Actual {money(budget.actualCents)}
                 </p>
@@ -494,16 +531,12 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           {missions.partners.map((partner) => (
             <article className="card" key={partner.id}>
               <h2>{partner.name}</h2>
-              <p>
-                {partner.summary}
-              </p>
+              <p>{partner.summary}</p>
             </article>
           ))}
           {missions.trips.map((trip) => (
             <article className="card" key={trip.id}>
-              <h2>
-                {trip.name}
-              </h2>
+              <h2>{trip.name}</h2>
               <p>
                 Raised {money(trip.raisedCents)} of {money(trip.goalCents)}
               </p>
@@ -520,14 +553,10 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           <div>
             <h1>Media</h1>
             {media.series.map((series) => (
-              <p key={series.id}>
-                {series.title}
-              </p>
+              <p key={series.id}>{series.title}</p>
             ))}
             {media.chat.map((line) => (
-              <p key={line.id}>
-                {line.body}
-              </p>
+              <p key={line.id}>{line.body}</p>
             ))}
             <p>
               YouTube uses the public RSS feed. Facebook Live stays a placeholder until a Page token is set.
