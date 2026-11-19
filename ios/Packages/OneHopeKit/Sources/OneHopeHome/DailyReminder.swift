@@ -18,7 +18,8 @@ enum DailyReminder {
         var when = DateComponents()
         when.hour = 7
         when.minute = 30
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: true))
+        let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: true)
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         try? await center.add(request)
         return true
     }

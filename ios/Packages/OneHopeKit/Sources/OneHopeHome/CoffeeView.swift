@@ -43,45 +43,53 @@ public struct CoffeeView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func menu(_ title: String, items: [(String, String, String)]) -> some View {
+    private func menu(_ title: String, items: [MenuLine]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.hopeTitle)
-            ForEach(items, id: \.0) { item in
+            ForEach(items) { item in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(item.0) · \(item.2)").font(.headline)
-                    Text(item.1).font(.footnote)
+                    Text("\(item.name) · \(item.price)").font(.headline)
+                    Text(item.detail).font(.footnote)
                 }
             }
         }
         .churchCard()
     }
 
-    private var drinks: [(String, String, String)] {
+    private var drinks: [MenuLine] {
         [
-            ("Espresso", "Bold, rich single or double shot", "$3.50"),
-            ("Americano", "Espresso with hot water", "$4.00"),
-            ("Latte", "Espresso with steamed milk and a touch of foam", "$5.00"),
-            ("Cappuccino", "Equal parts espresso, steamed milk, and foam", "$5.00"),
-            ("Cold Brew", "Slow-steeped for 18 hours", "$5.00"),
-            ("Iced Latte", "Espresso over ice with cold milk", "$5.50"),
-            ("Mocha", "Espresso, chocolate, and steamed milk", "$5.50"),
-            ("Flat White", "Microfoam over a double shot", "$5.00"),
-            ("Macchiato", "Espresso marked with foam", "$4.00"),
-            ("Drip Coffee", "Freshly brewed house blend", "$3.00"),
+            MenuLine(name: "Espresso", detail: "Bold, rich single or double shot", price: "$3.50"),
+            MenuLine(name: "Americano", detail: "Espresso with hot water", price: "$4.00"),
+            MenuLine(name: "Latte", detail: "Espresso with steamed milk and a touch of foam", price: "$5.00"),
+            MenuLine(name: "Cappuccino", detail: "Equal parts espresso, steamed milk, and foam", price: "$5.00"),
+            MenuLine(name: "Cold Brew", detail: "Slow-steeped for 18 hours", price: "$5.00"),
+            MenuLine(name: "Iced Latte", detail: "Espresso over ice with cold milk", price: "$5.50"),
+            MenuLine(name: "Mocha", detail: "Espresso, chocolate, and steamed milk", price: "$5.50"),
+            MenuLine(name: "Flat White", detail: "Microfoam over a double shot", price: "$5.00"),
+            MenuLine(name: "Macchiato", detail: "Espresso marked with foam", price: "$4.00"),
+            MenuLine(name: "Drip Coffee", detail: "Freshly brewed house blend", price: "$3.00"),
         ]
     }
 
-    private var food: [(String, String, String)] {
+    private var food: [MenuLine] {
         [
-            ("Breakfast Sandwich", "Egg, cheese, and protein on brioche", "$7.00"),
-            ("Avocado Feta Toast", "Sourdough, tomatoes, feta, walnuts. Add egg $1.", "$10.00"),
-            ("Overnight Oats Chia Pudding", "Blueberry or strawberry. The menu lists no price.", "Ask"),
-            ("Yogurt Parfait", "Greek yogurt, granola, and fruit", "$6.00"),
-            ("Three Cheese Grilled Cheese", "Cheddar, fontina, and Gruyère. Kettle chips.", "$10.00"),
-            ("Tomato Mozzarella Sandwich", "Pesto and mozzarella on focaccia. Kettle chips.", "$10.00"),
-            ("Chicken Pesto Wrap", "Chicken, pesto, and avocado. Kettle chips.", "$10.00"),
-            ("Turkey Club Wrap", "Turkey, bacon, lettuce, tomato, and ranch", "$9.00"),
-            ("Fresh Pastries", "Croissants, muffins, and scones", "$4.00"),
+            MenuLine(name: "Breakfast Sandwich", detail: "Egg, cheese, and protein on brioche", price: "$7.00"),
+            MenuLine(name: "Avocado Feta Toast", detail: "Sourdough, tomatoes, feta, walnuts. Add egg $1.", price: "$10.00"),
+            MenuLine(name: "Overnight Oats Chia Pudding", detail: "Blueberry or strawberry. The menu lists no price.", price: "Ask"),
+            MenuLine(name: "Yogurt Parfait", detail: "Greek yogurt, granola, and fruit", price: "$6.00"),
+            MenuLine(name: "Three Cheese Grilled Cheese", detail: "Cheddar, fontina, and Gruyère. Kettle chips.", price: "$10.00"),
+            MenuLine(name: "Tomato Mozzarella Sandwich", detail: "Pesto and mozzarella on focaccia. Kettle chips.", price: "$10.00"),
+            MenuLine(name: "Chicken Pesto Wrap", detail: "Chicken, pesto, and avocado. Kettle chips.", price: "$10.00"),
+            MenuLine(name: "Turkey Club Wrap", detail: "Turkey, bacon, lettuce, tomato, and ranch", price: "$9.00"),
+            MenuLine(name: "Fresh Pastries", detail: "Croissants, muffins, and scones", price: "$4.00"),
         ]
     }
+}
+
+private struct MenuLine: Identifiable {
+    let name: String
+    let detail: String
+    let price: String
+
+    var id: String { name }
 }
