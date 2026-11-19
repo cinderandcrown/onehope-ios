@@ -2,8 +2,8 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
 
-import { setLanguage, signOut } from "@/app/actions";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { signOut } from "@/app/actions";
+import { HeaderTools } from "@/components/header-tools";
 import { copy, isSectionId, navGroups } from "@/lib/i18n";
 import { staffSession } from "@/lib/session";
 
@@ -47,19 +47,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
         </aside>
         <div className="main">
           <div className="topbar">
-            <form action={setLanguage}>
-              <label>
-                {text.language}
-                <select name="language" defaultValue={language}>
-                  <option value="en">English</option>
-                  <option value="es">Español</option>
-                </select>
-              </label>
-              <button className="text-button" type="submit">
-                OK
-              </button>
-            </form>
-            <ThemeToggle light={text.light} dark={text.dark} />
+            <HeaderTools language={language} light={text.light} dark={text.dark} />
           </div>
           <div id="content">{children}</div>
         </div>

@@ -66,6 +66,9 @@ public struct MoreView: View {
                     }
                 }
             }
+            Section("Follow along") {
+                FollowAlong(links: snapshot.social)
+            }
             Section("About") {
                 Text(snapshot.churchName)
                 Text(snapshot.address)

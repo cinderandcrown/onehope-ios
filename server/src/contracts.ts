@@ -262,6 +262,96 @@ export const supportBodySchema = z
 
 export const followUpStatusBodySchema = z.object({ status: z.enum(FOLLOW_UP_STATUSES) }).strict();
 
+export const socialBodySchema = z
+  .object({
+    links: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().min(1).max(40),
+            name: z.string().trim().min(1).max(40),
+            url: z.string().trim().max(300),
+          })
+          .strict(),
+      )
+      .max(8),
+  })
+  .strict();
+
+export const myFiveBodySchema = z
+  .object({ names: z.array(z.string().trim().min(1).max(80)).max(5) })
+  .strict();
+
+export const testimonyBodySchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80),
+    body: z.string().trim().min(1).max(2000),
+    consent: z.literal(true),
+  })
+  .strict();
+
+export const milestoneBodySchema = z
+  .object({
+    kind: z.enum(["baptism", "salvation"]),
+    title: z.string().trim().min(1).max(120),
+    detail: z.string().trim().max(500),
+    consent: z.literal(true),
+  })
+  .strict();
+
+export const outreachBodySchema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    detail: z.string().trim().max(1000).optional(),
+    location: z.string().trim().min(1).max(200),
+    start: z.number(),
+    end: z.number(),
+  })
+  .strict();
+
+export const personCreateBodySchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80),
+    email: z.string().trim().email().max(254),
+    phone: z.string().trim().max(30).optional(),
+  })
+  .strict();
+
+export const personEditBodySchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80).optional(),
+    phone: z.string().trim().max(30).optional(),
+  })
+  .strict();
+
+export const servingAssignBodySchema = z
+  .object({
+    personId: z.string().trim().min(1).max(80),
+    position: z.string().trim().min(1).max(80),
+  })
+  .strict();
+
+export const neighborhoodPrayerBodySchema = z.object({ body: z.string().trim().min(1).max(1000) }).strict();
+
+export const coffeeOrderBodySchema = z
+  .object({
+    lines: z
+      .array(
+        z
+          .object({
+            catalogObjectId: z.string().trim().min(1).max(80),
+            quantity: z.number().int().positive().max(20),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+    sourceId: z.string().trim().min(6).max(200),
+    idempotencyKey: z.string().trim().min(8).max(80),
+    pickupName: z.string().trim().min(1).max(80),
+  })
+  .strict();
+
 export const healthSchema = z
   .object({
     service: z.literal("onehope"),

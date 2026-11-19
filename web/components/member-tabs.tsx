@@ -2,9 +2,11 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { deleteMember, signInMember, signOutMember, signUpMember } from "@/app/member/actions";
+import { FollowAlong, type SocialLink } from "@/components/follow-along";
 import { GiveInApp } from "@/components/give-in-app";
 import { Grow, type GrowthView } from "@/components/growth";
 import { KidsCheckIn, type KidView } from "@/components/kids-check-in";
@@ -44,6 +46,9 @@ export type ChurchView = {
   funds: { id: string; name: string }[];
   frequencies: readonly { id: GivingFrequency; label: string }[];
   growth: GrowthView;
+  social: SocialLink[];
+  greeting: string;
+  journeyMonth: KnowJesus["journey"];
 };
 
 export type ChurchGroup = {
@@ -82,13 +87,70 @@ export type MemberView = {
 
 type Notify = (message: string) => void;
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "Home", label: "Home" },
-  { id: "Watch", label: "Watch" },
-  { id: "Jesus", label: "Know Jesus" },
-  { id: "Give", label: "Give" },
-  { id: "Connect", label: "Connect" },
+const TABS: { id: Tab; label: string; name: string }[] = [
+  { id: "Home", label: "Home", name: "Home" },
+  { id: "Watch", label: "Watch", name: "Watch" },
+  { id: "Jesus", label: "Jesus", name: "Know Jesus" },
+  { id: "Give", label: "Give", name: "Give" },
+  { id: "Connect", label: "Connect", name: "Connect" },
 ];
+function TabIcon({ id }: { id: Tab }) {
+  if (id === "Home") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (id === "Watch") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="6" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M10 9.5v5l4.5-2.5-4.5-2.5z" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (id === "Jesus") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v18M7 8h10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (id === "Give") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 4.6-7 9-7 9z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="9" cy="9" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16" cy="10" r="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M4.5 18.5c.6-2.2 2.4-3.3 4.5-3.3s3.9 1.1 4.5 3.3M13.5 15.6c1.2-.5 2.5-.6 3.6-.2 1.5.5 2.4 1.6 2.8 3.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 const HEADINGS: Record<View, string> = {
   Home: "Home",
   Watch: "Watch",
@@ -120,56 +182,66 @@ export function MemberTabs({
     window.scrollTo({ top: 0 });
   };
   return (
-    <main className="member">
-      <h1>{HEADINGS[view]}</h1>
-      {notice ? <p role="status">{notice}</p> : null}
-      {view === "Home" ? (
-        <Home
-          church={church}
-          signedIn={member !== null}
-          onNotice={setNotice}
-          onGo={go}
-          onWatch={(id) => {
-            setVideoId(id);
-            go("Watch");
-          }}
-        />
-      ) : null}
-      {view === "Watch" ? (
-        <Watch church={church} selected={videoId} onSelect={setVideoId} onNotice={setNotice} />
-      ) : null}
-      {view === "Jesus" ? (
-        <KnowJesusView church={church} signedIn={member !== null} onNotice={setNotice} />
-      ) : null}
-      {view === "Give" ? <Give church={church} signedIn={member !== null} onNotice={setNotice} /> : null}
-      {view === "Visit" ? (
-        <PlanVisit church={church} signedIn={member !== null} onNotice={setNotice} />
-      ) : null}
-      {view === "Connect" ? (
-        member ? (
-          <Connect church={church} member={member} onNotice={setNotice} />
-        ) : (
-          <>
-            <Gatherings church={church} member={null} onNotice={setNotice} />
-            <Grow growth={church.growth} signedIn={false} onNotice={setNotice} />
-            <SignIn error={authError} onGo={go} />
-          </>
-        )
-      ) : null}
+    <div className="phone">
+      <main className="member">
+        <h1 className={view === "Home" ? "member-logo-title" : "member-page-title"}>
+          {view === "Home" ? (
+            <Image src="/brand/logo.svg" alt="Home" width={164} height={44} priority />
+          ) : (
+            HEADINGS[view]
+          )}
+        </h1>
+        {notice ? <p role="status">{notice}</p> : null}
+        {view === "Home" ? (
+          <Home
+            church={church}
+            signedIn={member !== null}
+            onNotice={setNotice}
+            onGo={go}
+            onWatch={(id) => {
+              setVideoId(id);
+              go("Watch");
+            }}
+          />
+        ) : null}
+        {view === "Watch" ? (
+          <Watch church={church} selected={videoId} onSelect={setVideoId} onNotice={setNotice} />
+        ) : null}
+        {view === "Jesus" ? (
+          <KnowJesusView church={church} signedIn={member !== null} onNotice={setNotice} />
+        ) : null}
+        {view === "Give" ? <Give church={church} signedIn={member !== null} onNotice={setNotice} /> : null}
+        {view === "Visit" ? (
+          <PlanVisit church={church} signedIn={member !== null} onNotice={setNotice} />
+        ) : null}
+        {view === "Connect" ? (
+          member ? (
+            <Connect church={church} member={member} onNotice={setNotice} />
+          ) : (
+            <>
+              <Gatherings church={church} member={null} onNotice={setNotice} />
+              <Grow growth={church.growth} signedIn={false} onNotice={setNotice} />
+              <SignIn error={authError} onGo={go} />
+            </>
+          )
+        ) : null}
+      </main>
       <nav className="member-tabs" aria-label="Member sections" role="tablist">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             role="tab"
+            aria-label={tab.name}
             aria-selected={view === tab.id}
             onClick={() => go(tab.id)}
           >
-            {tab.label}
+            <TabIcon id={tab.id} />
+            <span>{tab.label}</span>
           </button>
         ))}
       </nav>
-    </main>
+    </div>
   );
 }
 
@@ -371,7 +443,7 @@ function Home({
       <section className="member-hero">
         <Image src="/photos/hero.jpg" alt="" width={1400} height={816} priority />
         <div>
-          <p>{church.churchName}</p>
+          <p>{church.greeting}</p>
           <h2>Sundays at 10:30 a.m.</h2>
           <p>{church.visit.arrival}</p>
         </div>
@@ -386,7 +458,18 @@ function Home({
       </div>
       {latest ? (
         <button type="button" className="card video-card featured" onClick={() => onWatch(latest.id)}>
-          {latest.thumbnail ? <Image src={latest.thumbnail} alt="" width={480} height={360} /> : null}
+          <svg width="0" height="0" aria-hidden="true" className="sermon-filter">
+            <filter id="sermon-contrast" colorInterpolationFilters="sRGB">
+              <feComponentTransfer>
+                <feFuncR type="linear" slope="3.2" intercept="-2" />
+                <feFuncG type="linear" slope="3.2" intercept="-2" />
+                <feFuncB type="linear" slope="3.2" intercept="-2" />
+              </feComponentTransfer>
+            </filter>
+          </svg>
+          {latest.thumbnail ? (
+            <Image src={latest.thumbnail} alt="" width={640} height={360} className="sermon-art" />
+          ) : null}
           <span className="muted">Latest message · {formatDate(latest.published)}</span>
           <strong>{latest.title}</strong>
         </button>
@@ -399,6 +482,13 @@ function Home({
       </article>
       <InviteCard church={church} onNotice={onNotice} />
       <DailyWord church={church} signedIn={signedIn} onNotice={onNotice} />
+      <FollowAlong links={church.social} />
+      <Link className="card coffee-card" href="/coffee">
+        <Image src="/photos/revival.jpg" alt="" width={900} height={600} />
+        <strong>Revival Coffee</strong>
+        <span>Menu, hours, and directions. The shop is in our building.</span>
+        <span className="button">See menu</span>
+      </Link>
       <button type="button" className="card photo-card" onClick={() => onGo("Jesus")}>
         <Image src="/photos/about.jpg" alt="" width={900} height={600} />
         <strong>Know Jesus</strong>
@@ -516,9 +606,9 @@ function Watch({
 const DECISIONS: { kind: FollowUpKind; label: string; thanks: string }[] = [
   {
     kind: "salvation",
-    label: "I decided to follow Jesus",
+    label: "I said yes to Jesus",
     thanks:
-      "This is the best decision you'll ever make. A pastor will reach out, and your 7-day journey starts below.",
+      "This is the best decision you'll ever make. A pastor will reach out, and your 30-day journey starts below.",
   },
   {
     kind: "baptism",
@@ -692,14 +782,14 @@ function KnowJesusView({
         <p>{church.gospel.growthTrack}</p>
       </article>
       <section>
-        <h2>Your first 7 days with Jesus</h2>
+        <h2>Your first 30 days with Jesus</h2>
         {journey ? null : (
           <button type="button" className="text-button" onClick={() => setJourney(true)}>
-            Show the 7-day journey
+            Show the 30-day journey
           </button>
         )}
         {journey
-          ? church.journey.map((day) => (
+          ? (church.journeyMonth.length > 0 ? church.journeyMonth : church.journey).map((day) => (
               <article className="card verse" key={day.day}>
                 <p className="muted">
                   Day {day.day} · {day.title}
@@ -804,6 +894,7 @@ function PlanVisit({
         <h2>Kids</h2>
         <p>{visit.kids}</p>
       </article>
+      <FollowAlong links={church.social} />
       {coming ? (
         <FollowUpForm
           kind="visit"
@@ -954,6 +1045,42 @@ function Gatherings({
   );
 }
 
+function MyFive({ onNotice }: { onNotice: Notify }) {
+  const act = useAct(onNotice);
+  const [names, setNames] = useState(["", "", "", "", ""]);
+  return (
+    <section>
+      <h2>My 5</h2>
+      <p>Up to five people you are praying for and inviting. Only you can see this list.</p>
+      {names.map((name, index) => (
+        <input
+          key={index}
+          value={name}
+          aria-label={`Person ${index + 1}`}
+          onChange={(event) => {
+            const next = [...names];
+            next[index] = event.target.value;
+            setNames(next);
+          }}
+        />
+      ))}
+      <button
+        type="button"
+        className="button"
+        onClick={() =>
+          void act(
+            "/api/my-five",
+            { names: names.map((name) => name.trim()).filter(Boolean) },
+            "Saved. Only you can see this.",
+          )
+        }
+      >
+        Save my list
+      </button>
+    </section>
+  );
+}
+
 function Connect({ church, member, onNotice }: { church: ChurchView; member: MemberView; onNotice: Notify }) {
   const act = useAct(onNotice);
   const [serve, setServe] = useState("");
@@ -963,6 +1090,8 @@ function Connect({ church, member, onNotice }: { church: ChurchView; member: Mem
   const joined = church.groups.filter((group) => group.joined);
   return (
     <>
+      <FollowAlong links={church.social} />
+      <MyFive onNotice={onNotice} />
       <section>
         <h2>Next steps</h2>
         {member.pathway.map((step) => (

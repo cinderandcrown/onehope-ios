@@ -23,11 +23,13 @@ struct HomeReply: Decodable {
     let visit: VisitInfo
     let giving: GivingInfo
     let invite: InviteInfo
+    let social: [SocialLink]?
 }
 
 struct KnowJesusReply: Decodable {
     let gospel: GospelInfo
     let journey: [JourneyDay]
+    let journeyMonth: [JourneyDay]?
 }
 
 struct DailyWordReply: Decodable {
@@ -75,6 +77,8 @@ struct PrayersReply: Decodable {
         let sample: Bool
         let approved: Bool
         let mine: Bool
+        let prayedCount: Int?
+        let prayed: Bool?
     }
 
     let prayers: [Prayer]

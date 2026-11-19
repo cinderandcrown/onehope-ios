@@ -53,18 +53,31 @@ import {
   transitionExpense,
   zebraLabel,
 } from "./domain";
+import { coffeeGuide } from "./coffee";
 import {
   DEFAULT_PATHWAY,
   FOLLOW_UP_LABELS,
   FOLLOW_UP_PATHWAY,
   GOSPEL,
+  JOURNEY_MONTH,
   NEW_BELIEVER_JOURNEY,
   type FollowUpKind,
   type FollowUpStatus,
   currentStreak,
   dailyReading,
+  greeting,
   nextStreak,
+  streakEncouragement,
 } from "./faith";
+import { inviteUrl } from "./public-url";
+import { SITE_SOCIAL, type SocialLink, cleanSocialLinks } from "./social";
+import {
+  createSquareOrder,
+  createSquarePayment,
+  listSquareVariations,
+  squareSettings,
+  verifySquareSignature,
+} from "./square";
 import { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "./sample-accounts";
 import { decodeBase32, totpCode, totpMatches } from "./totp";
 
@@ -175,6 +188,48 @@ type PrayerRow = {
   serve?: string;
   /** "Please contact me" rather than "Just pray for me". Added in build 6. */
   contactRequested?: boolean;
+  /** Sent from the public neighborhood page. Still waits for staff. */
+  neighborhood?: boolean;
+};
+
+type AmenRow = { prayerId: string; personId: string };
+type TestimonyRow = {
+  id: string;
+  authorId: string;
+  displayName: string;
+  body: string;
+  approved: boolean;
+  consent: boolean;
+  sample: boolean;
+  createdAt: number;
+};
+type MilestoneRow = {
+  id: string;
+  kind: "baptism" | "salvation";
+  title: string;
+  detail: string;
+  consent: boolean;
+  published: boolean;
+  sample: boolean;
+  createdAt: number;
+};
+type OutreachRow = {
+  id: string;
+  title: string;
+  detail: string;
+  location: string;
+  start: number;
+  end: number;
+  sample: boolean;
+};
+type CoffeeOrderRow = {
+  id: string;
+  personId: string | null;
+  squareOrderId: string;
+  status: string;
+  totalCents: number;
+  idempotencyKey: string;
+  createdAt: number;
 };
 
 type StreakRow = { personId: string; lastDay: string; count: number };
@@ -243,6 +298,15 @@ export type StoreDocument = {
   followUps?: FollowUpRow[];
   streaks?: StreakRow[];
   throttle?: ThrottleRow[];
+  /** Added in build 8. Older snapshots load the defaults. */
+  amens?: AmenRow[];
+  myFive?: { personId: string; names: string[] }[];
+  testimonies?: TestimonyRow[];
+  milestones?: MilestoneRow[];
+  outreach?: OutreachRow[];
+  outreachRsvps?: { id: string; outreachId: string; personId: string }[];
+  coffeeOrders?: CoffeeOrderRow[];
+  social?: SocialLink[];
 };
 
 export type StoreOptions = {
@@ -357,6 +421,14 @@ export class ChurchStore {
   private readonly followUps: FollowUpRow[] = [];
   private readonly streaks = new Map<string, StreakRow>();
   private readonly throttle = new Map<string, number[]>();
+  private readonly amens: AmenRow[] = [];
+  private readonly myFive = new Map<string, string[]>();
+  private readonly testimonies: TestimonyRow[] = [];
+  private readonly milestones: MilestoneRow[] = [];
+  private readonly outreach: OutreachRow[] = [];
+  private readonly outreachRsvps: { id: string; outreachId: string; personId: string }[] = [];
+  private readonly coffeeOrders: CoffeeOrderRow[] = [];
+  private social: SocialLink[] = SITE_SOCIAL.map((link) => ({ ...link }));
 
   static demo(env: NodeJS.ProcessEnv = process.env): ChurchStore {
     return new ChurchStore(loadConfig(env), { fixture: env.ONEHOPE_SAMPLE_DATA === "true" });
@@ -403,6 +475,11 @@ export class ChurchStore {
     }
     if (options.fixture !== false) this.ensureDemoSessions();
     this.applyBootPassword();
+  }
+
+  /** Church clock, so pages don't call Date.now themselves. */
+  clock(): number {
+    return this.now();
   }
 
   status(version: string) {
@@ -627,7 +704,8 @@ export class ChurchStore {
         ...GIVING_WAYS,
         seasonal: this.now() < GIVING_WAYS.seasonal.until ? GIVING_WAYS.seasonal : null,
       },
-      invite: { ...INVITE },
+      invite: { ...INVITE, url: inviteUrl(this.config.publicBaseUrl) },
+      social: this.socialLinks(),
       countdown: { preService: when.preService.toISOString(), service: when.service.toISOString() },
       announcements: this.announcements.map((item) => ({ ...item })),
       events: this.upcomingEvents().map((event) => this.eventView(event)),
@@ -968,24 +1046,34 @@ export class ChurchStore {
         if (prayer.visibility === "public" && prayer.approved) return true;
         if (!actor) return false;
         if (prayer.authorId === actor.personId) return true;
+        if (prayer.visibility === "public" && !prayer.approved && this.unlocked(actor, "view_care_notes"))
+          return true;
         return prayer.visibility === "private" && this.unlocked(actor, "view_care_notes");
       })
       .map((prayer) => {
         const own = actor?.personId === prayer.authorId;
         const staffReader = actor ? this.unlocked(actor, "view_care_notes") : false;
         const steppedUp = actor !== null && actor.stepUpUntil >= this.now();
-        const showBody = prayer.visibility === "public" || ((own || staffReader) && steppedUp);
-        if (prayer.visibility === "private" && showBody && actor)
-          this.record(actor, "read", "prayer", prayer.id, 3);
+        const showBody =
+          (prayer.visibility === "public" && (prayer.approved || own || staffReader)) ||
+          ((own || staffReader) && steppedUp);
+        if (actor && !own && showBody && (prayer.visibility === "private" || !prayer.approved))
+          this.record(actor, "read", "prayer", prayer.id, prayer.visibility === "private" ? 3 : 1);
+        const onWall = prayer.visibility === "public" && prayer.approved;
         return {
           id: prayer.id,
           visibility: prayer.visibility,
           approved: prayer.approved,
           sample: prayer.sample,
           mine: own,
+          neighborhood: prayer.neighborhood === true,
           body: showBody ? prayer.body : "",
           serve: showBody && (own || staffReader) ? (prayer.serve ?? "") : "",
           contactRequested: (own || staffReader) && prayer.contactRequested === true,
+          prayedCount: onWall ? this.amens.filter((amen) => amen.prayerId === prayer.id).length : 0,
+          prayed: actor
+            ? this.amens.some((amen) => amen.prayerId === prayer.id && amen.personId === actor.personId)
+            : false,
         };
       });
   }
@@ -1033,7 +1121,578 @@ export class ChurchStore {
     const prayer = this.prayers.find((item) => item.id === prayerId);
     if (!prayer) throw new AccessError("not_found", "That prayer isn't here.");
     prayer.approved = approved;
+    this.record(actor, "write", "prayer", prayer.id, prayer.visibility === "private" ? 3 : 1);
     return { id: prayer.id, approved: prayer.approved };
+  }
+
+  markPrayed(token: string, prayerId: string) {
+    const actor = this.actor(token);
+    const prayer = this.prayers.find((item) => item.id === prayerId);
+    if (!prayer || prayer.visibility !== "public" || !prayer.approved) {
+      throw new AccessError("not_found", "That prayer isn't on the wall.");
+    }
+    if (!this.amens.some((amen) => amen.prayerId === prayerId && amen.personId === actor.personId)) {
+      this.amens.push({ prayerId, personId: actor.personId });
+    }
+    return {
+      id: prayerId,
+      prayed: true as const,
+      prayedCount: this.amens.filter((amen) => amen.prayerId === prayerId).length,
+    };
+  }
+
+  submitNeighborhoodPrayer(body: string, client: string) {
+    const text = body.trim();
+    if (!text) throw new AccessError("invalid", "Tell us what to pray for.");
+    const now = this.now();
+    this.pruneThrottle(now);
+    this.hit(`client:${this.clientKey(client)}`, GUEST_LIMIT_PER_CLIENT, now);
+    this.hit("guests", GUEST_LIMIT_TOTAL, now);
+    const prayer: PrayerRow = {
+      id: newId("prayer"),
+      authorId: "neighborhood",
+      body: text,
+      visibility: "public",
+      approved: false,
+      sample: false,
+      serve: "Prayer for the neighborhood",
+      neighborhood: true,
+    };
+    this.prayers.push(prayer);
+    return { id: prayer.id, approved: false as const };
+  }
+
+  socialLinks() {
+    return this.social.map((link) => ({ ...link }));
+  }
+
+  setSocialLinks(token: string, links: SocialLink[]) {
+    const actor = this.requireEditor(token);
+    let cleaned: SocialLink[];
+    try {
+      cleaned = cleanSocialLinks(links);
+    } catch {
+      throw new AccessError("invalid", "Check the link name and use an https address.");
+    }
+    this.social = cleaned;
+    this.record(actor, "write", "social", "links", 0);
+    return this.socialLinks();
+  }
+
+  myFiveNames(token: string) {
+    const actor = this.actor(token);
+    return { names: [...(this.myFive.get(actor.personId) ?? [])] };
+  }
+
+  saveMyFive(token: string, names: string[]) {
+    const actor = this.actor(token);
+    if (names.length > 5) throw new AccessError("invalid", "Keep the list to five people.");
+    const cleaned = names.map((name) => name.trim()).filter((name) => name.length > 0);
+    if (cleaned.some((name) => name.length > 80)) throw new AccessError("invalid", "Use a shorter name.");
+    this.myFive.set(actor.personId, cleaned);
+    this.record(actor, "write", "my_five", actor.personId, 2);
+    return { names: cleaned };
+  }
+
+  listTestimonies(token: string | null) {
+    const actor = token ? this.optionalActor(token) : null;
+    const staff = actor ? this.unlocked(actor, "view_care_notes") : false;
+    return this.testimonies
+      .filter((row) => (row.approved && row.consent) || (actor && row.authorId === actor.personId) || staff)
+      .map((row) => ({
+        id: row.id,
+        displayName:
+          row.approved && row.consent
+            ? row.displayName
+            : staff || actor?.personId === row.authorId
+              ? row.displayName
+              : "",
+        body:
+          row.approved && row.consent ? row.body : staff || actor?.personId === row.authorId ? row.body : "",
+        approved: row.approved,
+        mine: actor?.personId === row.authorId,
+      }));
+  }
+
+  submitTestimony(token: string, input: { displayName: string; body: string; consent: boolean }) {
+    const actor = this.actor(token);
+    if (!input.consent) throw new AccessError("invalid", "We only share a testimony with your yes.");
+    const body = input.body.trim();
+    const displayName = input.displayName.trim();
+    if (!body || !displayName) throw new AccessError("invalid", "Add your name and what you want to share.");
+    if (body.length > 2000 || displayName.length > 80)
+      throw new AccessError("invalid", "Please shorten that.");
+    const row: TestimonyRow = {
+      id: newId("testimony"),
+      authorId: actor.personId,
+      displayName,
+      body,
+      approved: false,
+      consent: true,
+      sample: false,
+      createdAt: this.now(),
+    };
+    this.testimonies.push(row);
+    return { id: row.id, approved: false as const };
+  }
+
+  moderateTestimony(token: string, id: string, approved: boolean) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    const row = this.testimonies.find((item) => item.id === id);
+    if (!row) throw new AccessError("not_found", "That testimony isn't here.");
+    if (approved && !row.consent) throw new AccessError("invalid", "They have not agreed to share this.");
+    row.approved = approved;
+    this.record(actor, "write", "testimony", row.id, 2);
+    return { id: row.id, approved: row.approved };
+  }
+
+  listMilestones() {
+    return this.milestones
+      .filter((row) => row.published && row.consent)
+      .map((row) => ({ id: row.id, kind: row.kind, title: row.title, detail: row.detail }));
+  }
+
+  publishMilestone(
+    token: string,
+    input: { kind: "baptism" | "salvation"; title: string; detail: string; consent: boolean },
+  ) {
+    const actor = this.requireEditor(token);
+    if (!input.consent) throw new AccessError("invalid", "Publish a milestone only with the person's yes.");
+    const title = input.title.trim();
+    const detail = input.detail.trim();
+    if (!title) throw new AccessError("invalid", "Add a short title.");
+    const row: MilestoneRow = {
+      id: newId("milestone"),
+      kind: input.kind,
+      title,
+      detail,
+      consent: true,
+      published: true,
+      sample: false,
+      createdAt: this.now(),
+    };
+    this.milestones.push(row);
+    this.record(actor, "write", "milestone", row.id, 2);
+    return { id: row.id, title: row.title };
+  }
+
+  listOutreach() {
+    return this.outreach
+      .map((row) => ({
+        ...row,
+        signedUp: 0,
+      }))
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        detail: row.detail,
+        location: row.location,
+        start: row.start,
+        end: row.end,
+        sample: row.sample,
+        signedUp: this.outreachRsvps.filter((rsvp) => rsvp.outreachId === row.id).length,
+      }));
+  }
+
+  createOutreach(
+    token: string,
+    input: { title: string; detail: string; location: string; start: number; end: number },
+  ) {
+    const actor = this.requireEditor(token);
+    const title = input.title.trim();
+    const location = input.location.trim();
+    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
+    const row: OutreachRow = {
+      id: newId("outreach"),
+      title,
+      detail: input.detail.trim(),
+      location,
+      start: input.start,
+      end: input.end,
+      sample: false,
+    };
+    this.outreach.push(row);
+    this.record(actor, "write", "outreach", row.id, 0);
+    return { id: row.id, title: row.title };
+  }
+
+  undoOutreach(token: string, id: string) {
+    const actor = this.requireEditor(token);
+    const index = this.outreach.findIndex((row) => row.id === id);
+    if (index < 0) throw new AccessError("not_found", "That serve opportunity isn't here.");
+    this.outreach.splice(index, 1);
+    for (let i = this.outreachRsvps.length - 1; i >= 0; i -= 1) {
+      if (this.outreachRsvps[i]?.outreachId === id) this.outreachRsvps.splice(i, 1);
+    }
+    this.record(actor, "write", "outreach", id, 0);
+    return { removed: true as const };
+  }
+
+  rsvpOutreach(token: string, id: string) {
+    const actor = this.actor(token);
+    const row = this.outreach.find((item) => item.id === id);
+    if (!row) throw new AccessError("not_found", "That serve opportunity isn't here.");
+    if (!this.outreachRsvps.some((rsvp) => rsvp.outreachId === id && rsvp.personId === actor.personId)) {
+      this.outreachRsvps.push({ id: newId("rsvp"), outreachId: id, personId: actor.personId });
+    }
+    return { id, signedUp: true as const };
+  }
+
+  community(token: string | null) {
+    const mine = token ? this.optionalActor(token) : null;
+    return {
+      outreach: this.listOutreach().map((row) => ({
+        ...row,
+        mine: mine
+          ? this.outreachRsvps.some((rsvp) => rsvp.outreachId === row.id && rsvp.personId === mine.personId)
+          : false,
+      })),
+      testimonies: this.listTestimonies(token).filter((row) => row.approved && row.body.length > 0),
+      milestones: this.listMilestones(),
+      invitePath: "/invite",
+    };
+  }
+
+  coffeePublic() {
+    const settings = squareSettings(this.config);
+    return coffeeGuide({
+      live: settings.orderingLive,
+      applicationId: settings.orderingLive ? settings.applicationId : "",
+      locationId: settings.orderingLive ? settings.locationId : "",
+      environment: settings.environment,
+    });
+  }
+
+  async coffeeCatalog() {
+    const settings = squareSettings(this.config);
+    if (!settings.orderingLive)
+      return {
+        orderingLive: false as const,
+        items: [] as {
+          catalogObjectId: string;
+          name: string;
+          variation: string;
+          priceCents: number | null;
+        }[],
+      };
+    if (!this.fetchImpl) throw new AccessError("invalid", "Order ahead isn't ready yet.");
+    try {
+      const items = await listSquareVariations(this.fetchImpl, settings);
+      return { orderingLive: true as const, items };
+    } catch {
+      throw new AccessError(
+        "invalid",
+        "The shop's menu couldn't be loaded from Square. Nothing was charged.",
+      );
+    }
+  }
+
+  async placeCoffeeOrder(
+    token: string | null,
+    input: {
+      lines: { catalogObjectId: string; quantity: number }[];
+      sourceId: string;
+      idempotencyKey: string;
+      pickupName: string;
+    },
+  ) {
+    const settings = squareSettings(this.config);
+    if (!settings.orderingLive) throw new AccessError("invalid", "Order ahead coming soon.");
+    if (!input.sourceId.startsWith("cnon:")) {
+      throw new AccessError("invalid", "Card numbers stay with Square. Use the Square checkout.");
+    }
+    if (!input.idempotencyKey || input.lines.length === 0)
+      throw new AccessError("invalid", "Add at least one item.");
+    const existing = this.coffeeOrders.find((row) => row.idempotencyKey === input.idempotencyKey);
+    if (existing)
+      return { orderId: existing.squareOrderId, status: existing.status, totalCents: existing.totalCents };
+    if (!this.fetchImpl) throw new AccessError("invalid", "Order ahead isn't ready yet.");
+    const actor = token ? this.optionalActor(token) : null;
+    try {
+      const order = await createSquareOrder(this.fetchImpl, settings, {
+        idempotencyKey: `${input.idempotencyKey}-order`,
+        lines: input.lines,
+      });
+      const payment = await createSquarePayment(this.fetchImpl, settings, {
+        sourceId: input.sourceId,
+        orderId: order.orderId,
+        amountCents: order.totalCents,
+        idempotencyKey: `${input.idempotencyKey}-pay`,
+      });
+      const row: CoffeeOrderRow = {
+        id: newId("coffee"),
+        personId: actor?.personId ?? null,
+        squareOrderId: order.orderId,
+        status: payment.status,
+        totalCents: order.totalCents,
+        idempotencyKey: input.idempotencyKey,
+        createdAt: this.now(),
+      };
+      this.coffeeOrders.push(row);
+      return {
+        orderId: row.squareOrderId,
+        status: row.status,
+        totalCents: row.totalCents,
+        pickupName: input.pickupName.trim(),
+      };
+    } catch {
+      throw new AccessError("invalid", "Square couldn't take that order. Nothing was charged.");
+    }
+  }
+
+  recordSquareWebhook(rawBody: string, signature: string) {
+    const settings = squareSettings(this.config);
+    if (!settings.webhookSignatureKey || !settings.webhookNotificationUrl) {
+      throw new AccessError("forbidden", "Square webhooks are not set up.");
+    }
+    if (
+      !verifySquareSignature(
+        settings.webhookSignatureKey,
+        settings.webhookNotificationUrl,
+        rawBody,
+        signature,
+      )
+    ) {
+      throw new AccessError("forbidden", "That Square signature doesn't match.");
+    }
+    let payload: { data?: { object?: { payment?: { order_id?: string; status?: string } } } } = {};
+    try {
+      payload = JSON.parse(rawBody) as typeof payload;
+    } catch {
+      throw new AccessError("invalid", "The webhook body wasn't JSON.");
+    }
+    const orderId = payload.data?.object?.payment?.order_id;
+    const status = payload.data?.object?.payment?.status;
+    if (orderId && status) {
+      const row = this.coffeeOrders.find((item) => item.squareOrderId === orderId);
+      if (row) row.status = status;
+    }
+    return { received: true as const };
+  }
+
+  staffHome(token: string) {
+    const actor = this.actor(token);
+    if (!isStaff(actor.role)) throw new AccessError("forbidden", "This desk is for church staff.");
+    const cards: {
+      id: string;
+      title: string;
+      count: number | null;
+      detail: string;
+      help: string;
+      href: string;
+    }[] = [];
+    if (this.unlocked(actor, "manage_checkin")) {
+      const here = [...this.children.values()].filter(
+        (child) => textField(this.readJson(child.ciphertext), "code") !== "",
+      ).length;
+      cards.push({
+        id: "checkins",
+        title: "Kids here today",
+        count: here,
+        detail: here === 0 ? "No children are checked in yet." : "Two adults stay at the door for pickup.",
+        help: "How do I check a child in? Open Check-in, find the child, and keep the pickup code for the family. The app does not text them.",
+        href: "/checkin",
+      });
+    }
+    if (this.unlocked(actor, "view_care_notes")) {
+      const waiting = this.followUps.filter((row) => row.status === "new");
+      const yes = waiting.filter((row) => row.kind === "salvation").length;
+      cards.push({
+        id: "followups",
+        title: "People to talk with",
+        count: waiting.length,
+        detail:
+          yes > 0
+            ? `${yes} said yes to Jesus. Reach out yourself. Nothing is sent from here.`
+            : "New next steps. Nothing is emailed from here.",
+        help: "How do I follow up? Open Care, read the name, and mark Contacted after you talk. The app never texts or emails them for you.",
+        href: "/care",
+      });
+      const pending = this.prayers.filter((prayer) => prayer.visibility === "public" && !prayer.approved);
+      cards.push({
+        id: "prayers",
+        title: "Prayers to share",
+        count: pending.length,
+        detail:
+          pending.length === 0
+            ? "No prayer requests are waiting."
+            : "Read each one, then share it with the church or keep it off the wall.",
+        help: "How do I share a prayer? Open Care. Share puts it on the prayer wall. Keep private leaves it off the wall.",
+        href: "/care",
+      });
+    }
+    if (this.unlocked(actor, "manage_serving")) {
+      const needed = this.schedule.filter((item) => item.status === "pending");
+      cards.push({
+        id: "volunteers",
+        title: "Help needed Sunday",
+        count: needed.length,
+        detail: needed.length === 0 ? "No open spots." : "These people have not answered yet.",
+        help: "How do I fill a spot? Open Serving, pick someone who already helps, and add them. They can say yes in the app. You can undo it while it is still waiting.",
+        href: "/serving",
+      });
+    }
+    if (actor.role === "pastor" || actor.role === "master_admin" || actor.role === "team_leader") {
+      const upcoming = this.upcomingEvents();
+      cards.push({
+        id: "events",
+        title: "What's coming up",
+        count: upcoming.length,
+        detail: upcoming[0] ? `Next: ${upcoming[0].title}` : "Add a gathering so people can see it.",
+        help: "How do I post an event? Open Events, type a name and a place, and tap Add. People see it in the app.",
+        href: "/events",
+      });
+    }
+    if (actor.role === "finance" || actor.role === "pastor" || actor.role === "master_admin") {
+      if (!this.unlocked(actor, "view_all_giving")) {
+        cards.push({
+          id: "giving",
+          title: "Giving",
+          count: null,
+          detail: "Confirm it's you to see giving. Card numbers are never stored here.",
+          help: "How do I see giving? Open Giving and enter your code again. Nothing in this build is charged.",
+          href: "/giving",
+        });
+      } else {
+        const gifts = [...this.gifts.values()];
+        const charged = gifts.some((gift) => gift.charged);
+        cards.push({
+          id: "giving",
+          title: "Giving",
+          count: gifts.length,
+          detail: charged ? "Some gifts are marked charged." : "Nothing in this build is charged.",
+          help: "How do I read giving? Open Giving. Live card charges stay off until the church switches them on.",
+          href: "/giving",
+        });
+      }
+    }
+    return {
+      greeting: greeting(this.now(), this.requirePerson(actor.personId).displayName),
+      role: actor.role,
+      cards: cards.slice(0, 6),
+    };
+  }
+
+  staffPeople(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "people", "list", 1);
+    return [...this.people.values()]
+      .filter((person) => !person.deleted)
+      .map((person) => ({
+        id: person.id,
+        displayName: person.displayName,
+        email: person.email,
+        phone: person.phone,
+        role: person.role,
+      }));
+  }
+
+  addPerson(token: string, input: { displayName: string; email: string; phone?: string }) {
+    const actor = this.requireEditor(token);
+    const email = input.email.trim().toLowerCase();
+    const displayName = input.displayName.trim();
+    if (!email || !displayName) throw new AccessError("invalid", "Name and email are required.");
+    if (isReservedName(displayName)) throw new AccessError("invalid", "Choose a different name.");
+    if (this.byEmail(email)) throw new AccessError("invalid", "That email is already here.");
+    const person = this.makePerson({
+      id: newId("person"),
+      displayName,
+      email,
+      role: "member",
+      householdId: newId("hh"),
+      sample: false,
+      password: false,
+      totp: false,
+      listed: false,
+    });
+    if (input.phone?.trim()) person.phone = input.phone.trim();
+    this.people.set(person.id, person);
+    this.ensurePathway(person.id);
+    const inviteToken = newId("invite");
+    this.invites.set(hashInvite(inviteToken), { email, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
+    this.record(actor, "write", "person", person.id, 1);
+    return {
+      id: person.id,
+      displayName,
+      email,
+      inviteToken,
+      note: "Read this code to them in person. Nothing was emailed.",
+    };
+  }
+
+  editPerson(token: string, personId: string, input: { displayName?: string; phone?: string }) {
+    const actor = this.requireEditor(token);
+    const person = this.requirePerson(personId);
+    if (person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    if (input.displayName?.trim()) {
+      if (isReservedName(input.displayName)) throw new AccessError("invalid", "Choose a different name.");
+      person.displayName = input.displayName.trim();
+    }
+    if (typeof input.phone === "string") person.phone = input.phone.trim();
+    this.record(actor, "write", "person", person.id, 1);
+    return { id: person.id, displayName: person.displayName, phone: person.phone };
+  }
+
+  undoAddPerson(token: string, personId: string) {
+    const actor = this.requireEditor(token);
+    const person = this.requirePerson(personId);
+    if (person.passwordHash || person.sample) {
+      throw new AccessError("invalid", "This person already has a password, so this can't be undone here.");
+    }
+    this.eraseOwnedData(person.id, person.householdId);
+    person.deleted = true;
+    person.email = "";
+    person.phone = "";
+    person.displayName = "Former member";
+    this.record(actor, "write", "person_delete", person.id, 2);
+    return { removed: true as const };
+  }
+
+  assignServing(token: string, input: { personId: string; position: string }) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_serving", this.now());
+    const person = this.requirePerson(input.personId);
+    const position = input.position.trim();
+    if (!position) throw new AccessError("invalid", "Name the spot, like Door or Kids.");
+    const row = {
+      id: newId("serve"),
+      personId: person.id,
+      position,
+      status: "pending" as const,
+      sample: false,
+    };
+    this.schedule.push(row);
+    this.record(actor, "write", "serving", row.id, 1);
+    return row;
+  }
+
+  undoServing(token: string, id: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_serving", this.now());
+    const index = this.schedule.findIndex((item) => item.id === id);
+    const item = this.schedule[index];
+    if (!item) throw new AccessError("not_found", "That spot isn't here.");
+    if (item.status !== "pending")
+      throw new AccessError("invalid", "They already answered. Talk with them before changing it.");
+    this.schedule.splice(index, 1);
+    this.record(actor, "write", "serving", id, 1);
+    return { removed: true as const };
+  }
+
+  groupRoster(token: string, groupId: string) {
+    const actor = this.requireEditor(token);
+    const group = this.groups.find((item) => item.id === groupId);
+    if (!group) throw new AccessError("not_found", "That group isn't here.");
+    this.record(actor, "read", "group", group.id, 1);
+    return {
+      id: group.id,
+      name: group.name,
+      people: group.memberIds
+        .map((id) => this.people.get(id))
+        .filter((person): person is NonNullable<typeof person> => Boolean(person && !person.deleted))
+        .map((person) => ({ id: person.id, displayName: person.displayName })),
+    };
   }
 
   myPathway(token: string) {
@@ -1395,7 +2054,12 @@ export class ChurchStore {
   }
 
   knowJesus() {
-    return { gospel: GOSPEL, journey: NEW_BELIEVER_JOURNEY, journeyEditableBy: "pastors" as const };
+    return {
+      gospel: GOSPEL,
+      journey: NEW_BELIEVER_JOURNEY,
+      journeyMonth: JOURNEY_MONTH,
+      journeyEditableBy: "pastors" as const,
+    };
   }
 
   /** Today's reading. A member also gets their synced streak; a guest keeps theirs on the device. */
@@ -1403,7 +2067,7 @@ export class ChurchStore {
     const reading = dailyReading(this.now());
     const actor = this.optionalActor(token);
     const streak = actor ? currentStreak(this.streaks.get(actor.personId) ?? null, reading.day) : null;
-    return { reading, streak };
+    return { reading, streak, encouragement: streak === null ? null : streakEncouragement(streak) };
   }
 
   markDailyWordRead(token: string) {
@@ -2490,6 +3154,14 @@ export class ChurchStore {
       followUps: this.followUps.map((row) => ({ ...row })),
       streaks: [...this.streaks.values()].map((row) => ({ ...row })),
       throttle: [...this.throttle.entries()].map(([key, hits]) => ({ key, hits: [...hits] })),
+      amens: this.amens.map((row) => ({ ...row })),
+      myFive: [...this.myFive.entries()].map(([personId, names]) => ({ personId, names: [...names] })),
+      testimonies: this.testimonies.map((row) => ({ ...row })),
+      milestones: this.milestones.map((row) => ({ ...row })),
+      outreach: this.outreach.map((row) => ({ ...row })),
+      outreachRsvps: this.outreachRsvps.map((row) => ({ ...row })),
+      coffeeOrders: this.coffeeOrders.map((row) => ({ ...row })),
+      social: this.social.map((link) => ({ ...link })),
     };
   }
 
@@ -2545,6 +3217,17 @@ export class ChurchStore {
     for (const row of document.streaks ?? []) this.streaks.set(row.personId, row);
     this.throttle.clear();
     for (const row of document.throttle ?? []) this.throttle.set(row.key, row.hits);
+    this.amens.splice(0, this.amens.length, ...(document.amens ?? []));
+    this.myFive.clear();
+    for (const row of document.myFive ?? []) this.myFive.set(row.personId, [...row.names]);
+    this.testimonies.splice(0, this.testimonies.length, ...(document.testimonies ?? []));
+    this.milestones.splice(0, this.milestones.length, ...(document.milestones ?? []));
+    this.outreach.splice(0, this.outreach.length, ...(document.outreach ?? []));
+    this.outreachRsvps.splice(0, this.outreachRsvps.length, ...(document.outreachRsvps ?? []));
+    this.coffeeOrders.splice(0, this.coffeeOrders.length, ...(document.coffeeOrders ?? []));
+    this.social = document.social
+      ? document.social.map((link) => ({ ...link }))
+      : SITE_SOCIAL.map((link) => ({ ...link }));
     this.rekeyStoredSecrets();
     this.scrubFormerMembers();
     if (this.fixture) this.ensureDemoSessions();
@@ -2614,6 +3297,14 @@ export class ChurchStore {
       ...this.followUps.filter((row) => row.personId !== personId),
     );
     this.streaks.delete(personId);
+    this.myFive.delete(personId);
+    for (let i = this.amens.length - 1; i >= 0; i -= 1)
+      if (this.amens[i]?.personId === personId) this.amens.splice(i, 1);
+    for (let i = this.testimonies.length - 1; i >= 0; i -= 1)
+      if (this.testimonies[i]?.authorId === personId) this.testimonies.splice(i, 1);
+    for (let i = this.outreachRsvps.length - 1; i >= 0; i -= 1)
+      if (this.outreachRsvps[i]?.personId === personId) this.outreachRsvps.splice(i, 1);
+    for (const order of this.coffeeOrders) if (order.personId === personId) order.personId = null;
     this.checks.delete(personId);
     this.pathways.delete(personId);
     for (const group of this.groups) group.memberIds = group.memberIds.filter((id) => id !== personId);

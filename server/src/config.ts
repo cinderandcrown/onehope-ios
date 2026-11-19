@@ -1,5 +1,7 @@
 import { scryptSync } from "node:crypto";
 
+import { publicBaseUrl } from "./public-url";
+
 export type AppConfig = {
   env: "demo" | "production";
   masterAdminPrimaryName: string;
@@ -22,6 +24,14 @@ export type AppConfig = {
   twilioAccountSid: string;
   planningCenterClientId: string;
   planningCenterClientSecret: string;
+  publicBaseUrl: string;
+  coffeeOrderingLive: boolean;
+  squareAccessToken: string;
+  squareLocationId: string;
+  squareApplicationId: string;
+  squareEnvironment: string;
+  squareWebhookSignatureKey: string;
+  squareWebhookNotificationUrl: string;
 };
 
 /** Only for reading snapshots written before a configured key. New writes use FIELD_ENCRYPTION_KEY. */
@@ -69,5 +79,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     twilioAccountSid: env.TWILIO_ACCOUNT_SID || "",
     planningCenterClientId: env.PLANNING_CENTER_CLIENT_ID || "",
     planningCenterClientSecret: env.PLANNING_CENTER_CLIENT_SECRET || "",
+    publicBaseUrl: publicBaseUrl(env),
+    coffeeOrderingLive: env.COFFEE_ORDERING_LIVE === "true",
+    squareAccessToken: env.SQUARE_ACCESS_TOKEN || "",
+    squareLocationId: env.SQUARE_LOCATION_ID || "",
+    squareApplicationId: env.SQUARE_APPLICATION_ID || "",
+    squareEnvironment: env.SQUARE_ENVIRONMENT || "sandbox",
+    squareWebhookSignatureKey: env.SQUARE_WEBHOOK_SIGNATURE_KEY || "",
+    squareWebhookNotificationUrl: env.SQUARE_WEBHOOK_NOTIFICATION_URL || "",
   };
 }

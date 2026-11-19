@@ -25,6 +25,9 @@ public struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Wordmark()
+                    Text(DayGreeting.line(name: snapshot.signedIn ? snapshot.accountName : ""))
+                        .font(.hopeDisplay)
+                        .foregroundStyle(BrandColor.ink)
                     HeroPhoto("hero", title: "Welcome home", subtitle: snapshot.visit.serviceTime)
                     if !snapshot.offlineNote.isEmpty {
                         Text(snapshot.offlineNote).font(.footnote)
@@ -54,6 +57,15 @@ public struct HomeView: View {
                         .churchCard()
                     }
                     Text("Lead pastors \(snapshot.pastors.joined(separator: " and ")).").font(.footnote)
+                    FollowAlong(links: snapshot.social)
+                    ReminderToggle()
+                    NavigationLink {
+                        CoffeeView()
+                    } label: {
+                        Text("Revival Coffee").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("home-coffee")
                 }
                 .padding()
             }
@@ -118,6 +130,23 @@ public struct HomeView: View {
             }
         }
         .churchCard()
+    }
+}
+
+private struct ReminderToggle: View {
+    @AppStorage("onehope.reminder") private var enabled = false
+
+    var body: some View {
+        Toggle("Remind me at 7:30", isOn: $enabled)
+            .onChange(of: enabled) { _, value in
+                Task {
+                    let on = await DailyReminder.setEnabled(value)
+                    if value, !on {
+                        enabled = false
+                    }
+                }
+            }
+        Text("This stays on this phone. It is not a push from the church.").font(.footnote)
     }
 }
 

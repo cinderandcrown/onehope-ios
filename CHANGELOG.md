@@ -1,5 +1,22 @@
 # Changelog
 
+## Build 8 - 2026-11-19
+
+### Added
+
+- Today on Home: a greeting, the Daily Word, a prayer moment, this Sunday, Revival Coffee, and Follow along.
+- Follow along uses only the three links printed on weareonehope.com: Instagram, Facebook, and YouTube. Staff can edit them on the desk. Tapping one opens the phone's app when it is installed.
+- Revival Coffee: the menu, hours, and address from myrevivalcoffee.com. Weekend hours stay TBD. There is no phone number on their site, so the app offers directions and email. Order ahead stays off until `COFFEE_ORDERING_LIVE` and Square are set. Card numbers never come to our server.
+- A 30-day journey of KJV verses after someone says yes to Jesus, and a public invite page a neighbor can open.
+- A staff desk with plain cards: kids here today, people to talk with, prayers to share, help needed Sunday, what's coming up, and giving. Giving stays hidden until the person confirms it's them, and nothing is charged.
+- The app is ready for `app.weareonehope.com`. See DOMAIN_SETUP.md. Nothing was changed at the DNS host or in Vercel.
+- DESIGN.md records the website's colors and type.
+
+### Changed
+
+- The look follows the church website more closely: olive, terracotta, sky, and dove, with ink edges and the church's own photos.
+- The button that used to say "I decided to follow Jesus" now says "I said yes to Jesus."
+
 ## Build 7 - 2026-11-18
 
 ### Added

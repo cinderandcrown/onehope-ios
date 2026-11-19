@@ -8,6 +8,9 @@ export * from "./contracts";
 export * from "./domain";
 export * from "./faith";
 export * from "./church-copy";
+export * from "./public-url";
+export * from "./social";
+export * from "./coffee";
 export { createLogger, redact, noopReporter } from "./logger";
 export {
   SAMPLE_MEMBER_EMAIL,

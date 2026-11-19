@@ -1,6 +1,6 @@
 "use server";
 
-import { withStore } from "@onehope/server";
+import { publicBaseUrl, withStore } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -10,7 +10,7 @@ async function setMember(token: string) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: process.env.NODE_ENV === "production",
+    secure: publicBaseUrl().startsWith("https://"),
     maxAge: 60 * 60 * 12,
   });
 }

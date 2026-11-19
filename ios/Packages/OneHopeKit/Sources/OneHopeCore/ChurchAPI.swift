@@ -83,6 +83,7 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var dailyStreak: Int?
     /// Toolkit, Recovery, and the Support/Assistance form. Nil until the server sends them.
     public var growth: GrowthInfo?
+    public var social: [SocialLink]
     public var offlineNote: String
     public var churchName: String
     public var address: String
@@ -122,6 +123,7 @@ public struct ChurchSnapshot: Equatable, Sendable {
             daily: nil,
             dailyStreak: nil,
             growth: nil,
+            social: SocialLink.site,
             offlineNote: offline ? "We couldn't reach the church just now." : "Loading the church…",
             churchName: SampleChurch.name,
             address: SampleChurch.address,
@@ -179,6 +181,8 @@ public struct PrayerLine: Equatable, Sendable, Identifiable {
     public let sample: Bool
     public let approved: Bool
     public let mine: Bool
+    public let prayedCount: Int
+    public let prayed: Bool
 }
 
 public struct KidLine: Equatable, Sendable, Identifiable {
@@ -272,7 +276,23 @@ public struct ChurchClient: Sendable {
 
     /// Everything a guest can see: Home, Watch, Know Jesus, Plan a Visit, Give, groups, and events.
     public func loadGuest() async throws -> ChurchSnapshot {
-        try await guestSnapshot(loadPublic(token: nil))
+        var snapshot = try await guestSnapshot(loadPublic(token: nil))
+        if let prayers: PrayersReply = try? await send("/api/prayers", method: "GET", token: nil, json: nil) {
+            snapshot.prayers = prayers.prayers.filter { !$0.body.isEmpty }.map {
+                PrayerLine(
+                    id: $0.id,
+                    serve: $0.serve ?? "",
+                    body: $0.body,
+                    contactRequested: $0.contactRequested ?? false,
+                    sample: $0.sample,
+                    approved: $0.approved,
+                    mine: $0.mine,
+                    prayedCount: $0.prayedCount ?? 0,
+                    prayed: $0.prayed ?? false
+                )
+            }
+        }
+        return snapshot
     }
 
     public func loadMember(token: String) async throws -> ChurchSnapshot {
