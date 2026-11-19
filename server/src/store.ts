@@ -263,7 +263,7 @@ const RETIRED_FUND_NAMES: Record<string, string> = {
   benevolence: "Benevolence",
 };
 
-/** Wrong pickup codes allowed per child each hour before pickup locks. */
+/** Wrong security codes allowed per child each hour before pickup locks. */
 const PICKUP_ATTEMPTS = 5;
 
 const SEED_AT = Date.parse("2026-11-01T15:00:00.000Z");
@@ -779,6 +779,7 @@ export class ChurchStore {
     const actor = this.actor(token);
     authorize(actor, "view_household_tier3", this.now());
     if (!this.flags.giving) throw new AccessError("invalid", "Giving is turned off.");
+    if (!this.givingAvailability().open) throw new AccessError("invalid", "Giving isn't open.");
     if (!actor.householdId) throw new AccessError("invalid", "A household is required before giving.");
     const fund = GIVING_FUNDS.find((item) => item.id === input.fundId);
     if (!fund) throw new AccessError("invalid", "Unknown fund.");
@@ -1900,7 +1901,8 @@ export class ChurchStore {
 
   /**
    * Releases a checked-in child to a verified guardian with the matching code.
-   * The code works once, and repeated wrong attempts lock pickup for an hour.
+   * The code works once. Only a wrong security code counts toward the hourly
+   * lockout; a station that is short two adults does not lock the family out.
    */
   private releaseChild(actor: Actor, child: ChildRow, code: string, guardianPersonId: string) {
     const now = this.now();
@@ -1914,21 +1916,21 @@ export class ChurchStore {
       );
     }
     this.record(actor, "read", "kid_pickup", child.id, 3);
-    const decision = evaluatePickup({
+    const verdict = evaluatePickup({
       code,
       expectedCode: textField(this.readJson(child.ciphertext), "code"),
       guardianAuthorized: child.guardianIds.includes(guardianPersonId),
       custodyRestricted: child.restrictedPersonIds.includes(guardianPersonId),
       adultsOnDuty: this.station.size,
     });
-    if (decision.allowed) {
+    if (verdict.allowed) {
       this.writeKidFields(child, { code: undefined, checkedInAt: undefined });
       this.throttle.delete(key);
       this.record(actor, "write", "kid_checkout", child.id, 3);
-    } else {
+    } else if (verdict.countsTowardLockout) {
       this.throttle.set(key, [...misses, now]);
     }
-    return decision;
+    return { allowed: verdict.allowed, reason: verdict.reason };
   }
 
   private requireEditor(token: string): Actor {

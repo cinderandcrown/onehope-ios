@@ -35,11 +35,19 @@ test("pickup requires two adults, a guardian, no custody block, and the code", (
     adultsOnDuty: 2,
   };
   assert.equal(evaluatePickup(ok).allowed, true);
-  assert.equal(evaluatePickup({ ...ok, adultsOnDuty: 1 }).allowed, false);
-  assert.equal(evaluatePickup({ ...ok, guardianAuthorized: false }).allowed, false);
-  assert.equal(evaluatePickup({ ...ok, custodyRestricted: true }).allowed, false);
-  assert.equal(evaluatePickup({ ...ok, code: "0000" }).allowed, false);
-  assert.equal(evaluatePickup({ ...ok, code: "", expectedCode: "" }).allowed, false);
+  assert.equal(evaluatePickup(ok).countsTowardLockout, false);
+  const shortStaffed = evaluatePickup({ ...ok, adultsOnDuty: 1 });
+  assert.equal(shortStaffed.allowed, false);
+  assert.equal(shortStaffed.countsTowardLockout, false);
+  assert.equal(shortStaffed.reason, "Two adults must be on duty at the station.");
+  assert.equal(evaluatePickup({ ...ok, guardianAuthorized: false }).countsTowardLockout, false);
+  assert.equal(evaluatePickup({ ...ok, custodyRestricted: true }).countsTowardLockout, false);
+  const wrongCode = evaluatePickup({ ...ok, code: "0000" });
+  assert.equal(wrongCode.allowed, false);
+  assert.equal(wrongCode.countsTowardLockout, true);
+  const notCheckedIn = evaluatePickup({ ...ok, code: "", expectedCode: "" });
+  assert.equal(notCheckedIn.allowed, false);
+  assert.equal(notCheckedIn.countsTowardLockout, false);
 });
 
 test("directory hides fields that are not opted in", () => {

@@ -322,45 +322,49 @@ test("sessions time out and a new IP is recorded", () => {
   );
 });
 
-test("demo giving never charges, push never sends, and secrets stay on the server", () => {
+test("closed giving records nothing, push never sends, and secrets stay on the server", async () => {
   const store = demo();
   const avery = member(store, "avery@sample.onehope");
   store.stepUp(avery, { password: SAMPLE_PASSWORD });
-  return store
-    .createGift(avery, { amountCents: 1200, fundId: "christmas-giving-tree", recurring: "twice_monthly" })
-    .then((gift) => {
-      assert.equal(gift.charged, false);
-      assert.equal(gift.processor, "demo");
-      assert.match(store.statement(avery, 2026).text, /SAMPLE STATEMENT/);
-    })
-    .then(() => {
-      const config = loadConfig({});
-      const adminStore = new ChurchStore(config, {
-        passwordOverrides: { [config.masterAdminPrimaryEmail]: "seat-password" },
-        totpOverrides: { [config.masterAdminPrimaryEmail]: SAMPLE_TOTP_BASE32 },
-      });
-      const nicholas = adminStore.login({
-        email: config.masterAdminPrimaryEmail,
-        password: "seat-password",
-        ip: "198.51.100.2",
-        userAgent: "test",
-      });
-      adminStore.verifyMfa(nicholas.token, code());
-      adminStore.setIntegration(nicholas.token, "stripe", "UNIQUESECRET9911");
-      const revealed = JSON.stringify(adminStore.integrations(nicholas.token));
-      assert.match(revealed, /9911/);
-      assert.doesNotMatch(revealed, /UNIQUESECRET/);
-      const reese = staff(adminStore, "reese@sample.onehope");
-      assert.doesNotMatch(JSON.stringify(adminStore.integrations(reese)), /9911/);
-      assert.doesNotMatch(adminStore.secretMaterial(), /UNIQUESECRET/);
-      const preview = adminStore.loginSampleStaff({ ip: "192.0.2.10", userAgent: "preview" });
-      const push = adminStore.sendPush(preview.token, {
-        title: "Sunday",
-        body: "Sample note",
-        segment: "members",
-      });
-      assert.equal(push.sent, false);
-    });
+  const before = store.myGifts(avery).length;
+  await assert.rejects(
+    () =>
+      store.createGift(avery, {
+        amountCents: 1200,
+        fundId: "christmas-giving-tree",
+        recurring: "twice_monthly",
+      }),
+    { code: "invalid", message: "Giving isn't open." },
+  );
+  assert.equal(store.myGifts(avery).length, before);
+  assert.equal(store.givingAvailability().open, false);
+  assert.match(store.statement(avery, 2026).text, /SAMPLE STATEMENT/);
+  const config = loadConfig({});
+  const adminStore = new ChurchStore(config, {
+    passwordOverrides: { [config.masterAdminPrimaryEmail]: "seat-password" },
+    totpOverrides: { [config.masterAdminPrimaryEmail]: SAMPLE_TOTP_BASE32 },
+  });
+  const nicholas = adminStore.login({
+    email: config.masterAdminPrimaryEmail,
+    password: "seat-password",
+    ip: "198.51.100.2",
+    userAgent: "test",
+  });
+  adminStore.verifyMfa(nicholas.token, code());
+  adminStore.setIntegration(nicholas.token, "stripe", "UNIQUESECRET9911");
+  const revealed = JSON.stringify(adminStore.integrations(nicholas.token));
+  assert.match(revealed, /9911/);
+  assert.doesNotMatch(revealed, /UNIQUESECRET/);
+  const reese = staff(adminStore, "reese@sample.onehope");
+  assert.doesNotMatch(JSON.stringify(adminStore.integrations(reese)), /9911/);
+  assert.doesNotMatch(adminStore.secretMaterial(), /UNIQUESECRET/);
+  const preview = adminStore.loginSampleStaff({ ip: "192.0.2.10", userAgent: "preview" });
+  const push = adminStore.sendPush(preview.token, {
+    title: "Sunday",
+    body: "Sample note",
+    segment: "members",
+  });
+  assert.equal(push.sent, false);
 });
 
 test("waitlist, groups, scheduling, rooms, and expenses follow the rules", () => {

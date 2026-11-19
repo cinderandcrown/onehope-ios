@@ -361,6 +361,13 @@ export type PickupInput = {
 
 export type PickupDecision = { allowed: boolean; reason: string };
 
+/**
+ * `countsTowardLockout` is true only when the security code was presented and
+ * did not match. A short-staffed station, a custody block, or an unauthorized
+ * adult is a refusal, not a wrong try.
+ */
+export type PickupVerdict = PickupDecision & { countsTowardLockout: boolean };
+
 function codesMatch(left: string, right: string): boolean {
   const a = left.trim();
   const b = right.trim();
@@ -372,15 +379,23 @@ function codesMatch(left: string, right: string): boolean {
   return mismatch === 0;
 }
 
-export function evaluatePickup(input: PickupInput): PickupDecision {
-  if (input.adultsOnDuty < 2) return { allowed: false, reason: "Two adults must be on duty at the station." };
-  if (!input.guardianAuthorized)
-    return { allowed: false, reason: "This adult is not an authorized guardian." };
-  if (input.custodyRestricted) return { allowed: false, reason: "A custody restriction blocks this pickup." };
-  if (!input.expectedCode) return { allowed: false, reason: "This child is not checked in." };
-  if (!codesMatch(input.code, input.expectedCode))
-    return { allowed: false, reason: "Security code does not match." };
-  return { allowed: true, reason: "Guardian verified and the security code matches." };
+function pickupRefusal(reason: string, countsTowardLockout = false): PickupVerdict {
+  return { allowed: false, reason, countsTowardLockout };
+}
+
+export function evaluatePickup(input: PickupInput): PickupVerdict {
+  if (input.adultsOnDuty < 2) return pickupRefusal("Two adults must be on duty at the station.");
+  if (!input.guardianAuthorized) return pickupRefusal("This adult is not an authorized guardian.");
+  if (input.custodyRestricted) return pickupRefusal("A custody restriction blocks this pickup.");
+  if (!input.expectedCode) return pickupRefusal("This child is not checked in.");
+  if (!codesMatch(input.code, input.expectedCode)) {
+    return pickupRefusal("Security code does not match.", true);
+  }
+  return {
+    allowed: true,
+    reason: "Guardian verified and the security code matches.",
+    countsTowardLockout: false,
+  };
 }
 
 export type Booking = { id: string; roomId: string; start: number; end: number };
