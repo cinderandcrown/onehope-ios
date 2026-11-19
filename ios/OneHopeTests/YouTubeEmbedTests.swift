@@ -49,7 +49,8 @@ final class YouTubeEmbedTests: XCTestCase {
         var origin = ""
         for _ in 0 ..< 100 where origin != identity.absoluteString {
             try await Task.sleep(nanoseconds: 100_000_000)
-            origin = (try? await web.evaluateJavaScript("window.location.origin") as? String) ?? ""
+            let value = try? await web.evaluateJavaScript("window.location.origin")
+            origin = value as? String ?? ""
         }
         XCTAssertEqual(origin, "https://com.cinderandcrown.onehope")
         let policy = try await web.evaluateJavaScript(#"document.querySelector('meta[name="referrer"]').content"#) as? String
