@@ -61,6 +61,17 @@ public extension ChurchClient {
         let _: EmptyReply = try await send("/api/follow-ups", method: "POST", token: token, json: JSONEncoder().encode(request))
     }
 
+    /// Sends the church's Support/Assistance Request to the staff care queue. `token` is nil for a guest.
+    func submitSupport(token: String?, request: SupportRequest) async throws {
+        let _: EmptyReply = try await send("/api/support", method: "POST", token: token, json: JSONEncoder().encode(request))
+    }
+
+    /// Confirms the password (giving is a sensitive record), then records the gift.
+    func give(token: String, request: GiftRequest, password: String) async throws {
+        try await stepUp(token: token, password: password)
+        let _: EmptyReply = try await send("/api/giving/gifts", method: "POST", token: token, json: JSONEncoder().encode(request))
+    }
+
     /// Marks today's Daily Word read and returns the member's synced streak.
     func markDailyWordRead(token: String) async throws -> Int {
         let reply: StreakReply = try await send("/api/daily-word/read", method: "POST", token: token, json: Data("{}".utf8))
@@ -113,11 +124,17 @@ public extension ChurchClient {
 }
 
 public extension ChurchClient {
-    /// Runs one action and returns what to tell the person. Only a next step works without an account.
+    /// Runs one action and returns what to tell the person. Next steps and support requests work without an account.
     func run(_ action: MemberAction, token: String?) async throws -> String {
-        if case let .followUp(request) = action {
+        switch action {
+        case let .followUp(request):
             try await submitFollowUp(token: token, request: request)
             return FollowUpKind(rawValue: request.kind)?.thanks ?? "Sent."
+        case let .support(request):
+            try await submitSupport(token: token, request: request)
+            return "Thank you. Someone from One Hope will contact you soon."
+        default:
+            break
         }
         guard let token else {
             throw ChurchAPIError(status: 401, code: "sign_in_needed", message: "Please sign in first, from the Connect tab.")
@@ -145,7 +162,10 @@ public extension ChurchClient {
         case .readDailyWord:
             let streak = try await markDailyWordRead(token: token)
             return streak == 1 ? "1 day in a row" : "\(streak) days in a row"
-        case .followUp, .addChild, .checkIn, .pickup:
+        case let .gift(request, password):
+            try await give(token: token, request: request, password: password)
+            return "Thank you. Your gift is set up (\(request.recurring.label.lowercased()))."
+        case .followUp, .support, .addChild, .checkIn, .pickup:
             return ""
         }
     }
@@ -157,7 +177,7 @@ public extension ChurchClient {
             return "\(name) was added."
         case let .checkIn(id):
             let code = try await checkIn(token: token, childId: id)
-            return "Security code \(code)"
+            return "Checked in. Security code \(code). Keep it for pickup."
         case let .pickup(id, code):
             return try await householdPickup(token: token, childId: id, code: code)
         default:

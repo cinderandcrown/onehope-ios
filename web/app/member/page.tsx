@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { MemberTabs, type ChurchView, type MemberView } from "@/components/member-tabs";
-import { loadConfig, loadSermons, withStore } from "@onehope/server";
+import { GIVING_FREQUENCIES, loadConfig, loadSermons, withStore } from "@onehope/server";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +69,9 @@ export default async function MemberPage({
         journey: knowJesus.journey,
         daily: store.dailyWord(token),
         givingOpen: store.givingAvailability().open,
+        funds: store.funds(),
+        frequencies: GIVING_FREQUENCIES,
+        growth: store.growth(),
       };
       if (!token) return { church, member: null };
       const me = store.me(token);
@@ -88,9 +91,12 @@ export default async function MemberPage({
             approved: prayer.approved,
             mine: prayer.mine,
           })),
-        kids: store
-          .myKids(token)
-          .map((child) => ({ id: child.id, displayName: child.displayName, classroom: child.classroom })),
+        kids: store.myKids(token).map((child) => ({
+          id: child.id,
+          displayName: child.displayName,
+          classroom: child.classroom,
+          checkedIn: child.checkedIn,
+        })),
         pathway: store.myPathway(token).steps,
         serving: store
           .serving(token)

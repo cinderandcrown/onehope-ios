@@ -6,6 +6,7 @@ struct PublicParts {
     let groups: GroupsReply
     let knowJesus: KnowJesusReply
     let daily: DailyWordReply
+    let growth: GrowthInfo?
 }
 
 struct MemberParts {
@@ -35,6 +36,7 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.journey = parts.knowJesus.journey
     snapshot.daily = parts.daily.reading
     snapshot.dailyStreak = parts.daily.streak
+    snapshot.growth = parts.growth
     snapshot.churchName = home.church.name
     snapshot.address = home.church.address
     snapshot.pastors = home.church.leadPastors
@@ -71,7 +73,7 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
     snapshot.accountEmail = parts.me.person.email
     snapshot.gifts = parts.gifts
     snapshot.needsStepUp = parts.needsStepUp
-    snapshot.kids = parts.kids.kids.map { KidLine(id: $0.id, displayName: $0.displayName, classroom: $0.classroom, sample: $0.sample) }
+    snapshot.kids = parts.kids.kids.map { KidLine(id: $0.id, displayName: $0.displayName, classroom: $0.classroom, sample: $0.sample, checkedIn: $0.checkedIn ?? false) }
     snapshot.serving = parts.serving.assignments.map { ServingLine(id: $0.id, position: $0.position, status: $0.status, sample: $0.sample) }
     snapshot.pathway = parts.pathway.steps.map { PathwayStep(id: $0.id, title: $0.title, status: $0.status) }
     snapshot.funds = parts.funds.funds.map { FundLine(id: $0.id, name: $0.name) }

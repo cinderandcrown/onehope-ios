@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>
+html, body { margin: 0; height: 100%; background: #000; }
+#player { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div id="player"></div>
+<script>
+// Loaded with loadHTMLString(_:baseURL:) and the app's https://<bundle id> base URL,
+// so every YouTube request carries that Referer, as YouTube's API client identity rules require.
+var ready = false;
+function send(message) {
+  try { window.webkit.messageHandlers.player.postMessage(message); } catch (error) {}
+}
+function onYouTubeIframeAPIReady() {
+  new YT.Player("player", {
+    videoId: "__VIDEO_ID__",
+    width: "100%",
+    height: "100%",
+    playerVars: { playsinline: 1, rel: 0, origin: "__ORIGIN__", widget_referrer: "__ORIGIN__" },
+    events: {
+      onReady: function () { ready = true; send("ready"); },
+      onError: function (event) { send("error:" + event.data); }
+    }
+  });
+}
+var api = document.createElement("script");
+api.src = "https://www.youtube.com/iframe_api";
+api.onerror = function () { send("error:offline"); };
+document.head.appendChild(api);
+setTimeout(function () { if (!ready) { send("error:timeout"); } }, 15000);
+</script>
+</body>
+</html>

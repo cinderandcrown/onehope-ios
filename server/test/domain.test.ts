@@ -39,6 +39,7 @@ test("pickup requires two adults, a guardian, no custody block, and the code", (
   assert.equal(evaluatePickup({ ...ok, guardianAuthorized: false }).allowed, false);
   assert.equal(evaluatePickup({ ...ok, custodyRestricted: true }).allowed, false);
   assert.equal(evaluatePickup({ ...ok, code: "0000" }).allowed, false);
+  assert.equal(evaluatePickup({ ...ok, code: "", expectedCode: "" }).allowed, false);
 });
 
 test("directory hides fields that are not opted in", () => {

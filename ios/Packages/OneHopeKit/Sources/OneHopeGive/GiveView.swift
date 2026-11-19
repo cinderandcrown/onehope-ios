@@ -7,12 +7,21 @@ import SwiftUI
 public struct GiveView: View {
     private let snapshot: ChurchSnapshot
     private let onRefresh: () async -> Void
+    private let perform: (MemberAction) async -> String
     @State private var amount = ""
-    @State private var fundId = "general"
+    @State private var fundId = ""
+    @State private var frequency = GivingFrequency.once
+    @State private var password = ""
+    @State private var notice = ""
 
-    public init(snapshot: ChurchSnapshot, onRefresh: @escaping () async -> Void = {}) {
+    public init(
+        snapshot: ChurchSnapshot,
+        onRefresh: @escaping () async -> Void = {},
+        perform: @escaping (MemberAction) async -> String = { _ in "" }
+    ) {
         self.snapshot = snapshot
         self.onRefresh = onRefresh
+        self.perform = perform
     }
 
     public var body: some View {
@@ -73,19 +82,63 @@ public struct GiveView: View {
         }
     }
 
+    /// Native giving with the Church Center frequencies. Shown only when giving is switched on.
     private var nativeGift: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Give in the app").font(.headline)
-            TextField("Amount", text: $amount)
-                .keyboardType(.decimalPad)
-                .accessibilityIdentifier("gift-amount")
-            Picker("Fund", selection: $fundId) {
-                ForEach(snapshot.funds) { fund in
-                    Text(fund.name).tag(fund.id)
+            if snapshot.signedIn {
+                TextField("Amount", text: $amount)
+                    .keyboardType(.decimalPad)
+                    .accessibilityIdentifier("gift-amount")
+                Picker("Fund", selection: $fundId) {
+                    ForEach(snapshot.funds) { fund in
+                        Text(fund.name).tag(fund.id)
+                    }
                 }
+                Picker("Frequency", selection: $frequency) {
+                    ForEach(GivingFrequency.allCases) { item in
+                        Text(item.label).tag(item)
+                    }
+                }
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                Button("Give") {
+                    give()
+                }
+                .buttonStyle(.borderedProminent)
+                if !notice.isEmpty {
+                    Text(notice).font(.footnote)
+                }
+            } else {
+                Text("Sign in under Connect to give here, or use online giving above.")
             }
         }
         .churchCard()
+        .onAppear {
+            if fundId.isEmpty {
+                fundId = snapshot.funds.first?.id ?? ""
+            }
+        }
+    }
+
+    private func give() {
+        guard let cents = GiftRequest.cents(from: amount) else {
+            notice = "Enter an amount like 25 or 25.50."
+            return
+        }
+        guard !password.isEmpty else {
+            notice = "Confirm your password to give."
+            return
+        }
+        let request = GiftRequest(amountCents: cents, fundId: fundId, recurring: frequency)
+        let typed = password
+        password = ""
+        Task {
+            notice = await perform(.gift(request, password: typed))
+            if notice.hasPrefix("Thank you") {
+                amount = ""
+            }
+        }
     }
 
     private var history: some View {

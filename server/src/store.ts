@@ -1,11 +1,18 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, randomInt } from "node:crypto";
 
 import {
   CHURCH_EVENTS,
   CHURCH_GROUPS,
+  GIVING_FUNDS,
   GIVING_WAYS,
+  type GivingFrequency,
   INVITE,
+  RECOVERY,
   RETIRED_GROUP_IDS,
+  SUPPORT,
+  SUPPORT_NEEDS,
+  type SupportNeedId,
+  TOOLKIT,
   VISIT,
   type PublicGroup,
 } from "./church-copy";
@@ -19,6 +26,7 @@ import type {
   ProposalBody,
   PushBody,
   RoleChangeBody,
+  SupportBody,
 } from "./contracts";
 import { decryptString, encryptString, hashPassword, newId, verifyPassword } from "./crypto";
 import {
@@ -65,7 +73,7 @@ type GiftRow = {
   householdId: string;
   personId: string;
   ciphertext: string;
-  recurring: "once" | "weekly" | "monthly";
+  recurring: GivingFrequency;
   charged: boolean;
   processor: "demo" | "stripe";
   sample: boolean;
@@ -126,7 +134,7 @@ type FollowUpRow = {
   kind: FollowUpKind;
   /** Null when a guest sent it without an account. */
   personId: string | null;
-  /** Encrypted `{ name, email, phone }`. */
+  /** Encrypted `{ name, email, phone }`, plus `needs` on a support request. */
   ciphertext: string;
   contactConsent: boolean;
   status: FollowUpStatus;
@@ -248,12 +256,15 @@ export type StoreOptions = {
   fixture?: boolean;
 };
 
-const FUNDS = [
-  { id: "general", name: "General" },
-  { id: "outreach", name: "Outreach" },
-  { id: "kids", name: "Kids" },
-  { id: "benevolence", name: "Benevolence" },
-] as const;
+/** Names for gifts recorded against the placeholder funds of builds 1–6, so their history still reads. */
+const RETIRED_FUND_NAMES: Record<string, string> = {
+  outreach: "Outreach",
+  kids: "Kids",
+  benevolence: "Benevolence",
+};
+
+/** Wrong pickup codes allowed per child each hour before pickup locks. */
+const PICKUP_ATTEMPTS = 5;
 
 const SEED_AT = Date.parse("2026-11-01T15:00:00.000Z");
 const ROOM_START = Date.parse("2026-11-22T16:00:00.000Z");
@@ -677,7 +688,7 @@ export class ChurchStore {
   }
 
   funds() {
-    return FUNDS.map((fund) => ({ ...fund }));
+    return GIVING_FUNDS.map((fund) => ({ ...fund }));
   }
 
   givingAvailability() {
@@ -706,14 +717,12 @@ export class ChurchStore {
     return { id: child.id, displayName: child.displayName, classroom: child.classroom, sample: false };
   }
 
+  /** A new code replaces any earlier one, so only the latest tag works at pickup. */
   checkIn(token: string, childId: string) {
     const actor = this.actor(token);
     const child = this.requireChild(actor, childId);
-    const prior = this.readJson(child.ciphertext);
-    const code = String(1000 + Math.floor(Math.random() * 9000));
-    const body =
-      prior && typeof prior === "object" ? { ...(prior as Record<string, unknown>), code } : { code };
-    child.ciphertext = encryptString(JSON.stringify(body), this.key);
+    const code = String(randomInt(1000, 10_000));
+    this.writeKidFields(child, { code, checkedInAt: this.now() });
     this.record(actor, "write", "kid_checkin", child.id, 3);
     return { childId: child.id, displayName: child.displayName, code };
   }
@@ -721,16 +730,7 @@ export class ChurchStore {
   householdPickup(token: string, input: { childId: string; code: string }) {
     const actor = this.actor(token);
     const child = this.requireChild(actor, input.childId);
-    const medical = this.readJson(child.ciphertext);
-    const expected = textField(medical, "code");
-    this.record(actor, "read", "kid_pickup", child.id, 3);
-    return evaluatePickup({
-      code: input.code,
-      expectedCode: expected,
-      guardianAuthorized: child.guardianIds.includes(actor.personId),
-      custodyRestricted: child.restrictedPersonIds.includes(actor.personId),
-      adultsOnDuty: this.station.size,
-    });
+    return this.releaseChild(actor, child, input.code, actor.personId);
   }
 
   createAnnouncement(token: string, input: { title: string; body: string }) {
@@ -780,7 +780,7 @@ export class ChurchStore {
     authorize(actor, "view_household_tier3", this.now());
     if (!this.flags.giving) throw new AccessError("invalid", "Giving is turned off.");
     if (!actor.householdId) throw new AccessError("invalid", "A household is required before giving.");
-    const fund = FUNDS.find((item) => item.id === input.fundId);
+    const fund = GIVING_FUNDS.find((item) => item.id === input.fundId);
     if (!fund) throw new AccessError("invalid", "Unknown fund.");
     let processor: GiftRow["processor"] = "demo";
     if (canChargeLive(this.config)) {
@@ -862,17 +862,8 @@ export class ChurchStore {
   listGroups(token: string | null) {
     const actor = this.optionalActor(token);
     return this.groups.map((group) => ({
-      id: group.id,
-      name: group.name,
-      summary: group.summary,
-      sample: group.sample,
+      ...this.publicGroup(group),
       joined: actor ? group.memberIds.includes(actor.personId) : false,
-      category: group.category ?? null,
-      schedule: group.schedule ?? "",
-      area: group.area ?? "",
-      leaders: [...(group.leaders ?? [])],
-      joinType: group.joinType ?? ("open" as const),
-      url: group.url ?? null,
     }));
   }
 
@@ -1060,6 +1051,7 @@ export class ChurchStore {
         displayName: child.displayName,
         classroom: child.classroom,
         sample: child.sample,
+        checkedIn: textField(this.readJson(child.ciphertext), "code") !== "",
       }));
   }
 
@@ -1110,15 +1102,7 @@ export class ChurchStore {
     authorize(actor, "view_kids_medical", this.now());
     const child = this.children.get(input.childId);
     if (!child) throw new AccessError("not_found", "That child isn't here.");
-    const medical = this.readJson(child.ciphertext);
-    this.record(actor, "read", "kid_pickup", child.id, 3);
-    return evaluatePickup({
-      code: input.code,
-      expectedCode: textField(medical, "code"),
-      guardianAuthorized: child.guardianIds.includes(input.guardianPersonId),
-      custodyRestricted: child.restrictedPersonIds.includes(input.guardianPersonId),
-      adultsOnDuty: this.station.size,
-    });
+    return this.releaseChild(actor, child, input.code, input.guardianPersonId);
   }
 
   label(token: string, childId: string) {
@@ -1436,34 +1420,7 @@ export class ChurchStore {
    */
   submitFollowUp(token: string | null, input: FollowUpBody, client: string) {
     const actor = this.optionalActor(token);
-    const now = this.now();
-    this.pruneThrottle(now);
-    if (actor) {
-      this.hit(`person:${actor.personId}`, MEMBER_LIMIT, now);
-    } else {
-      this.hit(`client:${this.clientKey(client)}`, GUEST_LIMIT_PER_CLIENT, now);
-      this.hit("guests", GUEST_LIMIT_TOTAL, now);
-    }
-    const person = actor ? this.requirePerson(actor.personId) : null;
-    const name = (person?.displayName ?? input.name ?? "").trim();
-    if (!name) throw new AccessError("invalid", "Please tell us your name.");
-    const consent = input.consent === true;
-    const contact = {
-      name,
-      email: consent ? (input.email ?? person?.email ?? "").trim().toLowerCase() : "",
-      phone: consent ? (input.phone ?? "").trim() : "",
-    };
-    const row: FollowUpRow = {
-      id: newId("followup"),
-      kind: input.kind,
-      personId: actor?.personId ?? null,
-      ciphertext: encryptString(JSON.stringify(contact), this.key),
-      contactConsent: consent,
-      status: "new",
-      createdAt: now,
-      sample: false,
-    };
-    this.followUps.push(row);
+    const row = this.queueFollowUp(actor, input.kind, input, client, {});
     const step = FOLLOW_UP_PATHWAY[input.kind];
     if (actor && step) {
       const steps = this.ensurePathway(actor.personId);
@@ -1471,6 +1428,28 @@ export class ChurchStore {
       if (target && target.status !== "done") target.status = step.status;
     }
     return { id: row.id, kind: row.kind, journey: input.kind === "salvation" };
+  }
+
+  /**
+   * The church's Support/Assistance Request. It promises a call back, so a
+   * guest must leave an email or phone. The boxes are encrypted with the contact.
+   */
+  submitSupport(token: string | null, input: SupportBody, client: string) {
+    const actor = this.optionalActor(token);
+    if (!actor && !input.email && !input.phone)
+      throw new AccessError("invalid", "Please leave an email or phone so we can reach you.");
+    const row = this.queueFollowUp(actor, "support", input, client, { needs: input.needs });
+    return { id: row.id, needs: input.needs.map(supportLabel) };
+  }
+
+  /** The church's Toolkit and Recovery pages, plus the Unlocking Freedom group. */
+  growth() {
+    const group = this.groups.find((item) => item.id === RECOVERY.groupId);
+    return {
+      toolkit: TOOLKIT,
+      recovery: { ...RECOVERY, group: group ? this.publicGroup(group) : null },
+      support: SUPPORT,
+    };
   }
 
   followUpsFor(token: string) {
@@ -1569,6 +1548,7 @@ export class ChurchStore {
           name: textField(contact, "name"),
           email: textField(contact, "email"),
           phone: textField(contact, "phone"),
+          needs: supportNeeds(contact).map(supportLabel),
           contactConsent: row.contactConsent,
           member: row.personId !== null,
           status: row.status,
@@ -1576,6 +1556,46 @@ export class ChurchStore {
           sample: row.sample,
         };
       });
+  }
+
+  /** Rate-limits, then queues a follow-up with only the contact the person consented to share. */
+  private queueFollowUp(
+    actor: Actor | null,
+    kind: FollowUpKind,
+    input: { name?: string; email?: string; phone?: string; consent: boolean },
+    client: string,
+    extra: Record<string, unknown>,
+  ): FollowUpRow {
+    const now = this.now();
+    this.pruneThrottle(now);
+    if (actor) {
+      this.hit(`person:${actor.personId}`, MEMBER_LIMIT, now);
+    } else {
+      this.hit(`client:${this.clientKey(client)}`, GUEST_LIMIT_PER_CLIENT, now);
+      this.hit("guests", GUEST_LIMIT_TOTAL, now);
+    }
+    const person = actor ? this.requirePerson(actor.personId) : null;
+    const name = (person?.displayName ?? input.name ?? "").trim();
+    if (!name) throw new AccessError("invalid", "Please tell us your name.");
+    const consent = input.consent;
+    const contact = {
+      ...extra,
+      name,
+      email: consent ? (input.email || person?.email || "").trim().toLowerCase() : "",
+      phone: consent ? (input.phone ?? "").trim() : "",
+    };
+    const row: FollowUpRow = {
+      id: newId("followup"),
+      kind,
+      personId: actor?.personId ?? null,
+      ciphertext: encryptString(JSON.stringify(contact), this.key),
+      contactConsent: consent,
+      status: "new",
+      createdAt: now,
+      sample: false,
+    };
+    this.followUps.push(row);
+    return row;
   }
 
   private ensurePathway(personId: string) {
@@ -1773,7 +1793,7 @@ export class ChurchStore {
       id: row.id,
       householdId: row.householdId,
       fundId,
-      fundName: FUNDS.find((fund) => fund.id === fundId)?.name ?? fundId,
+      fundName: GIVING_FUNDS.find((fund) => fund.id === fundId)?.name ?? RETIRED_FUND_NAMES[fundId] ?? fundId,
       amountCents: typeof amount === "number" ? amount : 0,
       recurring: row.recurring,
       charged: row.charged,
@@ -1854,6 +1874,61 @@ export class ChurchStore {
       throw new AccessError("not_found", "That child isn't in your household.");
     }
     return child;
+  }
+
+  private publicGroup(group: GroupRow) {
+    return {
+      id: group.id,
+      name: group.name,
+      summary: group.summary,
+      sample: group.sample,
+      category: group.category ?? null,
+      schedule: group.schedule ?? "",
+      area: group.area ?? "",
+      leaders: [...(group.leaders ?? [])],
+      joinType: group.joinType ?? ("open" as const),
+      url: group.url ?? null,
+    };
+  }
+
+  /** Merges fields into the child's encrypted record. Undefined fields are removed. */
+  private writeKidFields(child: ChildRow, fields: Record<string, unknown>) {
+    const prior = this.readJson(child.ciphertext);
+    const base = prior && typeof prior === "object" ? (prior as Record<string, unknown>) : {};
+    child.ciphertext = encryptString(JSON.stringify({ ...base, ...fields }), this.key);
+  }
+
+  /**
+   * Releases a checked-in child to a verified guardian with the matching code.
+   * The code works once, and repeated wrong attempts lock pickup for an hour.
+   */
+  private releaseChild(actor: Actor, child: ChildRow, code: string, guardianPersonId: string) {
+    const now = this.now();
+    this.pruneThrottle(now);
+    const key = `pickup:${child.id}`;
+    const misses = this.throttle.get(key) ?? [];
+    if (misses.length >= PICKUP_ATTEMPTS) {
+      throw new AccessError(
+        "rate_limited",
+        "Pickup is locked after several wrong tries. Please see a check-in leader.",
+      );
+    }
+    this.record(actor, "read", "kid_pickup", child.id, 3);
+    const decision = evaluatePickup({
+      code,
+      expectedCode: textField(this.readJson(child.ciphertext), "code"),
+      guardianAuthorized: child.guardianIds.includes(guardianPersonId),
+      custodyRestricted: child.restrictedPersonIds.includes(guardianPersonId),
+      adultsOnDuty: this.station.size,
+    });
+    if (decision.allowed) {
+      this.writeKidFields(child, { code: undefined, checkedInAt: undefined });
+      this.throttle.delete(key);
+      this.record(actor, "write", "kid_checkout", child.id, 3);
+    } else {
+      this.throttle.set(key, [...misses, now]);
+    }
+    return decision;
   }
 
   private requireEditor(token: string): Actor {
@@ -2640,6 +2715,17 @@ function reencrypt(value: string, current: Buffer, previous: Buffer): string {
 function replaceMap<T extends { id: string }>(target: Map<string, T>, rows: T[]) {
   target.clear();
   for (const row of rows) target.set(row.id, row);
+}
+
+function supportLabel(id: SupportNeedId): string {
+  return SUPPORT_NEEDS.find((need) => need.id === id)?.label ?? id;
+}
+
+function supportNeeds(value: unknown): SupportNeedId[] {
+  if (!value || typeof value !== "object" || !("needs" in value)) return [];
+  const needs = (value as { needs: unknown }).needs;
+  if (!Array.isArray(needs)) return [];
+  return needs.filter((need): need is SupportNeedId => SUPPORT_NEEDS.some((item) => item.id === need));
 }
 
 function textField(value: unknown, key: string): string {

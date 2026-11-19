@@ -152,8 +152,8 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                 <h2>Next steps from the app</h2>
                 {care.queue.followUps.length === 0 ? (
                   <p>
-                    No one has asked for a next step yet. Know Jesus, baptism, Growth Track, and Plan a Visit
-                    land here.
+                    No one has asked for a next step yet. Know Jesus, baptism, Growth Track, Plan a Visit,
+                    prayer contact requests, and Support/Assistance requests land here.
                   </p>
                 ) : (
                   <table>
@@ -172,7 +172,10 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                           <td>
                             {new Date(row.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago" })}
                           </td>
-                          <td>{row.label}</td>
+                          <td>
+                            {row.label}
+                            {row.needs.length > 0 ? <p className="muted">{row.needs.join(" · ")}</p> : null}
+                          </td>
                           <td>
                             {row.name}
                             {row.member ? " (member)" : " (guest)"}

@@ -1,5 +1,20 @@
 # Changelog
 
+## Build 7 - 2026-11-18
+
+### Added
+
+- Support and assistance: the church's Support/Assistance Request with its six boxes (pastoral counseling, pre-marital counseling, hospital visitation, One Hope recovery group, volunteering, clothing). Guests and members send it to the staff care queue; the boxes are encrypted with the contact. `POST /api/support` is rate limited and needs consent, and a guest must leave an email or phone.
+- Toolkit for Spiritual Growth from the church's Church Center page: Bible reading plan, scriptures to speak (KJV), Daily Proclamations, staff reads, podcast picks, and the Spotify playlist. `GET /api/growth` (public).
+- Hope City Recovery / Unlocking Freedom: the group with request-to-join on Church Center, and the Life Evaluation Worksheet (ten areas rated 1 to 10) with its printable PDF. Ratings stay on the device.
+- In-app giving form with the Church Center frequencies (Once, Weekly, Every other week, Twice monthly, Monthly). It asks for the password and stays behind `GIVING_LIVE`.
+- Kids check-in shows who is checked in. A family picks up with the code from check-in.
+
+### Changed
+
+- Giving funds are "One Hope Church" and "Christmas Giving Tree". The placeholder funds (Outreach, Kids, Benevolence) are no longer offered; gifts already recorded against them keep their names.
+- Check-in codes come from a cryptographic random source. A code works for one pickup, and pickup locks for an hour after five wrong tries.
+
 ## Build 6 - 2026-11-18
 
 ### Added
@@ -18,6 +33,12 @@
 ### Changed
 
 - Snapshots saved by earlier builds load unchanged. On load the placeholder groups (`group-kids`, `group-small`, `group-growth`) and their notes are removed, real groups are upserted by id with memberships kept, and the Sunday event moves to the next Sunday once it has passed.
+
+### Fixed (TestFlight build 6 hotfix)
+
+- iOS Watch: videos showed YouTube "Error 153, video player configuration error". The player loaded the embed URL directly, so YouTube got no HTTP Referer, the API client identity it now requires. The player page now loads with `loadHTMLString(_:baseURL:)` under `https://com.cinderandcrown.onehope` (the bundle id, as Google's Required Minimum Functionality rules specify), uses the IFrame Player API with `playsinline`, `origin` and `widget_referrer`, and reports player errors back to the app.
+- If YouTube still refuses a video, the player is covered with "Play on YouTube", which opens the YouTube app or Safari. The same button sits under every video.
+- Web Watch: the embed sets `referrerpolicy="strict-origin-when-cross-origin"` explicitly and has a "Play on YouTube" link.
 
 ## 1.0.0 - 2026-11-17
 

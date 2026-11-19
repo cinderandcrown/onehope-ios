@@ -377,6 +377,7 @@ export function evaluatePickup(input: PickupInput): PickupDecision {
   if (!input.guardianAuthorized)
     return { allowed: false, reason: "This adult is not an authorized guardian." };
   if (input.custodyRestricted) return { allowed: false, reason: "A custody restriction blocks this pickup." };
+  if (!input.expectedCode) return { allowed: false, reason: "This child is not checked in." };
   if (!codesMatch(input.code, input.expectedCode))
     return { allowed: false, reason: "Security code does not match." };
   return { allowed: true, reason: "Guardian verified and the security code matches." };

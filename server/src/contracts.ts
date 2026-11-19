@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ACTIONS, MODULES, ROLES } from "./domain";
+import { GIVING_FREQUENCY_IDS, GIVING_FUND_IDS, SUPPORT_NEED_IDS } from "./church-copy";
 import { FOLLOW_UP_KINDS, FOLLOW_UP_STATUSES } from "./faith";
 
 export const roleSchema = z.enum(ROLES);
@@ -120,8 +121,8 @@ export const stepUpBodySchema = z
 export const giftBodySchema = z
   .object({
     amountCents: z.number().int().positive().max(10_000_000),
-    fundId: z.enum(["general", "outreach", "kids", "benevolence"]),
-    recurring: z.enum(["once", "weekly", "monthly"]),
+    fundId: z.enum(GIVING_FUND_IDS),
+    recurring: z.enum(GIVING_FREQUENCY_IDS),
   })
   .strict();
 
@@ -208,13 +209,21 @@ export const giftViewSchema = z
     fundId: z.string(),
     fundName: z.string(),
     amountCents: z.number().int(),
-    recurring: z.enum(["once", "weekly", "monthly"]),
+    recurring: z.enum(GIVING_FREQUENCY_IDS),
     charged: z.boolean(),
     processor: z.enum(["demo", "stripe"]),
     sample: z.boolean(),
     createdAt: z.number(),
   })
   .strict();
+
+const contactPhone = z.union([
+  z.literal(""),
+  z
+    .string()
+    .trim()
+    .regex(/^[0-9+().\-\s]{7,20}$/),
+]);
 
 /**
  * A next step from Know Jesus or Plan a Visit. Guests send only a name and,
@@ -225,21 +234,31 @@ export const followUpBodySchema = z
     kind: z.enum(FOLLOW_UP_KINDS),
     name: z.string().trim().max(80).optional(),
     email: z.union([z.literal(""), z.string().trim().email().max(254)]).optional(),
-    phone: z
-      .union([
-        z.literal(""),
-        z
-          .string()
-          .trim()
-          .regex(/^[0-9+().\-\s]{7,20}$/),
-      ])
-      .optional(),
+    phone: contactPhone.optional(),
     consent: z.boolean(),
   })
   .strict()
   .refine((body) => body.consent || (!body.email && !body.phone), {
     message: "Contact details need consent.",
   });
+
+/**
+ * The church's Support/Assistance Request: at least one of its six boxes.
+ * The form promises a call back, so consent to be contacted is required.
+ */
+export const supportBodySchema = z
+  .object({
+    needs: z
+      .array(z.enum(SUPPORT_NEED_IDS))
+      .min(1)
+      .max(SUPPORT_NEED_IDS.length)
+      .refine((needs) => new Set(needs).size === needs.length, { message: "Each box counts once." }),
+    name: z.string().trim().max(80).optional(),
+    email: z.union([z.literal(""), z.string().trim().email().max(254)]).optional(),
+    phone: contactPhone.optional(),
+    consent: z.literal(true),
+  })
+  .strict();
 
 export const followUpStatusBodySchema = z.object({ status: z.enum(FOLLOW_UP_STATUSES) }).strict();
 
@@ -277,3 +296,4 @@ export type BookingBody = z.infer<typeof bookingBodySchema>;
 export type IntegrationBody = z.infer<typeof integrationBodySchema>;
 export type StepUpBody = z.infer<typeof stepUpBodySchema>;
 export type FollowUpBody = z.infer<typeof followUpBodySchema>;
+export type SupportBody = z.infer<typeof supportBodySchema>;

@@ -5,7 +5,10 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { deleteMember, signInMember, signOutMember, signUpMember } from "@/app/member/actions";
-import type { ChurchStore, FollowUpKind } from "@onehope/server";
+import { GiveInApp } from "@/components/give-in-app";
+import { Grow, type GrowthView } from "@/components/growth";
+import { KidsCheckIn, type KidView } from "@/components/kids-check-in";
+import type { ChurchStore, FollowUpKind, GivingFrequency } from "@onehope/server";
 
 type Tab = "Home" | "Watch" | "Jesus" | "Give" | "Connect";
 type View = Tab | "Visit";
@@ -38,6 +41,9 @@ export type ChurchView = {
   journey: KnowJesus["journey"];
   daily: ReturnType<ChurchStore["dailyWord"]>;
   givingOpen: boolean;
+  funds: { id: string; name: string }[];
+  frequencies: readonly { id: GivingFrequency; label: string }[];
+  growth: GrowthView;
 };
 
 export type ChurchGroup = {
@@ -63,7 +69,7 @@ export type MemberView = {
     approved: boolean;
     mine: boolean;
   }[];
-  kids: { id: string; displayName: string; classroom: string }[];
+  kids: KidView[];
   pathway: { id: string; title: string; status: string }[];
   serving: { id: string; position: string; status: string }[];
   directory: { id: string; displayName: string; email: string; phone: string }[];
@@ -83,7 +89,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "Give", label: "Give" },
   { id: "Connect", label: "Connect" },
 ];
-const CLASSROOMS = ["Nursery", "Preschool", "Elementary"];
 const HEADINGS: Record<View, string> = {
   Home: "Home",
   Watch: "Watch",
@@ -136,7 +141,7 @@ export function MemberTabs({
       {view === "Jesus" ? (
         <KnowJesusView church={church} signedIn={member !== null} onNotice={setNotice} />
       ) : null}
-      {view === "Give" ? <Give church={church} /> : null}
+      {view === "Give" ? <Give church={church} signedIn={member !== null} onNotice={setNotice} /> : null}
       {view === "Visit" ? (
         <PlanVisit church={church} signedIn={member !== null} onNotice={setNotice} />
       ) : null}
@@ -146,6 +151,7 @@ export function MemberTabs({
         ) : (
           <>
             <Gatherings church={church} member={null} onNotice={setNotice} />
+            <Grow growth={church.growth} signedIn={false} onNotice={setNotice} />
             <SignIn error={authError} onGo={go} />
           </>
         )
@@ -466,12 +472,22 @@ function Watch({
           <iframe
             className="player"
             title={current.title}
-            src={`https://www.youtube.com/embed/${current.id}`}
+            src={`https://www.youtube.com/embed/${encodeURIComponent(current.id)}?playsinline=1&rel=0`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />
           <h2>{current.title}</h2>
-          <p className="muted">{formatDate(current.published)}</p>
+          <p className="muted">
+            {formatDate(current.published)} ·{" "}
+            <a
+              href={`https://www.youtube.com/watch?v=${encodeURIComponent(current.id)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Play on YouTube
+            </a>
+          </p>
         </>
       ) : (
         <p>Sunday messages will appear here.</p>
@@ -699,7 +715,7 @@ function KnowJesusView({
   );
 }
 
-function Give({ church }: { church: ChurchView }) {
+function Give({ church, signedIn, onNotice }: { church: ChurchView; signedIn: boolean; onNotice: Notify }) {
   const giving = church.giving;
   return (
     <>
@@ -737,12 +753,12 @@ function Give({ church }: { church: ChurchView }) {
         <p>{giving.mail.address}</p>
       </article>
       {church.givingOpen ? (
-        <form className="form">
-          <label>
-            Amount
-            <input name="amount" inputMode="decimal" />
-          </label>
-        </form>
+        <GiveInApp
+          funds={church.funds}
+          frequencies={church.frequencies}
+          signedIn={signedIn}
+          onNotice={onNotice}
+        />
       ) : null}
     </>
   );
@@ -939,14 +955,11 @@ function Gatherings({
 }
 
 function Connect({ church, member, onNotice }: { church: ChurchView; member: MemberView; onNotice: Notify }) {
-  const router = useRouter();
   const act = useAct(onNotice);
   const [serve, setServe] = useState("");
   const [prayer, setPrayer] = useState("");
   const [contact, setContact] = useState(false);
   const [note, setNote] = useState("");
-  const [childName, setChildName] = useState("");
-  const [classroom, setClassroom] = useState("Preschool");
   const joined = church.groups.filter((group) => group.joined);
   return (
     <>
@@ -972,6 +985,7 @@ function Connect({ church, member, onNotice }: { church: ChurchView; member: Mem
         ))}
       </section>
       <Gatherings church={church} member={member} onNotice={onNotice} />
+      <Grow growth={church.growth} signedIn onNotice={onNotice} />
       <section>
         <h2>Group note</h2>
         {joined.length === 0 ? <p>Join a group before sending a note.</p> : null}
@@ -1050,62 +1064,7 @@ function Connect({ church, member, onNotice }: { church: ChurchView; member: Mem
           </article>
         ))}
       </section>
-      <section>
-        <h2>Kids check-in</h2>
-        <input
-          value={childName}
-          onChange={(event) => setChildName(event.target.value)}
-          placeholder="Child's name"
-        />
-        <select value={classroom} onChange={(event) => setClassroom(event.target.value)}>
-          {CLASSROOMS.map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="button"
-          onClick={() => {
-            const displayName = childName.trim();
-            if (!displayName) {
-              onNotice("Enter your child's name.");
-              return;
-            }
-            void act("/api/household/children", { displayName, classroom }, `${displayName} was added.`);
-            setChildName("");
-          }}
-        >
-          Add child
-        </button>
-        {member.kids.map((child) => (
-          <article className="card" key={child.id}>
-            <h3>{child.displayName}</h3>
-            <p>{child.classroom}</p>
-            <button
-              type="button"
-              className="button"
-              onClick={() => {
-                void (async () => {
-                  const response = await fetch("/api/kids/check-in", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({ childId: child.id }),
-                  });
-                  const data = (await response.json()) as { code?: string; error?: string };
-                  onNotice(
-                    response.ok && data.code
-                      ? `Security code ${data.code}`
-                      : data.error || "Check-in didn't go through.",
-                  );
-                  if (response.ok) router.refresh();
-                })();
-              }}
-            >
-              Check in
-            </button>
-          </article>
-        ))}
-      </section>
+      <KidsCheckIn kids={member.kids} onNotice={onNotice} />
       <Account member={member} onNotice={onNotice} />
     </>
   );
