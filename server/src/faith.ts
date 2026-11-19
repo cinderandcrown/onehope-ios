@@ -11,9 +11,12 @@ export type DailyReading = Verse & { read: string; prompt: string };
 
 export type JourneyDay = Verse & { day: number; title: string; prompt: string };
 
-export type FollowUpKind = (typeof FOLLOW_UP_KINDS)[number] | "prayer";
+export type FollowUpKind = (typeof FOLLOW_UP_KINDS)[number] | "prayer" | "support";
 
-/** Next steps anyone can send. "prayer" is only created by a prayer request that asks for contact. */
+/**
+ * Next steps anyone can send. "prayer" comes only from a prayer request that
+ * asks for contact, and "support" only from the Support/Assistance form.
+ */
 export const FOLLOW_UP_KINDS = ["salvation", "baptism", "new", "growth_track", "visit"] as const;
 
 export const FOLLOW_UP_LABELS: Record<FollowUpKind, string> = {
@@ -23,6 +26,7 @@ export const FOLLOW_UP_LABELS: Record<FollowUpKind, string> = {
   growth_track: "Growth Track",
   visit: "Coming this Sunday",
   prayer: "Prayer request: please contact me",
+  support: "Support/Assistance request",
 };
 
 export const FOLLOW_UP_STATUSES = ["new", "contacted", "closed"] as const;
