@@ -117,10 +117,6 @@ test("kids pickup is two-adult, guardian verified, and custody aware", () => {
   );
   store.clockIn(staff(store, "dana@sample.onehope"));
   assert.equal(
-    store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "4821" }).allowed,
-    true,
-  );
-  assert.equal(
     store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "0000" }).allowed,
     false,
   );
@@ -131,6 +127,14 @@ test("kids pickup is two-adult, guardian verified, and custody aware", () => {
   assert.equal(
     store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-casey", code: "4821" }).allowed,
     false,
+  );
+  assert.equal(
+    store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "4821" }).allowed,
+    true,
+  );
+  assert.deepEqual(
+    store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "4821" }),
+    { allowed: false, reason: "This child is not checked in." },
   );
   const label = store.label(frankie, "child-remy");
   assert.equal(label.socketOpened, false);
@@ -323,7 +327,7 @@ test("demo giving never charges, push never sends, and secrets stay on the serve
   const avery = member(store, "avery@sample.onehope");
   store.stepUp(avery, { password: SAMPLE_PASSWORD });
   return store
-    .createGift(avery, { amountCents: 1200, fundId: "kids", recurring: "monthly" })
+    .createGift(avery, { amountCents: 1200, fundId: "christmas-giving-tree", recurring: "twice_monthly" })
     .then((gift) => {
       assert.equal(gift.charged, false);
       assert.equal(gift.processor, "demo");
