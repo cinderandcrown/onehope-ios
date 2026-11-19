@@ -14,7 +14,7 @@ let package = Package(
         .library(name: "OneHopeMore", targets: ["OneHopeMore"]),
     ],
     targets: [
-        .target(name: "OneHopeCore"),
+        .target(name: "OneHopeCore", resources: [.copy("Resources/youtube-player.html")]),
         .target(name: "OneHopeDesign", dependencies: ["OneHopeCore"], resources: [.process("Resources")]),
         .target(name: "OneHopeHome", dependencies: ["OneHopeCore", "OneHopeDesign"]),
         .target(name: "OneHopeWatch", dependencies: ["OneHopeCore", "OneHopeDesign", "OneHopeHome"]),
