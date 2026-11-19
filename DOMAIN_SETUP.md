@@ -41,13 +41,12 @@ The API allows browser calls from:
 - `https://app.weareonehope.com`
 - local `http://localhost:3000` and `http://127.0.0.1:3000`
 
-## iPhone universal links
+## iPhone links
 
-The app entitlements include:
+Invite, visit, coffee, neighborhood, and member links are ordinary https links. They open in the browser. Share still uses `PUBLIC_BASE_URL` (`https://onehope-beryl.vercel.app` until DNS is live).
 
-- `applinks:onehope-beryl.vercel.app`
-- `applinks:app.weareonehope.com`
+Associated Domains is not on the app. The provisioning profile "One Hope App Store" does not include that capability, and `app.weareonehope.com` is not live, so the target has no entitlements file and no `CODE_SIGN_ENTITLEMENTS` build setting. The app target also has no push (`aps-environment`), App Groups, Apple Pay merchant id, Sign in with Apple, iCloud, or keychain-access-group entitlement. Daily reminders stay on the phone and do not use remote push.
 
-The server answers `/.well-known/apple-app-site-association` for the app id `GDNRT9DJ58.com.cinderandcrown.onehope` on `/invite`, `/visit`, `/coffee`, `/neighborhood`, and `/member`.
+The server still answers `/.well-known/apple-app-site-association` for the app id `GDNRT9DJ58.com.cinderandcrown.onehope` on `/invite`, `/visit`, `/coffee`, `/neighborhood`, and `/member`. That file does nothing until the app claims the domains.
 
-After DNS is live, open those paths once on a phone so Apple can fetch the file. No remote push is turned on.
+Re-adding Associated Domains requires enabling the capability on the App ID `com.cinderandcrown.onehope` and regenerating the "One Hope App Store" profile (Codemagic profile `onehope_appstore`). After that profile is in place, restore `ios/OneHope/OneHope.entitlements` with `com.apple.developer.associated-domains` set to `applinks:onehope-beryl.vercel.app` and `applinks:app.weareonehope.com`, and set `CODE_SIGN_ENTITLEMENTS` on the OneHope target in `ios/project.yml`.
