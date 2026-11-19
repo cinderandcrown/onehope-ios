@@ -16,8 +16,13 @@ public struct WatchView: View {
         self.onRefresh = onRefresh
     }
 
-    private var messages: [SermonLine] { snapshot.sermons.filter { !$0.isShort } }
-    private var shorts: [SermonLine] { snapshot.sermons.filter(\.isShort) }
+    private var messages: [SermonLine] {
+        snapshot.sermons.filter { !$0.isShort }
+    }
+
+    private var shorts: [SermonLine] {
+        snapshot.sermons.filter(\.isShort)
+    }
 
     public var body: some View {
         NavigationStack {

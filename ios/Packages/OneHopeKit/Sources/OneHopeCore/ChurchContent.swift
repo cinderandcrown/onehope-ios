@@ -41,14 +41,19 @@ public struct InviteInfo: Decodable, Equatable, Sendable {
     public let mapsUrl: String
 
     /// The words that go into the share sheet.
-    public var shareText: String { "\(title)\n\(body)" }
+    public var shareText: String {
+        "\(title)\n\(body)"
+    }
 }
 
 public struct GospelStep: Decodable, Equatable, Sendable, Identifiable {
     public let title: String
     public let reference: String
     public let text: String
-    public var id: String { reference }
+
+    public var id: String {
+        reference
+    }
 }
 
 public struct GospelInfo: Decodable, Equatable, Sendable {
@@ -66,7 +71,10 @@ public struct JourneyDay: Decodable, Equatable, Sendable, Identifiable {
     public let reference: String
     public let text: String
     public let prompt: String
-    public var id: Int { day }
+
+    public var id: Int {
+        day
+    }
 }
 
 public struct DailyWord: Decodable, Equatable, Sendable {
@@ -128,8 +136,12 @@ public struct FollowUpRequest: Encodable, Equatable, Sendable {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty { return .failure(.name) }
-        if !consent, !email.isEmpty || !phone.isEmpty { return .failure(.consent) }
+        if name.isEmpty {
+            return .failure(.name)
+        }
+        if !consent, !email.isEmpty || !phone.isEmpty {
+            return .failure(.consent)
+        }
         return .success(FollowUpRequest(kind: kind, name: name, email: email, phone: phone, consent: consent))
     }
 }
@@ -150,16 +162,20 @@ public enum FollowUpProblem: Error, Equatable {
 public enum StreakRules {
     /// Streak after reading on `today`. Twice in a day keeps the count; a missed day starts over.
     public static func next(lastDay: String?, count: Int, today: String) -> Int {
-        guard let lastDay, let gap = gap(from: lastDay, to: today) else { return 1 }
-        if gap == 0 { return count }
-        if gap == 1 { return count + 1 }
+        guard let lastDay, let days = gap(from: lastDay, to: today) else { return 1 }
+        if days == 0 {
+            return count
+        }
+        if days == 1 {
+            return count + 1
+        }
         return 1
     }
 
     /// A streak only counts when the last read was today or yesterday.
     public static func current(lastDay: String?, count: Int, today: String) -> Int {
-        guard let lastDay, let gap = gap(from: lastDay, to: today) else { return 0 }
-        return gap == 0 || gap == 1 ? count : 0
+        guard let lastDay, let days = gap(from: lastDay, to: today) else { return 0 }
+        return days == 0 || days == 1 ? count : 0
     }
 
     private static func gap(from start: String, to end: String) -> Int? {
@@ -216,5 +232,7 @@ public extension InviteInfo {
 }
 
 extension FollowUpKind: Identifiable {
-    public var id: String { rawValue }
+    public var id: String {
+        rawValue
+    }
 }

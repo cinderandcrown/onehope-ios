@@ -61,7 +61,9 @@ public struct ConnectView<Account: View>: View {
 
     private var categories: [String] {
         snapshot.groups.reduce(into: [String]()) { list, group in
-            if !list.contains(group.category) { list.append(group.category) }
+            if !list.contains(group.category) {
+                list.append(group.category)
+            }
         }
     }
 

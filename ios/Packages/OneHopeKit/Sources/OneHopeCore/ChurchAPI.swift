@@ -163,7 +163,9 @@ public struct GroupLine: Equatable, Sendable, Identifiable {
     public let joinType: String
     public let url: URL?
 
-    public var joinsInApp: Bool { joinType != "request" }
+    public var joinsInApp: Bool {
+        joinType != "request"
+    }
 }
 
 public struct PrayerLine: Equatable, Sendable, Identifiable {
@@ -205,7 +207,9 @@ public struct SermonLine: Equatable, Sendable, Identifiable {
     public let kind: String
     public let link: URL?
 
-    public var isShort: Bool { kind == "short" }
+    public var isShort: Bool {
+        kind == "short"
+    }
 }
 
 public enum MemberAction: Sendable {
