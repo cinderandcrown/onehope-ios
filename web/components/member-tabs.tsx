@@ -466,12 +466,22 @@ function Watch({
           <iframe
             className="player"
             title={current.title}
-            src={`https://www.youtube.com/embed/${current.id}`}
+            src={`https://www.youtube.com/embed/${encodeURIComponent(current.id)}?playsinline=1&rel=0`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />
           <h2>{current.title}</h2>
-          <p className="muted">{formatDate(current.published)}</p>
+          <p className="muted">
+            {formatDate(current.published)} ·{" "}
+            <a
+              href={`https://www.youtube.com/watch?v=${encodeURIComponent(current.id)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Play on YouTube
+            </a>
+          </p>
         </>
       ) : (
         <p>Sunday messages will appear here.</p>

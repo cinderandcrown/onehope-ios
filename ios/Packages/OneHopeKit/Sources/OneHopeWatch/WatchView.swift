@@ -2,6 +2,7 @@ import OneHopeCore
 import OneHopeDesign
 import OneHopeHome
 import SwiftUI
+import UIKit
 import WebKit
 
 /// Sunday messages and shorts from the church YouTube channel, each with a share sheet.
@@ -9,6 +10,7 @@ public struct WatchView: View {
     private let snapshot: ChurchSnapshot
     private let onRefresh: () async -> Void
     @Binding private var selected: String?
+    @State private var failedVideo: String?
 
     public init(snapshot: ChurchSnapshot, selected: Binding<String?>, onRefresh: @escaping () async -> Void = {}) {
         self.snapshot = snapshot
@@ -71,9 +73,18 @@ public struct WatchView: View {
         if let sermon = snapshot.sermons.first(where: { $0.id == selected }) ?? messages.first {
             VStack(alignment: .leading, spacing: 8) {
                 if selected == sermon.id {
-                    SermonPlayer(videoID: sermon.id)
-                        .frame(height: 220)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                    ZStack {
+                        SermonPlayer(videoID: sermon.id) { event in
+                            if case .failed = event {
+                                failedVideo = sermon.id
+                            }
+                        }
+                        if failedVideo == sermon.id || !YouTubeEmbed.isVideoID(sermon.id) {
+                            playerFallback(sermon)
+                        }
+                    }
+                    .frame(height: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
                 } else {
                     Button { selected = sermon.id } label: { VideoThumbnail(sermon: sermon, height: 220) }
                         .buttonStyle(.plain)
@@ -85,8 +96,44 @@ public struct WatchView: View {
                         Text(published.formatted(date: .abbreviated, time: .omitted)).font(.footnote)
                     }
                     Spacer()
+                    playOnYouTube(sermon, prominent: false)
                     share(sermon)
                 }
+            }
+        }
+    }
+
+    /// Covers the player when YouTube refuses to play inside the app.
+    private func playerFallback(_ sermon: SermonLine) -> some View {
+        VStack(spacing: 12) {
+            Text("This video can't play here.").font(.headline).foregroundStyle(.white)
+            playOnYouTube(sermon, prominent: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black)
+    }
+
+    @ViewBuilder private func playOnYouTube(_ sermon: SermonLine, prominent: Bool) -> some View {
+        if let url = YouTubeEmbed.watchURL(videoID: sermon.id) ?? sermon.link {
+            let button = Button {
+                openOnYouTube(url)
+            } label: {
+                Label("Play on YouTube", systemImage: "play.rectangle.fill")
+            }
+            if prominent {
+                button.buttonStyle(.borderedProminent)
+            } else {
+                button.font(.footnote.weight(.semibold))
+            }
+        }
+    }
+
+    /// Opens the YouTube app when it is installed, otherwise Safari.
+    private func openOnYouTube(_ url: URL) {
+        Task { @MainActor in
+            let openedApp = await UIApplication.shared.open(url, options: [.universalLinksOnly: true])
+            if !openedApp {
+                _ = await UIApplication.shared.open(url)
             }
         }
     }
@@ -122,27 +169,54 @@ public struct WatchView: View {
     }
 }
 
+/// The YouTube player, loaded under the app's identity so YouTube accepts the embed (see `YouTubeEmbed`).
 private struct SermonPlayer: UIViewRepresentable {
     let videoID: String
+    let onEvent: (YouTubeEmbed.PlayerEvent) -> Void
 
-    func makeUIView(context _: Context) -> WKWebView {
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onEvent: onEvent)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
+        configuration.userContentController.add(context.coordinator, name: YouTubeEmbed.messageHandler)
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.scrollView.isScrollEnabled = false
-        load(web)
+        web.isOpaque = false
+        web.backgroundColor = .black
+        load(web, coordinator: context.coordinator)
         return web
     }
 
-    func updateUIView(_ web: WKWebView, context _: Context) {
-        if web.url?.lastPathComponent != videoID {
-            load(web)
+    func updateUIView(_ web: WKWebView, context: Context) {
+        context.coordinator.onEvent = onEvent
+        if context.coordinator.videoID != videoID {
+            load(web, coordinator: context.coordinator)
         }
     }
 
-    private func load(_ web: WKWebView) {
-        if let url = URL(string: "https://www.youtube.com/embed/\(videoID)?playsinline=1") {
-            web.load(URLRequest(url: url))
+    private func load(_ web: WKWebView, coordinator: Coordinator) {
+        coordinator.videoID = videoID
+        let identity = YouTubeEmbed.clientIdentity(bundleID: Bundle.main.bundleIdentifier)
+        if let html = YouTubeEmbed.playerHTML(videoID: videoID, identity: identity) {
+            web.loadHTMLString(html, baseURL: identity)
+        }
+    }
+
+    @MainActor final class Coordinator: NSObject, WKScriptMessageHandler {
+        var onEvent: (YouTubeEmbed.PlayerEvent) -> Void
+        var videoID: String?
+
+        init(onEvent: @escaping (YouTubeEmbed.PlayerEvent) -> Void) {
+            self.onEvent = onEvent
+        }
+
+        func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
+            if let body = message.body as? String, let event = YouTubeEmbed.PlayerEvent(message: body) {
+                onEvent(event)
+            }
         }
     }
 }
