@@ -34,7 +34,7 @@ test("a guest can open Home, Watch, Know Jesus, Give, and Plan a Visit without a
 
   await page.getByRole("tab", { name: "Know Jesus" }).click();
   await expect(page.getByText("John 3:16 (KJV)")).toBeVisible();
-  await page.getByRole("button", { name: "I decided to follow Jesus" }).click();
+  await page.getByRole("button", { name: "I said yes to Jesus" }).click();
   await page.getByLabel("Your name").fill("E2E Guest Decision");
   await page.getByLabel("Email (optional)").fill("guest@onehope.test");
   await page.getByRole("button", { name: "Send" }).click();

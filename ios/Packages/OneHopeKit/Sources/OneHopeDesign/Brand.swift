@@ -3,11 +3,17 @@ import SwiftUI
 import UIKit
 
 public enum BrandColor {
+    /// weareonehope.com --green
     public static let olive = Color(uiColor: dynamic(light: 0x3F4903, dark: 0xC6CC8E))
+    /// weareonehope.com --orange
     public static let terracotta = Color(uiColor: dynamic(light: 0xDF8052, dark: 0xE79A74))
-    public static let paper = Color(uiColor: dynamic(light: 0xF4F1E6, dark: 0x14140F))
+    /// weareonehope.com --dove
+    public static let paper = Color(uiColor: dynamic(light: 0xE5E4D0, dark: 0x14140F))
+    /// weareonehope.com --black-2
     public static let ink = Color(uiColor: dynamic(light: 0x1C1B1B, dark: 0xE5E4D0))
-    public static let card = Color(uiColor: dynamic(light: 0xFBF8F1, dark: 0x222218))
+    public static let card = Color(uiColor: dynamic(light: 0xF7F4EA, dark: 0x222218))
+    /// weareonehope.com --blue
+    public static let sky = Color(uiColor: dynamic(light: 0xCADDF6, dark: 0x8AA4C4))
 
     private static func dynamic(light: UInt32, dark: UInt32) -> UIColor {
         UIColor { traits in
@@ -55,9 +61,7 @@ public struct PhotoCard: View {
     }
 
     @ViewBuilder private var photo: some View {
-        if let url = Bundle.module.url(forResource: resource, withExtension: "jpg"),
-           let data = try? Data(contentsOf: url),
-           let image = UIImage(data: data) {
+        if let image = BundledPhoto.image(named: resource) {
             Image(uiImage: image).resizable().scaledToFill()
         } else {
             BrandColor.olive
@@ -70,9 +74,7 @@ public struct Wordmark: View {
     public init() {}
     public var body: some View {
         let name = scheme == .dark ? "wordmark-dove" : "wordmark-ink"
-        if let url = Bundle.module.url(forResource: name, withExtension: "png"),
-           let data = try? Data(contentsOf: url),
-           let image = UIImage(data: data) {
+        if let image = BundledPhoto.image(named: name, ext: "png") {
             Image(uiImage: image).resizable().scaledToFit().frame(height: 36).accessibilityLabel("One Hope")
         }
     }
@@ -109,12 +111,34 @@ public enum Haptics {
 }
 
 public extension View {
-    /// The rounded paper card used across the app.
+    /// A card with the site's ink edge, lifted off the dove background.
     func churchCard() -> some View {
         padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(BrandColor.card)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(BrandColor.ink.opacity(0.85), lineWidth: 1))
+            .shadow(color: BrandColor.olive.opacity(0.18), radius: 0, x: 4, y: 4)
+    }
+}
+
+public extension Font {
+    /// Large headlines in the site's scale. Articulat CF is not licensed for the app, so this is SF.
+    static var hopeDisplay: Font { .system(size: 40, weight: .semibold, design: .default) }
+    static var hopeTitle: Font { .system(.title2, design: .default).weight(.semibold) }
+}
+
+enum BundledPhoto {
+    private static let cache = NSCache<NSString, UIImage>()
+
+    static func image(named resource: String, ext: String = "jpg") -> UIImage? {
+        let key = "\(resource).\(ext)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        guard let url = Bundle.module.url(forResource: resource, withExtension: ext),
+              let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data) else { return nil }
+        cache.setObject(image, forKey: key)
+        return image
     }
 }
 

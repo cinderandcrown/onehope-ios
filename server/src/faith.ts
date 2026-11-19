@@ -374,3 +374,194 @@ export function currentStreak(previous: { lastDay: string; count: number } | nul
   const gap = dayNumber(today) - dayNumber(previous.lastDay);
   return gap === 0 || gap === 1 ? previous.count : 0;
 }
+
+/** A short line when a streak hits a mark. Not attributed to any person. */
+export function streakEncouragement(count: number): string | null {
+  if (count === 1) return "You opened the Word today.";
+  if (count === 3) return "Three days in a row.";
+  if (count === 7) return "A week of showing up.";
+  if (count === 14) return "Two weeks. Keep going.";
+  if (count === 21) return "Three weeks in the Word.";
+  if (count === 30) return "Thirty days. This is a habit now.";
+  if (count > 30 && count % 30 === 0) return `${count} days in a row.`;
+  return null;
+}
+
+export function greeting(at: number, name: string | null, timeZone = "America/Chicago"): string {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" }).format(new Date(at)),
+  );
+  const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const first = (name ?? "").trim().split(/\s+/)[0] ?? "";
+  if (first.length < 2 || first.toLowerCase() === "former") return hello;
+  return `${hello}, ${first}`;
+}
+
+/**
+ * Thirty days for someone who just said yes to Jesus. Days 1–7 match the
+ * shorter journey. Every verse is KJV. Prompts are app copy, not a person's words.
+ */
+export const JOURNEY_MONTH: readonly JourneyDay[] = [
+  ...NEW_BELIEVER_JOURNEY,
+  {
+    day: 8,
+    title: "Hide the Word",
+    reference: "Psalm 119:11",
+    text: "Thy word have I hid in mine heart, that I might not sin against thee.",
+    prompt: "Read the verse once more and carry one phrase into the day.",
+  },
+  {
+    day: 9,
+    title: "You belong to Him",
+    reference: "John 1:12",
+    text: "But as many as received him, to them gave he power to become the sons of God, even to them that believe on his name:",
+    prompt: "Thank God that you are His.",
+  },
+  {
+    day: 10,
+    title: "No condemnation",
+    reference: "Romans 8:1",
+    text: "There is therefore now no condemnation to them which are in Christ Jesus, who walk not after the flesh, but after the Spirit.",
+    prompt: "When shame shows up, answer it with this verse.",
+  },
+  {
+    day: 11,
+    title: "He loved first",
+    reference: "1 John 4:19",
+    text: "We love him, because he first loved us.",
+    prompt: "Tell God you love Him, in your own words.",
+  },
+  {
+    day: 12,
+    title: "Taste and see",
+    reference: "Psalm 34:8",
+    text: "O taste and see that the LORD is good: blessed is the man that trusteth in him.",
+    prompt: "Name one way God has been good to you.",
+  },
+  {
+    day: 13,
+    title: "Do not fear",
+    reference: "Isaiah 41:10",
+    text: "Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee; yea, I will uphold thee with the right hand of my righteousness.",
+    prompt: "Hand God the fear that has been loudest.",
+  },
+  {
+    day: 14,
+    title: "His peace",
+    reference: "John 14:27",
+    text: "Peace I leave with you, my peace I give unto you: not as the world giveth, give I unto you. Let not your heart be troubled, neither let it be afraid.",
+    prompt: "Sit quietly for a minute and receive His peace.",
+  },
+  {
+    day: 15,
+    title: "The God of hope",
+    reference: "Romans 15:13",
+    text: "Now the God of hope fill you with all joy and peace in believing, that ye may abound in hope, through the power of the Holy Ghost.",
+    prompt: "Ask God to fill you with hope today.",
+  },
+  {
+    day: 16,
+    title: "Fruit of the Spirit",
+    reference: "Galatians 5:22-23",
+    text: "But the fruit of the Spirit is love, joy, peace, longsuffering, gentleness, goodness, faith, Meekness, temperance: against such there is no law.",
+    prompt: "Ask the Spirit for one of these fruits in a real conversation today.",
+  },
+  {
+    day: 17,
+    title: "Be kind",
+    reference: "Ephesians 4:32",
+    text: "And be ye kind one to another, tenderhearted, forgiving one another, even as God for Christ's sake hath forgiven you.",
+    prompt: "Show kindness to one person on purpose.",
+  },
+  {
+    day: 18,
+    title: "He will finish",
+    reference: "Philippians 1:6",
+    text: "Being confident of this very thing, that he which hath begun a good work in you will perform it until the day of Jesus Christ:",
+    prompt: "Thank God that He started this and He will finish it.",
+  },
+  {
+    day: 19,
+    title: "Come boldly",
+    reference: "Hebrews 4:16",
+    text: "Let us therefore come boldly unto the throne of grace, that we may obtain mercy, and find grace to help in time of need.",
+    prompt: "Pray about a real need. You can come close.",
+  },
+  {
+    day: 20,
+    title: "Called into light",
+    reference: "1 Peter 2:9",
+    text: "But ye are a chosen generation, a royal priesthood, an holy nation, a peculiar people; that ye should shew forth the praises of him who hath called you out of darkness into his marvellous light:",
+    prompt: "Thank God for calling you out of darkness.",
+  },
+  {
+    day: 21,
+    title: "Light of the world",
+    reference: "Matthew 5:14",
+    text: "Ye are the light of the world. A city that is set on an hill cannot be hid.",
+    prompt: "How can you be a light for one neighbor today?",
+  },
+  {
+    day: 22,
+    title: "Witnesses",
+    reference: "Acts 1:8",
+    text: "But ye shall receive power, after that the Holy Ghost is come upon you: and ye shall be witnesses unto me both in Jerusalem, and in all Judaea, and in Samaria, and unto the uttermost part of the earth.",
+    prompt: "Pray for one person who lives near you.",
+  },
+  {
+    day: 23,
+    title: "Work as for the Lord",
+    reference: "Colossians 3:23",
+    text: "And whatsoever ye do, do it heartily, as to the Lord, and not unto men;",
+    prompt: "Do one ordinary task today as for the Lord.",
+  },
+  {
+    day: 24,
+    title: "Ask for wisdom",
+    reference: "James 1:5",
+    text: "If any of you lack wisdom, let him ask of God, that giveth to all men liberally, and upbraideth not; and it shall be given him.",
+    prompt: "Ask God for wisdom about one decision.",
+  },
+  {
+    day: 25,
+    title: "My light",
+    reference: "Psalm 27:1",
+    text: "The LORD is my light and my salvation; whom shall I fear? the LORD is the strength of my life; of whom shall I be afraid?",
+    prompt: "Say this verse out loud.",
+  },
+  {
+    day: 26,
+    title: "Love one another",
+    reference: "John 15:12",
+    text: "This is my commandment, That ye love one another, as I have loved you.",
+    prompt: "Love someone the way Jesus has loved you.",
+  },
+  {
+    day: 27,
+    title: "A living offering",
+    reference: "Romans 12:1",
+    text: "I beseech you therefore, brethren, by the mercies of God, that ye present your bodies a living sacrifice, holy, acceptable unto God, which is your reasonable service.",
+    prompt: "Offer God this day before it starts running you.",
+  },
+  {
+    day: 28,
+    title: "Fullness of joy",
+    reference: "Psalm 16:11",
+    text: "Thou wilt shew me the path of life: in thy presence is fulness of joy; at thy right hand there are pleasures for evermore.",
+    prompt: "Spend a few minutes just being with God.",
+  },
+  {
+    day: 29,
+    title: "Let it shine",
+    reference: "Matthew 5:16",
+    text: "Let your light so shine before men, that they may see your good works, and glorify your Father which is in heaven.",
+    prompt: "Do one good thing a neighbor can see, for God's glory.",
+  },
+  {
+    day: 30,
+    title: "All things new",
+    reference: "Revelation 21:5",
+    text: "And he that sat upon the throne said, Behold, I make all things new. And he said unto me, Write: for these words are true and faithful.",
+    prompt: "Thank Jesus that He makes things new, including you.",
+  },
+];

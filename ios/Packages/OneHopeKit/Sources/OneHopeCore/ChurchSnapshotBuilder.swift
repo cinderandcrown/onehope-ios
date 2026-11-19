@@ -37,6 +37,8 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.daily = parts.daily.reading
     snapshot.dailyStreak = parts.daily.streak
     snapshot.growth = parts.growth
+    snapshot.social = home.social ?? SocialLink.site
+    snapshot.journey = parts.knowJesus.journeyMonth ?? parts.knowJesus.journey
     snapshot.churchName = home.church.name
     snapshot.address = home.church.address
     snapshot.pastors = home.church.leadPastors
@@ -63,7 +65,9 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
             contactRequested: $0.contactRequested ?? false,
             sample: $0.sample,
             approved: $0.approved,
-            mine: $0.mine
+            mine: $0.mine,
+            prayedCount: $0.prayedCount ?? 0,
+            prayed: $0.prayed ?? false
         )
     }
     snapshot.directory = parts.directory.people.map {

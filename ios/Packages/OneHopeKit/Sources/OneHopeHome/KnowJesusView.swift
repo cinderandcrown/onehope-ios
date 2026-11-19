@@ -98,7 +98,7 @@ public struct KnowJesusView: View {
 
     private var journey: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Your first 7 days").font(.title3.bold())
+            Text("Your first 30 days").font(.title3.bold())
             ForEach(snapshot.journey) { day in
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Day \(day.day) · \(day.title)").font(.headline)

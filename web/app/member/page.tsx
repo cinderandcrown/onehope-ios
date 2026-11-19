@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { MemberTabs, type ChurchView, type MemberView } from "@/components/member-tabs";
-import { GIVING_FREQUENCIES, loadConfig, loadSermons, withStore } from "@onehope/server";
+import { GIVING_FREQUENCIES, greeting, loadConfig, loadSermons, withStore } from "@onehope/server";
 
 export const dynamic = "force-dynamic";
 
@@ -72,9 +72,13 @@ export default async function MemberPage({
         funds: store.funds(),
         frequencies: GIVING_FREQUENCIES,
         growth: store.growth(),
+        social: store.socialLinks(),
+        greeting: greeting(store.clock(), null),
+        journeyMonth: knowJesus.journeyMonth,
       };
       if (!token) return { church, member: null };
       const me = store.me(token);
+      church.greeting = greeting(store.clock(), me.displayName);
       const member: MemberView = {
         registeredEventIds: store
           .listEvents(token)

@@ -77,6 +77,19 @@ public struct JourneyDay: Decodable, Equatable, Sendable, Identifiable {
     }
 }
 
+/// Links printed on weareonehope.com on Nov 19, 2026. No other networks were on the site.
+public struct SocialLink: Decodable, Equatable, Sendable, Identifiable {
+    public let id: String
+    public let name: String
+    public let url: String
+
+    public static let site: [SocialLink] = [
+        SocialLink(id: "instagram", name: "Instagram", url: "https://www.instagram.com/iamonehope/?igshid=YmMyMTA2M2Y%3D"),
+        SocialLink(id: "facebook", name: "Facebook", url: "https://www.facebook.com/iamonehope/"),
+        SocialLink(id: "youtube", name: "YouTube", url: "https://www.youtube.com/@Weareonehope"),
+    ]
+}
+
 public struct DailyWord: Decodable, Equatable, Sendable {
     /// The church calendar day, YYYY-MM-DD in Chicago.
     public let day: String
@@ -96,7 +109,7 @@ public enum FollowUpKind: String, Sendable, CaseIterable {
 
     public var label: String {
         switch self {
-        case .salvation: "I decided to follow Jesus"
+        case .salvation: "I said yes to Jesus"
         case .baptism: "I want to be baptized"
         case .new: "I'm new"
         case .growthTrack: "Growth Track"
@@ -106,7 +119,7 @@ public enum FollowUpKind: String, Sendable, CaseIterable {
 
     public var thanks: String {
         switch self {
-        case .salvation: "This is the best decision you'll ever make. A pastor will reach out, and your 7-day journey starts below."
+        case .salvation: "This is the best decision you'll ever make. A pastor will reach out, and your 30-day journey starts below."
         case .baptism: "Wonderful. A pastor will reach out about baptism."
         case .new: "Welcome to One Hope! We're glad you're here."
         case .growthTrack: "Great. We'll reach out about the next Growth Track."
@@ -155,6 +168,19 @@ public enum FollowUpProblem: Error, Equatable {
         case .name: "Please tell us your name."
         case .consent: "Check the box so we can contact you, or leave email and phone empty."
         }
+    }
+}
+
+public enum DayGreeting {
+    /// Chicago time, matching the church. A first name is used when we have one.
+    public static func line(name: String, now: Date = Date()) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+        let hour = calendar.component(.hour, from: now)
+        let hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+        let first = name.split(separator: " ").first.map(String.init) ?? ""
+        if first.count < 2 || first.lowercased() == "former" { return hello }
+        return "\(hello), \(first)"
     }
 }
 

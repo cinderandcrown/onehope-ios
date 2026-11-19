@@ -1,6 +1,16 @@
 import Image from "next/image";
 
-import { createEventAction, createGroupAction, savePush, updateFollowUpAction } from "@/app/actions";
+import {
+  addPersonAction,
+  editPersonAction,
+  createEventAction,
+  createGroupAction,
+  createOutreachAction,
+  moderatePrayerAction,
+  savePush,
+  saveSocialAction,
+  updateFollowUpAction,
+} from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
 import {
   AccessError,
@@ -13,6 +23,31 @@ import {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function Desk({ store, token }: { store: ChurchStore; token: string }) {
+  let desk: ReturnType<ChurchStore["staffHome"]> | null = null;
+  try {
+    desk = store.staffHome(token);
+  } catch {
+    desk = null;
+  }
+  if (!desk) return null;
+  return (
+    <section>
+      <h2>{desk.greeting}</h2>
+      <div className="desk-grid">
+        {desk.cards.map((card) => (
+          <a className="desk-card" key={card.id} href={card.href}>
+            <h3>{card.title}</h3>
+            {card.count === null ? null : <p className="count">{card.count}</p>}
+            <p>{card.detail}</p>
+            <p className="help">{card.help}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function Locked({ title }: { title: string }) {
@@ -86,6 +121,26 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               </article>
             ) : null}
           </div>
+          <Desk store={store} token={token} />
+          <article className="panel">
+            <h2>Follow along</h2>
+            <p className="help">
+              How do I change a link? Edit the row and save. Only https links. These show on Today, Connect,
+              and the public invite page.
+            </p>
+            <form className="form" action={saveSocialAction}>
+              {store.socialLinks().map((link) => (
+                <fieldset key={link.id}>
+                  <input name="id" defaultValue={link.id} aria-label={`${link.name} id`} />
+                  <input name="name" defaultValue={link.name} aria-label={`${link.name} name`} />
+                  <input name="url" defaultValue={link.url} aria-label={`${link.name} link`} />
+                </fieldset>
+              ))}
+              <button className="button" type="submit">
+                Save links
+              </button>
+            </form>
+          </article>
         </>
       );
     }
@@ -94,6 +149,36 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       return (
         <section>
           <h1>People</h1>
+          <p className="help">
+            How do I add someone? Type their name and email. You will get a code to read to them. Nothing is
+            emailed.
+          </p>
+          <form className="form" action={addPersonAction}>
+            <input name="displayName" placeholder="Name" required />
+            <input name="email" type="email" placeholder="Email" required />
+            <input name="phone" placeholder="Phone (optional)" />
+            <button className="button" type="submit">
+              Add someone
+            </button>
+          </form>
+          {store.staffPeople(token).map((person) => (
+            <form className="form" action={editPersonAction} key={person.id}>
+              <input type="hidden" name="id" value={person.id} />
+              <input
+                name="displayName"
+                defaultValue={person.displayName}
+                aria-label={`Name for ${person.displayName}`}
+              />
+              <input
+                name="phone"
+                defaultValue={person.phone}
+                aria-label={`Phone for ${person.displayName}`}
+              />
+              <button className="button" type="submit">
+                Save {person.displayName}
+              </button>
+            </form>
+          ))}
           <table>
             <thead>
               <tr>
@@ -220,6 +305,28 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                   </p>
                 ))}
               </article>
+              <article className="panel">
+                <h2>Prayers to share</h2>
+                <p className="help">
+                  How do I share a prayer? Read it, then Share with the church or Keep private. Private stays
+                  off the wall.
+                </p>
+                {store
+                  .listPrayers(token)
+                  .filter((prayer) => !prayer.approved && prayer.body)
+                  .map((prayer) => (
+                    <form key={prayer.id} action={moderatePrayerAction}>
+                      <p>{prayer.body}</p>
+                      <input type="hidden" name="id" value={prayer.id} />
+                      <button className="button" name="approved" value="yes" type="submit">
+                        Share with the church
+                      </button>
+                      <button className="button secondary" name="approved" value="no" type="submit">
+                        Keep private
+                      </button>
+                    </form>
+                  ))}
+              </article>
             </>
           )}
         </section>
@@ -241,6 +348,13 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <h2>{group.name}</h2>
               <p>{[group.schedule, group.summary].filter(Boolean).join(" · ")}</p>
               {group.leaders.length > 0 ? <p>Led by {group.leaders.join(", ")}</p> : null}
+              <p className="help">
+                Who is in it:{" "}
+                {store
+                  .groupRoster(token, group.id)
+                  .people.map((person) => person.displayName)
+                  .join(", ") || "No one has joined yet."}
+              </p>
               {group.url ? (
                 <a href={group.url} target="_blank" rel="noreferrer">
                   {group.joinType === "request" ? "Requests on Church Center" : "Church Center page"}
@@ -255,11 +369,25 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       return (
         <section>
           <h1>Events</h1>
+          <p className="help">How do I post an event? Type a name and a place. People see it in the app.</p>
           <form className="form" action={createEventAction}>
             <input name="title" placeholder="Event title" required />
             <input name="location" placeholder="Location" required />
             <button className="button" type="submit">
               Add event
+            </button>
+          </form>
+          <h2>Serve the neighborhood</h2>
+          <p className="help">
+            How do I ask for help in the neighborhood? Add a serve day. People can sign up in the app. Leave
+            it blank until you have a real one.
+          </p>
+          <form className="form" action={createOutreachAction}>
+            <input name="title" placeholder="Serve day name" required />
+            <input name="location" placeholder="Where" required />
+            <input name="detail" placeholder="What people will do" />
+            <button className="button" type="submit">
+              Post serve day
             </button>
           </form>
           {store.publicHome().events.map((event) => (

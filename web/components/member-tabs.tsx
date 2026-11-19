@@ -2,9 +2,11 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { deleteMember, signInMember, signOutMember, signUpMember } from "@/app/member/actions";
+import { FollowAlong, type SocialLink } from "@/components/follow-along";
 import { GiveInApp } from "@/components/give-in-app";
 import { Grow, type GrowthView } from "@/components/growth";
 import { KidsCheckIn, type KidView } from "@/components/kids-check-in";
@@ -44,6 +46,9 @@ export type ChurchView = {
   funds: { id: string; name: string }[];
   frequencies: readonly { id: GivingFrequency; label: string }[];
   growth: GrowthView;
+  social: SocialLink[];
+  greeting: string;
+  journeyMonth: KnowJesus["journey"];
 };
 
 export type ChurchGroup = {
@@ -371,7 +376,7 @@ function Home({
       <section className="member-hero">
         <Image src="/photos/hero.jpg" alt="" width={1400} height={816} priority />
         <div>
-          <p>{church.churchName}</p>
+          <p>{church.greeting}</p>
           <h2>Sundays at 10:30 a.m.</h2>
           <p>{church.visit.arrival}</p>
         </div>
@@ -399,6 +404,11 @@ function Home({
       </article>
       <InviteCard church={church} onNotice={onNotice} />
       <DailyWord church={church} signedIn={signedIn} onNotice={onNotice} />
+      <FollowAlong links={church.social} />
+      <Link className="card" href="/coffee">
+        <strong>Revival Coffee</strong>
+        <span>The shop in our building. Menu, hours, and directions.</span>
+      </Link>
       <button type="button" className="card photo-card" onClick={() => onGo("Jesus")}>
         <Image src="/photos/about.jpg" alt="" width={900} height={600} />
         <strong>Know Jesus</strong>
@@ -516,9 +526,9 @@ function Watch({
 const DECISIONS: { kind: FollowUpKind; label: string; thanks: string }[] = [
   {
     kind: "salvation",
-    label: "I decided to follow Jesus",
+    label: "I said yes to Jesus",
     thanks:
-      "This is the best decision you'll ever make. A pastor will reach out, and your 7-day journey starts below.",
+      "This is the best decision you'll ever make. A pastor will reach out, and your 30-day journey starts below.",
   },
   {
     kind: "baptism",
@@ -692,14 +702,14 @@ function KnowJesusView({
         <p>{church.gospel.growthTrack}</p>
       </article>
       <section>
-        <h2>Your first 7 days with Jesus</h2>
+        <h2>Your first 30 days with Jesus</h2>
         {journey ? null : (
           <button type="button" className="text-button" onClick={() => setJourney(true)}>
-            Show the 7-day journey
+            Show the 30-day journey
           </button>
         )}
         {journey
-          ? church.journey.map((day) => (
+          ? (church.journeyMonth.length > 0 ? church.journeyMonth : church.journey).map((day) => (
               <article className="card verse" key={day.day}>
                 <p className="muted">
                   Day {day.day} · {day.title}
@@ -804,6 +814,7 @@ function PlanVisit({
         <h2>Kids</h2>
         <p>{visit.kids}</p>
       </article>
+      <FollowAlong links={church.social} />
       {coming ? (
         <FollowUpForm
           kind="visit"
@@ -954,6 +965,42 @@ function Gatherings({
   );
 }
 
+function MyFive({ onNotice }: { onNotice: Notify }) {
+  const act = useAct(onNotice);
+  const [names, setNames] = useState(["", "", "", "", ""]);
+  return (
+    <section>
+      <h2>My 5</h2>
+      <p>Up to five people you are praying for and inviting. Only you can see this list.</p>
+      {names.map((name, index) => (
+        <input
+          key={index}
+          value={name}
+          aria-label={`Person ${index + 1}`}
+          onChange={(event) => {
+            const next = [...names];
+            next[index] = event.target.value;
+            setNames(next);
+          }}
+        />
+      ))}
+      <button
+        type="button"
+        className="button"
+        onClick={() =>
+          void act(
+            "/api/my-five",
+            { names: names.map((name) => name.trim()).filter(Boolean) },
+            "Saved. Only you can see this.",
+          )
+        }
+      >
+        Save my list
+      </button>
+    </section>
+  );
+}
+
 function Connect({ church, member, onNotice }: { church: ChurchView; member: MemberView; onNotice: Notify }) {
   const act = useAct(onNotice);
   const [serve, setServe] = useState("");
@@ -963,6 +1010,8 @@ function Connect({ church, member, onNotice }: { church: ChurchView; member: Mem
   const joined = church.groups.filter((group) => group.joined);
   return (
     <>
+      <FollowAlong links={church.social} />
+      <MyFive onNotice={onNotice} />
       <section>
         <h2>Next steps</h2>
         {member.pathway.map((step) => (

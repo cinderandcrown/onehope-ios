@@ -1,6 +1,12 @@
 "use server";
 
-import { AccessError, FOLLOW_UP_STATUSES, type FollowUpStatus, withStore } from "@onehope/server";
+import {
+  AccessError,
+  FOLLOW_UP_STATUSES,
+  publicBaseUrl,
+  type FollowUpStatus,
+  withStore,
+} from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -8,12 +14,17 @@ import { isLanguage } from "@/lib/i18n";
 
 async function setSession(token: string) {
   const jar = await cookies();
-  jar.set("onehope_session", token, {
+  jar.set("onehope_session", token, sessionCookie());
+}
+
+/** Host-only cookie. It stays on the app host (app.weareonehope.com later) and is not shared with www. */
+function sessionCookie() {
+  return {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     path: "/",
-    secure: process.env.NODE_ENV === "production",
-  });
+    secure: publicBaseUrl().startsWith("https://"),
+  };
 }
 
 export async function previewSampleStaff() {
@@ -97,6 +108,84 @@ export async function savePush(formData: FormData) {
 
 function isFollowUpStatus(value: unknown): value is FollowUpStatus {
   return typeof value === "string" && (FOLLOW_UP_STATUSES as readonly string[]).includes(value);
+}
+
+export async function saveSocialAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const ids = formData.getAll("id").map(String);
+  const names = formData.getAll("name").map(String);
+  const urls = formData.getAll("url").map(String);
+  const links = ids
+    .map((id, index) => ({ id, name: names[index] ?? "", url: urls[index] ?? "" }))
+    .filter((link) => link.url.trim());
+  try {
+    await withStore((store) => store.setSocialLinks(token, links));
+  } catch {
+    redirect("/overview?error=1");
+  }
+  redirect("/overview");
+}
+
+export async function addPersonAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const displayName = String(formData.get("displayName") ?? "");
+  const email = String(formData.get("email") ?? "");
+  const phone = String(formData.get("phone") ?? "");
+  try {
+    const person = await withStore((store) => store.addPerson(token, { displayName, email, phone }));
+    redirect(`/people?added=${encodeURIComponent(person.inviteToken)}`);
+  } catch {
+    redirect("/people?error=1");
+  }
+}
+
+export async function editPersonAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const id = String(formData.get("id") ?? "");
+  const displayName = String(formData.get("displayName") ?? "");
+  const phone = String(formData.get("phone") ?? "");
+  await withStore((store) => store.editPerson(token, id, { displayName, phone }));
+  redirect("/people");
+}
+
+export async function moderatePrayerAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const id = String(formData.get("id") ?? "");
+  const approved = formData.get("approved") === "yes";
+  await withStore((store) => store.moderatePrayer(token, id, approved));
+  redirect("/care");
+}
+
+export async function createOutreachAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_session")?.value;
+  if (!token) redirect("/login");
+  const title = String(formData.get("title") ?? "");
+  const location = String(formData.get("location") ?? "");
+  const detail = String(formData.get("detail") ?? "");
+  const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  await withStore((store) =>
+    store.createOutreach(token, { title, location, detail, start, end: start + 2 * 60 * 60 * 1000 }),
+  );
+  redirect("/events");
+}
+
+export async function neighborhoodPrayerAction(formData: FormData) {
+  const body = String(formData.get("body") ?? "");
+  try {
+    await withStore((store) => store.submitNeighborhoodPrayer(body, "web-neighborhood"));
+  } catch {
+    redirect("/neighborhood?error=1");
+  }
+  redirect("/neighborhood?sent=1");
 }
 
 export async function updateFollowUpAction(formData: FormData) {

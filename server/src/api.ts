@@ -1,5 +1,6 @@
 import { CAPABILITIES } from "./capabilities";
 import { AccessError, assertNever, assertNoCardData, isAccessError } from "./domain";
+import { originAllowed } from "./public-url";
 import { facebookLive, loadSermons } from "./adapters";
 import {
   bookingBodySchema,
@@ -17,6 +18,16 @@ import {
   followUpBodySchema,
   supportBodySchema,
   followUpStatusBodySchema,
+  socialBodySchema,
+  myFiveBodySchema,
+  testimonyBodySchema,
+  milestoneBodySchema,
+  outreachBodySchema,
+  personCreateBodySchema,
+  personEditBodySchema,
+  servingAssignBodySchema,
+  neighborhoodPrayerBodySchema,
+  coffeeOrderBodySchema,
   groupBodySchema,
   loginBodySchema,
   moderateBodySchema,
@@ -97,6 +108,31 @@ export const API_ROUTES = [
   ["GET", "/api/growth"],
   ["GET", "/api/care/follow-ups"],
   ["POST", "/api/care/follow-ups/{id}"],
+  ["GET", "/api/social"],
+  ["POST", "/api/social"],
+  ["GET", "/api/coffee"],
+  ["GET", "/api/coffee/catalog"],
+  ["POST", "/api/coffee/orders"],
+  ["POST", "/api/coffee/square-webhook"],
+  ["GET", "/api/community"],
+  ["POST", "/api/neighborhood/prayers"],
+  ["POST", "/api/prayers/{id}/pray"],
+  ["GET", "/api/my-five"],
+  ["POST", "/api/my-five"],
+  ["POST", "/api/testimonies"],
+  ["POST", "/api/testimonies/{id}/moderate"],
+  ["POST", "/api/milestones"],
+  ["POST", "/api/outreach"],
+  ["POST", "/api/outreach/{id}/rsvp"],
+  ["POST", "/api/outreach/{id}/undo"],
+  ["GET", "/api/staff/home"],
+  ["GET", "/api/staff/people"],
+  ["POST", "/api/staff/people"],
+  ["POST", "/api/staff/people/{id}"],
+  ["POST", "/api/staff/people/{id}/undo"],
+  ["POST", "/api/staff/serving"],
+  ["POST", "/api/staff/serving/{id}/undo"],
+  ["GET", "/api/staff/groups/{id}"],
 ] as const;
 
 type Deps = {
@@ -111,6 +147,33 @@ export function createApi(deps: Deps) {
   const reporter = deps.reporter ?? noopReporter;
   return async function handle(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") {
+      return finish(deps, request, new Response(null, { status: 204 }));
+    }
+    if (request.method === "POST" && url.pathname === "/api/coffee/square-webhook") {
+      try {
+        const raw = await request.text();
+        const signature = request.headers.get("x-square-hmacsha256-signature") ?? "";
+        const result = deps.store.recordSquareWebhook(raw, signature);
+        return finish(deps, request, Response.json({ ok: true, ...result }));
+      } catch (error) {
+        if (isAccessError(error)) {
+          return finish(
+            deps,
+            request,
+            Response.json(
+              { ok: false, error: error.message, code: error.code },
+              { status: statusFor(error.code) },
+            ),
+          );
+        }
+        return finish(
+          deps,
+          request,
+          Response.json({ ok: false, error: "Something went wrong.", code: "error" }, { status: 500 }),
+        );
+      }
+    }
     try {
       assertMutation(request);
       const token = bearerOrCookie(request);
@@ -128,20 +191,41 @@ export function createApi(deps: Deps) {
       }
       const result = await route(deps, token, request.method, url.pathname, body, clientAddress(request));
       log.log("info", "request", { method: request.method, path: url.pathname, status: 200 });
-      return Response.json({ ok: true, ...result });
+      return finish(deps, request, Response.json({ ok: true, ...result }));
     } catch (error) {
       if (isAccessError(error)) {
         log.log("info", "request_denied", { method: request.method, path: url.pathname, code: error.code });
-        return Response.json(
-          { ok: false, error: friendlyError(error), code: error.code },
-          { status: statusFor(error.code) },
+        return finish(
+          deps,
+          request,
+          Response.json(
+            { ok: false, error: friendlyError(error), code: error.code },
+            { status: statusFor(error.code) },
+          ),
         );
       }
       reporter.capture(error, { path: url.pathname, method: request.method });
       log.log("error", "request_failed", { method: request.method, path: url.pathname });
-      return Response.json({ ok: false, error: "Something went wrong.", code: "error" }, { status: 500 });
+      return finish(
+        deps,
+        request,
+        Response.json({ ok: false, error: "Something went wrong.", code: "error" }, { status: 500 }),
+      );
     }
   };
+}
+
+function finish(deps: Deps, request: Request, response: Response): Response {
+  const headers = new Headers(response.headers);
+  const origin = request.headers.get("origin");
+  if (origin && originAllowed(origin, deps.store.config.publicBaseUrl)) {
+    headers.set("access-control-allow-origin", origin);
+    headers.set("access-control-allow-credentials", "true");
+    headers.set("access-control-allow-headers", "authorization, content-type");
+    headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
+    headers.set("vary", "Origin");
+  }
+  return new Response(response.body, { status: response.status, headers });
 }
 
 async function route(
@@ -288,6 +372,63 @@ async function route(
   if (method === "POST" && path === "/api/support")
     return { support: store.submitSupport(token, parse(supportBodySchema, body), client) };
   if (method === "GET" && path === "/api/growth") return store.growth();
+  if (method === "GET" && path === "/api/social") return { links: store.socialLinks() };
+  if (method === "POST" && path === "/api/social")
+    return { links: store.setSocialLinks(need(), parse(socialBodySchema, body).links) };
+  if (method === "GET" && path === "/api/coffee") return store.coffeePublic();
+  if (method === "GET" && path === "/api/coffee/catalog") return store.coffeeCatalog();
+  if (method === "POST" && path === "/api/coffee/orders")
+    return store.placeCoffeeOrder(token, parse(coffeeOrderBodySchema, body));
+  if (method === "GET" && path === "/api/community") return store.community(token);
+  if (method === "POST" && path === "/api/neighborhood/prayers")
+    return store.submitNeighborhoodPrayer(parse(neighborhoodPrayerBodySchema, body).body, client);
+  const pray = path.match(/^\/api\/prayers\/([^/]+)\/pray$/);
+  if (method === "POST" && pray?.[1]) return store.markPrayed(need(), decodeURIComponent(pray[1]));
+  if (method === "GET" && path === "/api/my-five") return store.myFiveNames(need());
+  if (method === "POST" && path === "/api/my-five")
+    return store.saveMyFive(need(), parse(myFiveBodySchema, body).names);
+  if (method === "POST" && path === "/api/testimonies")
+    return store.submitTestimony(need(), parse(testimonyBodySchema, body));
+  const testimony = path.match(/^\/api\/testimonies\/([^/]+)\/moderate$/);
+  if (method === "POST" && testimony?.[1]) {
+    return store.moderateTestimony(
+      need(),
+      decodeURIComponent(testimony[1]),
+      parse(moderateBodySchema, body).approved,
+    );
+  }
+  if (method === "POST" && path === "/api/milestones")
+    return store.publishMilestone(need(), parse(milestoneBodySchema, body));
+  if (method === "POST" && path === "/api/outreach") {
+    const input = parse(outreachBodySchema, body);
+    return { outreach: store.createOutreach(need(), { ...input, detail: input.detail ?? "" }) };
+  }
+  const rsvp = path.match(/^\/api\/outreach\/([^/]+)\/rsvp$/);
+  if (method === "POST" && rsvp?.[1]) return store.rsvpOutreach(need(), decodeURIComponent(rsvp[1]));
+  const undoOutreach = path.match(/^\/api\/outreach\/([^/]+)\/undo$/);
+  if (method === "POST" && undoOutreach?.[1])
+    return store.undoOutreach(need(), decodeURIComponent(undoOutreach[1]));
+  if (method === "GET" && path === "/api/staff/home") return store.staffHome(need());
+  if (method === "GET" && path === "/api/staff/people") return { people: store.staffPeople(need()) };
+  if (method === "POST" && path === "/api/staff/people")
+    return { person: store.addPerson(need(), parse(personCreateBodySchema, body)) };
+  const editPerson = path.match(/^\/api\/staff\/people\/([^/]+)$/);
+  if (method === "POST" && editPerson?.[1]) {
+    return {
+      person: store.editPerson(need(), decodeURIComponent(editPerson[1]), parse(personEditBodySchema, body)),
+    };
+  }
+  const undoPerson = path.match(/^\/api\/staff\/people\/([^/]+)\/undo$/);
+  if (method === "POST" && undoPerson?.[1])
+    return store.undoAddPerson(need(), decodeURIComponent(undoPerson[1]));
+  if (method === "POST" && path === "/api/staff/serving")
+    return { assignment: store.assignServing(need(), parse(servingAssignBodySchema, body)) };
+  const undoServing = path.match(/^\/api\/staff\/serving\/([^/]+)\/undo$/);
+  if (method === "POST" && undoServing?.[1])
+    return store.undoServing(need(), decodeURIComponent(undoServing[1]));
+  const roster = path.match(/^\/api\/staff\/groups\/([^/]+)$/);
+  if (method === "GET" && roster?.[1])
+    return { group: store.groupRoster(need(), decodeURIComponent(roster[1])) };
   if (method === "GET" && path === "/api/care/follow-ups") return { followUps: store.followUpsFor(need()) };
   const followUp = path.match(/^\/api\/care\/follow-ups\/([^/]+)$/);
   if (method === "POST" && followUp?.[1]) {
