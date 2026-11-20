@@ -29,7 +29,7 @@ export {
   withStore,
   UnknownTenantError,
 } from "./persist";
-export { ADAPTERS, assertTruthful, projectCapabilities, sourceRoot } from "./adapter-registry";
+export { ADAPTERS, assertTruthful, projectCapabilities } from "./adapter-registry";
 export { tablesFor } from "./request-tables";
 export { WriteConflictError } from "./document-store";
 export { localAuthProvider } from "./auth-provider";

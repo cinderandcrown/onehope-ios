@@ -79,6 +79,43 @@ test("truth gate refuses a live capability with no backing code", async () => {
   assert.equal(source.includes("migrate("), false);
 });
 
+test("capabilities answers when the source tree is not deployed", async () => {
+  const missing = fileURLToPath(new URL("./no-such-source-root/", import.meta.url));
+  assert.throws(() => assertTruthful(new Set(), missing), /youtube backing file is missing/);
+  const handle = createApi({ store: ChurchStore.demo() });
+  const response = await handle(new Request("http://localhost/api/capabilities"));
+  assert.equal(response.status, 200);
+  const route = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+  assert.equal(route.includes("assertTruthful()"), true);
+  assert.equal(route.includes("sourceRoot("), false);
+});
+
+test("0005 replaces a link_membership shipped with the first 0004", async () => {
+  const db = new PGlite();
+  const sql = client(db);
+  await migrate(
+    sql,
+    loadMigrations().filter((item) => item.version !== "0005_tenant_passwords"),
+  );
+  await sql.exec(`
+    CREATE OR REPLACE FUNCTION link_membership(
+      p_email text, p_password text, p_tenant text, p_person text, p_role text, p_status text
+    ) RETURNS void LANGUAGE plpgsql AS $fn$
+    BEGIN
+      UPDATE accounts SET password_hash = p_password WHERE email = p_email;
+    END;
+    $fn$;
+  `);
+  const applied = await migrate(sql);
+  assert.deepEqual(applied, ["0005_tenant_passwords"]);
+  const found = await sql.query<{ def: string }>(
+    "SELECT pg_get_functiondef('link_membership(text,text,text,text,text,text)'::regprocedure) AS def",
+  );
+  const def = found.rows[0]?.def ?? "";
+  assert.equal(def.includes("password_hash = p_password"), false);
+  assert.equal(def.includes("INSERT INTO tenant_passwords"), true);
+});
+
 test("production refuses sample people", () => {
   const doc = emptyDocument();
   doc.people.push({

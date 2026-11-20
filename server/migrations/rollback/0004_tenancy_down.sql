@@ -2,7 +2,7 @@
 -- Take a Neon branch, PITR restore point, or pg_dump before you run it.
 -- demo_runtime is not modified.
 
-DELETE FROM schema_migrations WHERE version = '0004_tenancy';
+DELETE FROM schema_migrations WHERE version IN ('0004_tenancy', '0005_tenant_passwords');
 
 DROP FUNCTION IF EXISTS link_membership(text, text, text, text, text, text);
 DROP FUNCTION IF EXISTS read_tenant_passwords(text);

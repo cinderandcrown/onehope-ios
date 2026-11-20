@@ -31,7 +31,13 @@ test("migrations apply once and Postgres RLS isolates households", async () => {
   const sql = client(db);
   const first = await migrate(sql);
   const second = await migrate(sql);
-  assert.deepEqual(first, ["0001_init", "0002_retention", "0003_demo_runtime", "0004_tenancy"]);
+  assert.deepEqual(first, [
+    "0001_init",
+    "0002_retention",
+    "0003_demo_runtime",
+    "0004_tenancy",
+    "0005_tenant_passwords",
+  ]);
   assert.deepEqual(second, []);
 
   await db.exec("RESET ROLE");
