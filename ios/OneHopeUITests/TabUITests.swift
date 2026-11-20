@@ -126,8 +126,8 @@ final class TabUITests: XCTestCase {
     /// lazily drawn row (or land as a tap on another row) and leave the next row "missing".
     private func reveal(_ identifier: String, app: XCUIApplication) {
         let row = marked(identifier, app: app)
-        let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
-        let surface: XCUIElement = list.exists ? list : app
+        // Drag on the screen itself: other tabs keep their own lists alive, so "the first list" may be off screen.
+        let surface = app.windows.firstMatch
         let tabTop = app.buttons["tab-home"].frame.minY
         func onScreen() -> Bool {
             row.exists && row.frame.height > 1 && row.frame.minY > 90 && row.frame.maxY < tabTop
