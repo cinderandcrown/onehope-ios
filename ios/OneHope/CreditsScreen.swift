@@ -49,6 +49,7 @@ struct CreditsScreen: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle("About & Credits")
         .navigationBarTitleDisplayMode(.inline)

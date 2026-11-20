@@ -25,6 +25,7 @@ public struct CoffeeView: View {
             }
             .padding(Space.lg)
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle("Revival Coffee")
         .navigationBarTitleDisplayMode(.inline)

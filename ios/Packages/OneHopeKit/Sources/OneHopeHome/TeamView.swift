@@ -48,6 +48,7 @@ public struct TeamView: View {
             }
             .padding(Space.lg)
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle("Our Team")
         .navigationBarTitleDisplayMode(.inline)

@@ -47,6 +47,7 @@ public struct HomeView: View {
                 .padding(.vertical, Space.lg)
             }
             .refreshable { await onRefresh() }
+            .tabBarClearance()
             .background(BrandColor.paper)
             .navigationTitle(L10n.text(.home))
             .navigationBarTitleDisplayMode(.inline)

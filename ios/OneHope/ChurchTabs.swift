@@ -35,16 +35,21 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
         self.account = account
     }
 
+    /// The tab bar is stacked under the screen instead of floated over it with `safeAreaInset`.
+    /// Every tab hosts its own NavigationStack (List, Form, ScrollView, pushed pages), and an inset
+    /// applied outside a NavigationStack is not reliably passed down to those scroll views, so the
+    /// last rows and buttons ended up behind the bar. Stacking gives each screen a frame that ends
+    /// at the top of the bar on every device, so nothing can sit underneath it.
     var body: some View {
-        screen
-            .id(tab)
-            .transition(.opacity)
-            .animation(reduceMotion ? nil : HopeMotion.fade, value: tab)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(BrandColor.paper)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                ChurchTabBar(selection: $tab)
-            }
+        VStack(spacing: 0) {
+            screen
+                .id(tab)
+                .transition(.opacity)
+                .animation(reduceMotion ? nil : HopeMotion.fade, value: tab)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ChurchTabBar(selection: $tab)
+        }
+        .background(BrandColor.paper)
     }
 
     @ViewBuilder private var screen: some View {
@@ -102,7 +107,8 @@ private struct ChurchTabBar: View {
         }
         .padding(.top, 6)
         .padding(.bottom, 4)
-        .background(BrandColor.paper)
+        // The bar stays inside the safe area; only its paper color runs down behind the home indicator.
+        .background(BrandColor.paper.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(BrandColor.ink.opacity(0.12)).frame(height: 1) }
         .accessibilityElement(children: .contain)
     }

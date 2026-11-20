@@ -272,6 +272,7 @@ public struct HopeList<Content: View>: View {
     public var body: some View {
         List { content }
             .scrollContentBackground(.hidden)
+            .tabBarClearance()
             .background(BrandColor.paper)
     }
 }
@@ -287,6 +288,16 @@ public struct HopeForm<Content: View>: View {
     public var body: some View {
         Form { content }
             .scrollContentBackground(.hidden)
+            .tabBarClearance()
             .background(BrandColor.paper)
+    }
+}
+
+public extension View {
+    /// Breathing room under the last row of a vertical scroll view or list, so its final button never sits flush
+    /// against the tab bar (or the home indicator in a sheet). The tab bar itself reserves its own height in
+    /// ChurchShell; this only adds the gap. Apply it to vertical scroll containers, not to horizontal carousels.
+    func tabBarClearance() -> some View {
+        contentMargins(.bottom, Space.xl, for: .scrollContent)
     }
 }

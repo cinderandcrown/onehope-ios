@@ -44,6 +44,7 @@ struct FeatureMenu<Account: View>: View {
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
+            .tabBarClearance()
             .background(BrandColor.paper)
             .navigationTitle(L10n.text(.more))
             .refreshable { await onRefresh() }

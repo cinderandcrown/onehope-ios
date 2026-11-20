@@ -58,6 +58,7 @@ public struct PlanVisitView: View {
             }
             .padding()
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle("Plan a Visit")
         .sheet(isPresented: $asking) {

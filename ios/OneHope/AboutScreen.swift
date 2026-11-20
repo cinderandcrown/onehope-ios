@@ -44,6 +44,7 @@ struct AboutScreen: View {
             }
             .padding(Space.lg)
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle("About")
         .accessibilityIdentifier("more-about-screen")

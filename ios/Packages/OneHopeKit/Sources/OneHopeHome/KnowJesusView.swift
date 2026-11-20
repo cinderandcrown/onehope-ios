@@ -71,6 +71,7 @@ public struct KnowJesusView: View {
             }
             .padding()
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle(L10n.text(.knowJesus))
         .sheet(item: $asking) { kind in

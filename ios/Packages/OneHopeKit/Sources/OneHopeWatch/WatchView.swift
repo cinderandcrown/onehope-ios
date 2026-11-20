@@ -80,6 +80,7 @@ public struct WatchView: View {
             .padding()
         }
         .refreshable { await onRefresh() }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle(L10n.text(.watch))
     }

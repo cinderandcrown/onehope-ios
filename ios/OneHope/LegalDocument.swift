@@ -52,6 +52,7 @@ struct LegalDocument: View {
             }
             .padding(Space.lg)
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)

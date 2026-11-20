@@ -26,6 +26,7 @@ struct AccountGate: View {
             }
             .padding()
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .announce(message)
         .sheet(item: $legal) { LegalSheet(page: $0) }
