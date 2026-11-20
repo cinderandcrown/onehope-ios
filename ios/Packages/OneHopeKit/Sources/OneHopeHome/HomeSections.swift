@@ -66,7 +66,7 @@ struct HomeShortcuts: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: Space.sm) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: typeSize >= .xxLarge ? 2 : 4), spacing: Space.sm) {
             shortcut("Give", symbol: "heart.fill", tint: BrandColor.terracottaDeep) { onOpenTab("give") }
             shortcut("Pray", symbol: "hands.sparkles.fill", tint: BrandColor.olive) { onOpenTab("prayer") }
             NavigationLink {
@@ -96,6 +96,8 @@ struct HomeShortcuts: View {
         VStack(spacing: Space.sm) {
             FeatureIcon(symbol, tint: tint, size: 44)
             Text(title).font(.caption.weight(.semibold)).foregroundStyle(BrandColor.ink)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.vertical, Space.md)

@@ -49,6 +49,7 @@ public struct ConnectView<Account: View, KnowJesus: View>: View {
                 } footer: {
                     if !snapshot.signedIn {
                         Text("Sign in to join groups and check in kids. Prayer has its own tab.")
+                            .foregroundStyle(BrandColor.ink)
                     }
                 }
                 if snapshot.signedIn {

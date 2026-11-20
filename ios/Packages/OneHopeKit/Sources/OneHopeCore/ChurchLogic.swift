@@ -135,17 +135,28 @@ public enum GivingRules {
 public enum ChurchTime {
     /// "Sunday 10:30 AM": the weekday and time of a service.
     public static func serviceLine(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
-        date.formatted(style(.dateTime.weekday(.wide).hour().minute(), locale: locale))
+        churchWording(date.formatted(style(.dateTime.weekday(.wide).hour().minute(), locale: locale)), locale: locale)
     }
 
     /// "Sunday, November 22, 2026 at 10:30 AM": an event start.
     public static func eventLine(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
-        date.formatted(style(Date.FormatStyle(date: .complete, time: .shortened), locale: locale))
+        churchWording(date.formatted(style(Date.FormatStyle(date: .complete, time: .shortened), locale: locale)), locale: locale)
     }
 
     /// "Nov 22, 2026": the day a message was published.
     public static func dayLine(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
         date.formatted(style(Date.FormatStyle(date: .abbreviated, time: .omitted), locale: locale))
+    }
+
+    /// The church writes "10:30 a.m.", so English times match the rest of the app instead of "10:30 AM".
+    static func churchWording(_ text: String, locale: Locale) -> String {
+        guard locale.language.languageCode == .english else { return text }
+        var out = text
+        for space in ["\u{202F}", "\u{00A0}", " "] {
+            out = out.replacingOccurrences(of: "\(space)AM", with: " a.m.")
+                .replacingOccurrences(of: "\(space)PM", with: " p.m.")
+        }
+        return out
     }
 
     private static func style(_ base: Date.FormatStyle, locale: Locale) -> Date.FormatStyle {

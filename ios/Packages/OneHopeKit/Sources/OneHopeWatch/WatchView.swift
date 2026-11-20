@@ -62,6 +62,7 @@ public struct WatchView: View {
                                     VStack(alignment: .leading, spacing: 6) {
                                         VideoThumbnail(sermon: short, height: 120)
                                         Text(short.title).font(.footnote).foregroundStyle(BrandColor.ink)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                     .frame(width: 160, alignment: .leading)
                                 }

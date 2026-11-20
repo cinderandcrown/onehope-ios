@@ -29,14 +29,14 @@ final class ChurchTimeTests: XCTestCase {
         let line = try ChurchTime.serviceLine(sundayService(), locale: english)
         XCTAssertTrue(line.contains("Sunday"), line)
         XCTAssertTrue(line.contains("10:30"), line)
-        XCTAssertTrue(line.contains("AM"), line)
+        XCTAssertTrue(line.hasSuffix("10:30 a.m."), line)
         XCTAssertFalse(line.contains("4:30"), line)
     }
 
     func testEventAndDayLinesUseChicagoDates() throws {
         let event = try ChurchTime.eventLine(sundayService(), locale: english)
         XCTAssertTrue(event.contains("November 22, 2026"), event)
-        XCTAssertTrue(event.contains("10:30"), event)
+        XCTAssertTrue(event.hasSuffix("10:30 a.m."), event)
         // 03:00 UTC on Nov 23 is still the evening of Nov 22 in Chicago.
         let late = try XCTUnwrap(parseISODate("2026-11-23T03:00:00Z"))
         XCTAssertEqual(ChurchTime.dayLine(late, locale: english), "Nov 22, 2026")

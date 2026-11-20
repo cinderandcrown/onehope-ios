@@ -557,7 +557,8 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           <h2>Bookings</h2>
           {facilities.bookings.map((booking) => (
             <p key={booking.id}>
-              {booking.roomId} · {new Date(booking.start).toLocaleString()}
+              {booking.roomId} ·{" "}
+              {new Date(booking.start).toLocaleString("en-US", { timeZone: "America/Chicago" })}
             </p>
           ))}
         </section>
@@ -741,7 +742,9 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                   </td>
                   <td className={row.read ? "yes" : "no"}>{row.read ? "Yes" : "No"}</td>
                   <td className={row.write ? "yes" : "no"}>{row.write ? "Yes" : "No"}</td>
-                  <td>{row.status === "live" ? "Live" : row.status === "dry_run" ? "Dry run" : "Not built"}</td>
+                  <td>
+                    {row.status === "live" ? "Live" : row.status === "dry_run" ? "Dry run" : "Not built"}
+                  </td>
                 </tr>
               ))}
             </tbody>

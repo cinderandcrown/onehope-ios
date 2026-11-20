@@ -255,7 +255,7 @@ public struct TitledSection<Content: View>: View {
         } header: {
             Text(title)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(BrandColor.ink.opacity(0.8))
+                .foregroundStyle(BrandColor.ink)
                 .accessibilityAddTraits(.isHeader)
         }
     }

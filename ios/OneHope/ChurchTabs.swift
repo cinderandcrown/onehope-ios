@@ -127,6 +127,7 @@ private struct ChurchTabBar: View {
             }
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
             .foregroundStyle(selection == id ? BrandColor.terracottaDeep : BrandColor.ink.opacity(0.75))
         }
         .buttonStyle(.plain)

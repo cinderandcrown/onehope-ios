@@ -121,18 +121,22 @@ final class TabUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    /// Scrolls the list slowly until the row is on screen and tappable.
-    /// Slow swipes on the list itself (not the whole app) keep a swipe from landing as a tap on a row,
+    /// Scrolls the list until the row sits fully on screen above the tab bar.
+    /// Swipes go to the list itself (not the whole app) so a swipe never lands as a tap on a row,
     /// which used to open the wrong screen and leave the next row "missing".
     private func reveal(_ identifier: String, app: XCUIApplication) {
         let row = marked(identifier, app: app)
         let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
         let surface: XCUIElement = list.exists ? list : app
-        for _ in 0 ..< 14 where !(row.exists && row.isHittable) {
-            surface.swipeUp(velocity: .slow)
+        let tabTop = app.buttons["tab-home"].frame.minY
+        func onScreen() -> Bool {
+            row.exists && row.frame.minY > 90 && row.frame.maxY < tabTop
         }
-        for _ in 0 ..< 14 where !(row.exists && row.isHittable) {
-            surface.swipeDown(velocity: .slow)
+        for _ in 0 ..< 10 where !onScreen() {
+            surface.swipeUp(velocity: .default)
+        }
+        for _ in 0 ..< 10 where !onScreen() {
+            surface.swipeDown(velocity: .default)
         }
     }
 

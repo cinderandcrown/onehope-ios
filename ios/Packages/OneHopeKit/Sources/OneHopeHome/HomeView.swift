@@ -112,7 +112,7 @@ public struct VideoThumbnail: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
             .overlay {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 44))
+                    .font(.system(size: min(44, height * 0.45)))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.3), radius: 6)
             }
