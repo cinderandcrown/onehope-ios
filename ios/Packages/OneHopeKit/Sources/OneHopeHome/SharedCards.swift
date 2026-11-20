@@ -48,8 +48,10 @@ public struct DailyWordCard: View {
     public var body: some View {
         if let daily = snapshot.daily {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Daily Word · \(daily.reference)").font(.caption.weight(.semibold)).foregroundStyle(BrandColor.olive)
-                Text("\u{201C}\(daily.text)\u{201D}").font(.body.italic())
+                Text("Today's encouragement · \(daily.reference)").eyebrow()
+                Text("\u{201C}\(daily.text)\u{201D}")
+                    .font(.system(.title3, design: .serif).italic())
+                    .foregroundStyle(BrandColor.ink)
                 Text("Read \(daily.read) (KJV)").font(.footnote)
                 Text(daily.prompt).font(.callout)
                 let days = streakCount(today: daily.day)

@@ -245,6 +245,8 @@ public enum MemberAction: Sendable {
     /// Confirms the password, then gives. Only offered when giving is switched on.
     case gift(GiftRequest, password: String)
     case readDailyWord
+    /// Takes a prayer off the wall until a pastor looks at it.
+    case reportPrayer(String)
 }
 
 public struct FundLine: Equatable, Sendable, Identifiable {

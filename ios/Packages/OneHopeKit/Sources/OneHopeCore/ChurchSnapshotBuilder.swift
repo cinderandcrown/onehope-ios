@@ -62,7 +62,8 @@ private func churchMedia(_ reply: MediaReply?) -> ChurchMedia {
         team: reply?.team ?? [],
         ministries: reply?.ministries ?? [],
         revivalGallery: reply?.revival?.gallery ?? [],
-        credits: reply?.credits ?? []
+        credits: reply?.credits ?? [],
+        contactEmail: reply?.contactEmail ?? ""
     )
 }
 

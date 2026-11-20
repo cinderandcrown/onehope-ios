@@ -47,6 +47,10 @@ public extension ChurchClient {
         let _: EmptyReply = try await send("/api/events/\(eventId)/register", method: "POST", token: token, json: Data("{}".utf8))
     }
 
+    func reportPrayer(token: String, prayerId: String) async throws {
+        let _: EmptyReply = try await send("/api/prayers/\(prayerId)/report", method: "POST", token: token, json: Data("{}".utf8))
+    }
+
     func submitPrayer(token: String, serve: String, contact: Bool, body: String) async throws {
         let _: EmptyReply = try await send(
             "/api/prayers",
@@ -159,6 +163,9 @@ public extension ChurchClient {
         case let .prayer(serve, contact, body):
             try await submitPrayer(token: token, serve: serve, contact: contact, body: body)
             return "Your prayer request was sent to the pastors."
+        case let .reportPrayer(id):
+            try await reportPrayer(token: token, prayerId: id)
+            return "Thank you. That request was taken down and a pastor will review it."
         case .readDailyWord:
             let streak = try await markDailyWordRead(token: token)
             return streak == 1 ? "1 day in a row" : "\(streak) days in a row"

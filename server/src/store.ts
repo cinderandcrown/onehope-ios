@@ -1166,6 +1166,21 @@ export class ChurchStore {
     return { id: prayer.id, approved: prayer.approved };
   }
 
+  /**
+   * A member reports a prayer on the wall. It leaves the wall at once and waits for a pastor,
+   * who can approve it again. Authors cannot report their own request.
+   */
+  reportPrayer(token: string, prayerId: string) {
+    const actor = this.actor(token);
+    const prayer = this.prayers.find((item) => item.id === prayerId);
+    if (!prayer || prayer.visibility !== "public" || !prayer.approved || prayer.authorId === actor.personId) {
+      throw new AccessError("not_found", "That prayer isn't on the wall.");
+    }
+    prayer.approved = false;
+    this.record(actor, "write", "prayer_report", prayer.id, 1);
+    return { id: prayer.id, reported: true as const };
+  }
+
   markPrayed(token: string, prayerId: string) {
     const actor = this.actor(token);
     const prayer = this.prayers.find((item) => item.id === prayerId);

@@ -13,6 +13,9 @@
 - Accessibility: text and icon colors reach 4.5:1 (a darker orange for anything readable, dark-mode safe), 44 pt tap targets, Dynamic Type layouts that reflow instead of clipping, Reduce Motion respected, labeled photos and silent decorative ones, visible form labels, VoiceOver announcements for form results, YouTube captions on by default, and an automated accessibility audit in UI tests.
 - Legal drafts in More: Privacy Policy and Terms of Use (marked DRAFT pending church and attorney review, also reachable from signup), and an About & Credits screen with photo credits and open-source licenses. `LICENSE` (MIT) and `THIRD_PARTY_NOTICES.md` added. Giving statements say no goods or services were provided. App Store privacy answers are in `docs/app-store-privacy.md`.
 
+- App Review fixes: members can report a prayer request (it leaves the wall at once and returns to the pastors' queue, `POST /api/prayers/{id}/report`); unfinished "Coming soon" rows and labels are gone; the unused camera permission is removed; a church contact email (`contactEmail` in tenant config) shows in About, Privacy, and Terms.
+- A branded launch screen, Home ordered for the first 30 seconds (next service, Give / Pray / Revival / Know Jesus, today's encouragement, latest message), and the last photo set is remembered for an instant second launch.
+
 ### Changed
 
 - Smoother tab changes, a haptic tap, and filled icons for the selected tab.

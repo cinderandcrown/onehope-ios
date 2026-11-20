@@ -24,6 +24,7 @@ struct LegalDocument: View {
     let banner: String
     let sections: [LegalSection]
     let identifier: String
+    @Environment(\.churchMedia) private var media
 
     var body: some View {
         ScrollView {
@@ -47,6 +48,7 @@ struct LegalDocument: View {
                         }
                     }
                 }
+                contact
             }
             .padding(Space.lg)
         }
@@ -54,6 +56,17 @@ struct LegalDocument: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier(identifier)
+    }
+}
+
+private extension LegalDocument {
+    /// A way to reach the church, set by the church in its own configuration. Never hard-coded here.
+    @ViewBuilder var contact: some View {
+        if let mail = URL(string: "mailto:\(media.contactEmail)"), !media.contactEmail.isEmpty {
+            Link(destination: mail) { Text("Email the church: \(media.contactEmail)") }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityIdentifier("legal-contact")
+        }
     }
 }
 

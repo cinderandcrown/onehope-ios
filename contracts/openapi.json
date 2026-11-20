@@ -661,6 +661,22 @@
         }
       }
     },
+    "/api/prayers/{id}/report": {
+      "post": {
+        "operationId": "post__api_prayers_id_report",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in or step up"
+          },
+          "403": {
+            "description": "Not allowed"
+          }
+        }
+      }
+    },
     "/api/kids/check-in": {
       "post": {
         "operationId": "post__api_kids_check_in",

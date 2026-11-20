@@ -234,3 +234,21 @@ test("the directory pages and searches", async () => {
   assert.equal(none.total, 0);
   assert.equal(none.nextOffset, null);
 });
+
+test("a member can report a prayer: it leaves the wall at once, and authors cannot report their own", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const { token } = store.login({
+    email: "avery@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "t",
+    userAgent: "t",
+  });
+  const wall = store.listPrayers(token) as { id: string; mine: boolean; approved: boolean }[];
+  const others = wall.find((item) => !item.mine && item.approved);
+  assert.ok(others, "the sample wall has someone else's approved prayer");
+  assert.deepEqual(store.reportPrayer(token, others.id), { id: others.id, reported: true });
+  assert.ok(!(store.listPrayers(token) as { id: string }[]).some((item) => item.id === others.id));
+  assert.throws(() => store.reportPrayer(token, others.id), /isn't on the wall/);
+  const mine = wall.find((item) => item.mine);
+  if (mine) assert.throws(() => store.reportPrayer(token, mine.id), /isn't on the wall/);
+});

@@ -3,7 +3,7 @@ import OneHopeDesign
 import SwiftUI
 
 /// Revival Coffee as published on myrevivalcoffee.com on Nov 19, 2026.
-/// Order-ahead stays a coming-soon state. The live switch is the server flag.
+/// Revival Coffee: menu, hours and directions. Orders are taken at the counter.
 public struct CoffeeView: View {
     @Environment(\.churchImages) private var images
     @Environment(\.churchMedia) private var media
@@ -22,11 +22,6 @@ public struct CoffeeView: View {
                 menuBoard
                 menu("Coffee & Drinks", items: CoffeeMenuData.drinks)
                 menu("Food & Pastries", items: CoffeeMenuData.food)
-                VStack(alignment: .leading, spacing: Space.sm) {
-                    Text("Events").font(.headline)
-                    Text("Their events page says coming soon. No dated events were listed.")
-                }
-                .churchCard()
             }
             .padding(Space.lg)
         }
@@ -42,7 +37,7 @@ public struct CoffeeView: View {
             Text("Revival Coffee shares the building with One Hope. Menu and hours are from their site.")
                 .font(.body)
                 .foregroundStyle(BrandColor.ink)
-            Text("Order ahead coming soon.").font(.headline).foregroundStyle(BrandColor.terracottaDeep)
+            Text("Order at the counter.").font(.headline).foregroundStyle(BrandColor.terracottaDeep)
         }
     }
 
@@ -61,9 +56,8 @@ public struct CoffeeView: View {
         VStack(alignment: .leading, spacing: Space.xs) {
             Text("Hours").font(.hopeTitle)
             Text("Monday–Friday 7:00 AM – 3:00 PM")
-            Text("Saturday TBD")
-            Text("Sunday TBD")
-            Text("No public phone number is listed.").font(.footnote).padding(.top, Space.xs)
+            Text("Weekends: email the shop for hours.")
+            Text("Questions? Use Email the shop above.").font(.footnote).padding(.top, Space.xs)
         }
         .churchCard()
     }

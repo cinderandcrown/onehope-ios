@@ -30,9 +30,17 @@ export type ChurchMedia = {
   revival: { gallery: GalleryPhoto[] };
   /** Who made or owns the pictures and other material shown, for the About & Credits screen. */
   credits: CreditLine[];
+  /** Where people reach the church about the app: privacy, safety reports, deletion. Empty until the church sets it. */
+  contactEmail: string;
 };
 
-export const EMPTY_MEDIA: ChurchMedia = { team: [], ministries: [], revival: { gallery: [] }, credits: [] };
+export const EMPTY_MEDIA: ChurchMedia = {
+  team: [],
+  ministries: [],
+  revival: { gallery: [] },
+  credits: [],
+  contactEmail: "",
+};
 
 const MAX_URL = 600;
 
@@ -78,6 +86,7 @@ const mediaSchema = z.object({
         .default([]),
     })
     .default({ gallery: [] }),
+  contactEmail: z.string().trim().max(120).default(""),
   credits: z
     .array(z.object({ title: text(80), detail: text(300).default(""), url: z.string().default("") }))
     .max(20)
@@ -137,6 +146,7 @@ export function loadMedia(env: NodeJS.ProcessEnv): Loaded {
         .map((photo) => ({ ...photo, url: httpsURL(photo.url) }))
         .filter((photo) => photo.url.length > 0),
     },
+    contactEmail: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value.contactEmail) ? value.contactEmail : "",
     credits: value.credits
       .map((credit) => ({ ...credit, url: httpsURL(credit.url) }))
       .filter((credit) => credit.title.length > 0),
@@ -152,6 +162,7 @@ export function churchMedia(env: NodeJS.ProcessEnv): { images: ChurchImages; med
       ministries: loaded.ministries,
       revival: loaded.revival,
       credits: loaded.credits,
+      contactEmail: loaded.contactEmail,
     },
   };
 }

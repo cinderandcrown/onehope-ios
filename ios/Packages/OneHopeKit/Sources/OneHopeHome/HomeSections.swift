@@ -62,9 +62,15 @@ struct HomeShortcuts: View {
 
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: Space.sm) {
-            shortcut("Watch", symbol: "play.rectangle.fill", tint: BrandColor.terracottaDeep) { onOpenTab("watch") }
-            shortcut("Pray", symbol: "hands.sparkles.fill", tint: BrandColor.olive) { onOpenTab("prayer") }
             shortcut("Give", symbol: "heart.fill", tint: BrandColor.terracottaDeep) { onOpenTab("give") }
+            shortcut("Pray", symbol: "hands.sparkles.fill", tint: BrandColor.olive) { onOpenTab("prayer") }
+            NavigationLink {
+                CoffeeView()
+            } label: {
+                tile("Revival", symbol: "cup.and.saucer.fill", tint: BrandColor.terracottaDeep)
+            }
+            .buttonStyle(PressableStyle())
+            .accessibilityIdentifier("home-shortcut-revival")
             NavigationLink {
                 KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
             } label: {
@@ -116,14 +122,13 @@ struct RevivalFeature: View {
                         .frame(minHeight: 44)
                         .background(BrandColor.terracottaDeep)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
-                    InfoPill("Order ahead soon")
                 }
             }
             .churchCard()
         }
         .buttonStyle(PressableStyle())
         .accessibilityIdentifier("home-coffee")
-        .accessibilityLabel("Revival Coffee. Menu, hours and order ahead.")
+        .accessibilityLabel("Revival Coffee. Menu, hours and directions.")
     }
 }
 

@@ -119,7 +119,7 @@ public struct PhotoTile: View {
     }
 }
 
-/// A small label such as "Order ahead coming soon".
+/// A small status label shown on a card.
 public struct InfoPill: View {
     private let text: String
 

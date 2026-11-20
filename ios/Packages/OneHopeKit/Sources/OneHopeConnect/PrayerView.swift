@@ -11,6 +11,7 @@ public struct PrayerView: View {
     @State private var prayer = ""
     @State private var contact = false
     @State private var notice = ""
+    @State private var reporting: String?
 
     public init(
         snapshot: ChurchSnapshot,
@@ -44,6 +45,13 @@ public struct PrayerView: View {
                             if item.mine, !item.approved {
                                 Text("Waiting for pastor approval").font(.footnote)
                             }
+                            if !item.mine, item.approved, snapshot.signedIn {
+                                Button("Report this request", role: .destructive) { reporting = item.id }
+                                    .font(.footnote)
+                                    .frame(minHeight: 44)
+                                    .accessibilityHint("Takes it off the wall until a pastor reviews it")
+                                    .accessibilityIdentifier("prayer-report-\(item.id)")
+                            }
                         }
                     }
                 }
@@ -60,6 +68,20 @@ public struct PrayerView: View {
             }
             .refreshable { await onRefresh() }
             .announce(notice)
+            .confirmationDialog("Report this prayer request?", isPresented: Binding(get: { reporting != nil }, set: {
+                if !$0 {
+                    reporting = nil
+                }
+            }), titleVisibility: .visible) {
+                Button("Report and take it down", role: .destructive) {
+                    guard let id = reporting else { return }
+                    reporting = nil
+                    Task { notice = await perform(.reportPrayer(id)) }
+                }
+                Button("Cancel", role: .cancel) { reporting = nil }
+            } message: {
+                Text("It is removed from the wall right away. A pastor will review it.")
+            }
             .navigationTitle(L10n.text(.prayer))
         }
     }

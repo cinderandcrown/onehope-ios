@@ -41,11 +41,6 @@ struct FeatureMenu<Account: View>: View {
                 church
                 accountSection
                 LegalLinks()
-                if snapshot.isStaff {
-                    MenuSection("Staff") {
-                        soon("more-staff", MenuLabel(title: "Staff", symbol: "lock", detail: "Tools for church staff"))
-                    }
-                }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -72,7 +67,7 @@ struct FeatureMenu<Account: View>: View {
             PhotoOverlay("revival", minHeight: 150) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Revival Coffee").font(.title2.bold()).foregroundStyle(.white)
-                    Text("Menu, hours, and order ahead soon").font(.footnote).foregroundStyle(.white)
+                    Text("Menu, hours, and directions").font(.footnote).foregroundStyle(.white)
                 }
             }
             .accessibilityIdentifier("more-revival")
@@ -97,7 +92,6 @@ struct FeatureMenu<Account: View>: View {
             row("more-kids", MenuLabel(title: "Children's Church", symbol: "figure.and.child.holdinghands", detail: "Check in and pick up")) {
                 KidsScreen(snapshot: snapshot, perform: perform)
             }
-            soon("more-household", MenuLabel(title: "Household", symbol: "house", detail: "Your family in one place"))
         }
     }
 
@@ -129,7 +123,6 @@ struct FeatureMenu<Account: View>: View {
             row("more-sermons", MenuLabel(title: "Sermons", symbol: "play.rectangle", detail: "Messages and shorts")) {
                 WatchView(snapshot: snapshot, selected: $videoId, onRefresh: onRefresh, embedded: true)
             }
-            soon("more-live", MenuLabel(title: "Live stream", symbol: "dot.radiowaves.left.and.right", detail: "Watch Sunday live"))
         }
     }
 
@@ -202,24 +195,6 @@ struct FeatureMenu<Account: View>: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-    }
-
-    private func soon(_ identifier: String, _ label: MenuLabel) -> some View {
-        HStack {
-            menuRow(label)
-            Text("Coming soon")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(BrandColor.sky)
-                .clipShape(Capsule())
-                .accessibilityIdentifier("\(identifier)-badge")
-        }
-        .frame(minHeight: 48)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier(identifier)
-        .accessibilityLabel("\(label.title), coming soon")
-        .listRowBackground(BrandColor.card)
     }
 }
 

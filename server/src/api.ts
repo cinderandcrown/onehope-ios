@@ -80,6 +80,7 @@ export const API_ROUTES = [
   ["GET", "/api/prayers"],
   ["POST", "/api/prayers"],
   ["POST", "/api/prayers/{id}/moderate"],
+  ["POST", "/api/prayers/{id}/report"],
   ["GET", "/api/kids/mine"],
   ["GET", "/api/serving/mine"],
   ["GET", "/api/pathways/mine"],
@@ -348,6 +349,8 @@ async function route(
       parse(moderateBodySchema, body).approved,
     );
   }
+  const report = path.match(/^\/api\/prayers\/([^/]+)\/report$/);
+  if (method === "POST" && report?.[1]) return store.reportPrayer(need(), decodeURIComponent(report[1]));
   if (method === "GET" && path === "/api/kids/mine") return { kids: store.myKids(need()) };
   if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
   if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());

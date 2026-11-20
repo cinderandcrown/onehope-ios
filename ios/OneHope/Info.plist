@@ -6,12 +6,19 @@
 	<string>$(API_BASE_URL)</string>
 	<key>CFBundleDisplayName</key>
 	<string>One Hope</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>Paper</string>
+		<key>UIImageName</key>
+		<string>Wordmark</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
+	</dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>One Hope adds events you choose to your calendar.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>One Hope uses the camera to scan a kids check-in code.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

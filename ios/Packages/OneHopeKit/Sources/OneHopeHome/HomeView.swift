@@ -31,14 +31,14 @@ public struct HomeView: View {
                     HomeHero(snapshot: snapshot, perform: perform)
                     HomeShortcuts(snapshot: snapshot, perform: perform, onOpenTab: onOpenTab)
                     if !snapshot.offlineNote.isEmpty {
-                        Text(snapshot.offlineNote).font(.footnote)
+                        Text(snapshot.offlineNote).font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.8))
                     }
-                    RevivalFeature()
+                    DailyWordCard(snapshot: snapshot, perform: perform)
                     LatestMessages(sermons: snapshot.sermons, onWatch: onWatch)
+                    RevivalFeature()
                     MinistriesRow(ministries: snapshot.media.ministries)
                     TeamTeaser(snapshot: snapshot)
                     InviteCard(invite: snapshot.invite)
-                    DailyWordCard(snapshot: snapshot, perform: perform)
                     announcements
                     FollowAlong(links: snapshot.social)
                     ReminderToggle()

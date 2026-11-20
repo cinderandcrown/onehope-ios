@@ -6,6 +6,7 @@ import SwiftUI
 /// Who we are, with the church's own pictures and the details a new family needs.
 struct AboutScreen: View {
     let snapshot: ChurchSnapshot
+    @Environment(\.churchMedia) private var media
 
     var body: some View {
         ScrollView {
@@ -32,6 +33,11 @@ struct AboutScreen: View {
                     }
                 }
                 .churchCard()
+                if !media.contactEmail.isEmpty, let mail = URL(string: "mailto:\(media.contactEmail)") {
+                    Link(destination: mail) { Text("Email the church") }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .accessibilityIdentifier("about-contact")
+                }
                 if let site = URL(string: snapshot.visit.websiteUrl) {
                     Link("More on weareonehope.com", destination: site).font(.footnote)
                 }

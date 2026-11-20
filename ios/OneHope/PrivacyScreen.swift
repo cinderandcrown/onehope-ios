@@ -28,7 +28,7 @@ struct PrivacyScreen: View {
         ]),
         LegalSection(heading: "What it does not collect", paragraphs: [
             "The app does not use advertising, does not track you across other apps or websites, and does not include third-party analytics in this version. It does not read your contacts or photos, and it does not know your location.",
-            "The camera is used only if you choose to scan a kids check-in code. Calendar access is write-only and only when you add an event. Notifications are used only for the Sunday reminder you turn on.",
+            "The app does not use your camera. Calendar access is write-only and only when you add an event. Notifications are used only for the Sunday reminder you turn on.",
         ]),
         LegalSection(heading: "Who can see your information", paragraphs: [
             "• You, always.",

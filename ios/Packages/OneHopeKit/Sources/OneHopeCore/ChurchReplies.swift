@@ -35,6 +35,7 @@ struct MediaReply: Decodable {
     let ministries: [MinistryCard]?
     let revival: Revival?
     let credits: [CreditLine]?
+    let contactEmail: String?
 }
 
 struct KnowJesusReply: Decodable {

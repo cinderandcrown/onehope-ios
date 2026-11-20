@@ -43,5 +43,5 @@ Notes for the form:
 - **Account deletion (guideline 5.1.1(v))**: in app at More > Profile > Delete my account (password required). It starts from the signed-in profile and finishes in the app.
 - **Sign in with Apple**: only required when the app offers third-party social login. It offers none.
 - **Encryption export**: the app uses only standard HTTPS. Answer that it uses standard encryption and qualifies for the exemption.
-- **Camera**: used only to scan a kids check-in code. **Calendar**: write-only, when the user adds an event.
+- **Camera**: not used. The unused camera permission string was removed in build 10. **Calendar**: write-only, when the user adds an event.
 - **Push notifications**: this build schedules only a local Sunday reminder. No APNs registration, so no push data is collected. Redo this page if server push is added.

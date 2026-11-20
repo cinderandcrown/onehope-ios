@@ -84,8 +84,11 @@ public struct ChurchMedia: Equatable, Sendable {
     public var ministries: [MinistryCard]
     public var revivalGallery: [GalleryPhoto]
     public var credits: [CreditLine]
+    /// Where to reach the church about the app. Empty until the church sets it.
+    public var contactEmail: String
 
-    public init(team: [TeamMember] = [], ministries: [MinistryCard] = [], revivalGallery: [GalleryPhoto] = [], credits: [CreditLine] = []) {
+    public init(team: [TeamMember] = [], ministries: [MinistryCard] = [], revivalGallery: [GalleryPhoto] = [], credits: [CreditLine] = [], contactEmail: String = "") {
+        self.contactEmail = contactEmail
         self.team = team
         self.ministries = ministries
         self.revivalGallery = revivalGallery

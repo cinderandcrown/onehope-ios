@@ -23,7 +23,7 @@ final class TabUITests: XCTestCase {
                     app.swipeDown()
                 }
                 app.buttons["home-coffee"].tap()
-                XCTAssertTrue(app.staticTexts["Order ahead coming soon."].waitForExistence(timeout: 10))
+                XCTAssertTrue(app.staticTexts["Order at the counter."].waitForExistence(timeout: 10))
                 app.navigationBars.buttons.element(boundBy: 0).tap()
                 app.buttons["home-know-jesus"].tap()
                 XCTAssertTrue(app.buttons["decision-salvation"].waitForExistence(timeout: 10))
@@ -109,11 +109,8 @@ final class TabUITests: XCTestCase {
             capture(app, name: "More \(route.0)")
             bar.buttons["BackButton"].tap()
         }
-        for soon in ["more-household", "more-live"] {
-            reveal(soon, app: app)
-            XCTAssertTrue(marked("\(soon)-badge", app: app).waitForExistence(timeout: 5), soon)
-            tapMarked(soon, app: app)
-            XCTAssertTrue(app.navigationBars["More"].waitForExistence(timeout: 3), soon)
+        for hidden in ["more-household", "more-live", "more-staff"] {
+            XCTAssertFalse(marked(hidden, app: app).exists, "\(hidden) is unfinished and must stay hidden")
         }
     }
 
