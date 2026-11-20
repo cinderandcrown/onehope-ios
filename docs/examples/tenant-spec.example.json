@@ -1,0 +1,13 @@
+{
+  "id": "exampletenant",
+  "name": "Example Tenant",
+  "kind": "business",
+  "timezone": "America/Chicago",
+  "modules": [
+    { "id": "command_center", "enabled": true },
+    { "id": "crm", "enabled": true },
+    { "id": "agents", "enabled": false }
+  ],
+  "domains": ["app.example.test"],
+  "clerkOrgId": null
+}
