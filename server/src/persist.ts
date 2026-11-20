@@ -1,5 +1,3 @@
-import { Pool, type PoolClient, neonConfig } from "@neondatabase/serverless";
-
 import { ChurchStore } from "./store";
 import {
   emptyDocument,
@@ -9,6 +7,7 @@ import {
   type LoadOptions,
 } from "./document-store";
 import { loadConfig } from "./config";
+import { clientSql, createPool, type DbPool } from "./db-pool";
 import type { SqlClient } from "./migrate";
 import { assumeService } from "./service-role";
 import { refuseSampleInProduction } from "./snapshot-import";
@@ -16,17 +15,15 @@ import { resolveTenant, tenantProfile, UnknownTenantError } from "./tenancy";
 
 export { UnknownTenantError };
 
-if (typeof WebSocket !== "undefined") neonConfig.webSocketConstructor = WebSocket;
-
-let pool: Pool | null = null;
+let pool: DbPool | null = null;
 
 export function databaseUrl(): string | null {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
   return url.length > 0 ? url : null;
 }
 
-function sharedPool(url: string): Pool {
-  if (!pool) pool = new Pool({ connectionString: url, max: 5 });
+function sharedPool(url: string): DbPool {
+  if (!pool) pool = createPool(url, 5);
   return pool;
 }
 
@@ -83,7 +80,9 @@ export async function seedTenantIfEmpty(
         syncModules: tenantId === "onehope",
         platformKey: loadConfig(env).fieldEncryptionKey,
       });
-      await sql.query("INSERT INTO tenant_runtime (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING", [tenantId]);
+      await sql.query("INSERT INTO tenant_runtime (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING", [
+        tenantId,
+      ]);
     }
     await sql.query("COMMIT");
   } catch (error) {
@@ -93,7 +92,9 @@ export async function seedTenantIfEmpty(
 }
 
 export function isWriteConflict(error: unknown): boolean {
-  return error instanceof WriteConflictError || (error instanceof Error && error.name === "WriteConflictError");
+  return (
+    error instanceof WriteConflictError || (error instanceof Error && error.name === "WriteConflictError")
+  );
 }
 
 /** Runs once, and a second time when the first attempt loses a row version. */
@@ -113,7 +114,10 @@ export function storeErrorResponse(error: unknown): { status: number; body: Reco
       body: { ok: false, error: "This page changed. Reload and try again.", code: "conflict" },
     };
   }
-  if (error instanceof UnknownTenantError || (error instanceof Error && error.name === "UnknownTenantError")) {
+  if (
+    error instanceof UnknownTenantError ||
+    (error instanceof Error && error.name === "UnknownTenantError")
+  ) {
     return { status: 404, body: { ok: false, error: error.message, code: "not_found" } };
   }
   return null;
@@ -189,16 +193,4 @@ function getMemoryStore(): ChurchStore {
   const globalStore = globalThis as typeof globalThis & { __onehope?: ChurchStore };
   if (!globalStore.__onehope) globalStore.__onehope = ChurchStore.demo();
   return globalStore.__onehope;
-}
-
-function clientSql(client: PoolClient): SqlClient {
-  return {
-    async exec(sqlText) {
-      await client.query(sqlText);
-    },
-    async query<T extends Record<string, unknown>>(text: string, params?: readonly unknown[]) {
-      const result = await client.query(text, params ? [...params] : []);
-      return { rows: result.rows as T[] };
-    },
-  };
 }
