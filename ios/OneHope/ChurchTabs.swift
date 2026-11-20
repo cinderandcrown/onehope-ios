@@ -18,6 +18,7 @@ struct ChurchSelection {
 }
 
 /// Home, Watch, Prayer, Give, and Connect stay. More is the last tab, always on screen.
+/// iPhone keeps five items in the system tab bar, so this bar is the app's own.
 struct ChurchShell<Account: View, KnowJesus: View>: View {
     @Binding var tab: String
     @Binding var videoId: String?
@@ -34,22 +35,23 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
     }
 
     var body: some View {
-        TabView(selection: $tab) {
-            HomeView(snapshot: chrome.snapshot, onRefresh: chrome.onRefresh, perform: chrome.perform) { id in
-                videoId = id
-                tab = "watch"
+        screen
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(BrandColor.paper)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                ChurchTabBar(selection: $tab)
             }
-            .tabItem { Label(L10n.text(.home), systemImage: "house") }
-            .tag("home")
+    }
+
+    @ViewBuilder private var screen: some View {
+        switch tab {
+        case "watch":
             WatchView(snapshot: chrome.snapshot, selected: $videoId, onRefresh: chrome.onRefresh)
-                .tabItem { Label(L10n.text(.watch), systemImage: "play.rectangle") }
-                .tag("watch")
+        case "prayer":
             PrayerView(snapshot: chrome.snapshot, onRefresh: chrome.onRefresh, perform: chrome.perform)
-                .tabItem { Label(L10n.text(.prayer), systemImage: "hands.sparkles") }
-                .tag("prayer")
+        case "give":
             GiveView(snapshot: chrome.snapshot, onRefresh: chrome.onRefresh, perform: chrome.perform)
-                .tabItem { Label(L10n.text(.give), systemImage: "heart") }
-                .tag("give")
+        case "connect":
             ConnectView(
                 snapshot: chrome.snapshot,
                 onRefresh: chrome.onRefresh,
@@ -58,17 +60,58 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
                 account: { account }
             )
             .id(chrome.snapshot.signedIn)
-            .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
-            .tag("connect")
+        case "more":
             FeatureMenu(
                 snapshot: chrome.snapshot,
                 onRefresh: chrome.onRefresh,
                 perform: chrome.perform,
                 account: account
             )
-            .tabItem { Label(L10n.text(.more), systemImage: "line.3.horizontal") }
-            .tag("more")
+        default:
+            HomeView(snapshot: chrome.snapshot, onRefresh: chrome.onRefresh, perform: chrome.perform) { id in
+                videoId = id
+                tab = "watch"
+            }
         }
+    }
+}
+
+private struct ChurchTabBar: View {
+    @Binding var selection: String
+
+    var body: some View {
+        HStack(spacing: 0) {
+            item("home", title: L10n.text(.home), symbol: "house")
+            item("watch", title: L10n.text(.watch), symbol: "play.rectangle")
+            item("prayer", title: L10n.text(.prayer), symbol: "hands.sparkles")
+            item("give", title: L10n.text(.give), symbol: "heart")
+            item("connect", title: L10n.text(.connect), symbol: "person.2")
+            item("more", title: L10n.text(.more), symbol: "line.3.horizontal")
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
         .background(BrandColor.paper)
+        .overlay(alignment: .top) { Rectangle().fill(BrandColor.ink.opacity(0.12)).frame(height: 1) }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func item(_ id: String, title: String, symbol: String) -> some View {
+        Button {
+            selection = id
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: symbol)
+                Text(title)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .foregroundStyle(selection == id ? BrandColor.terracotta : BrandColor.ink)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tab-\(id)")
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }

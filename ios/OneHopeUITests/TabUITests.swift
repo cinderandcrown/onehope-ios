@@ -46,9 +46,14 @@ final class TabUITests: XCTestCase {
         password.tap()
         password.typeText("gathering1")
         app.buttons["submit-account"].tap()
-        XCTAssertTrue(app.buttons["sign-out"].waitForExistence(timeout: 20))
-        app.navigationBars["Account"].buttons["BackButton"].tap()
-        XCTAssertTrue(app.buttons["Account and directory"].waitForExistence(timeout: 10))
+        let member = app.buttons["Account and directory"]
+        if !member.waitForExistence(timeout: 20) {
+            let back = app.navigationBars["Account"].buttons["BackButton"]
+            if back.waitForExistence(timeout: 2) {
+                back.tap()
+            }
+        }
+        XCTAssertTrue(member.waitForExistence(timeout: 10))
         capture(app, name: "Member Connect")
     }
 
@@ -83,9 +88,24 @@ final class TabUITests: XCTestCase {
             bar.buttons["BackButton"].tap()
         }
         for soon in ["more-household", "more-live"] {
-            XCTAssertTrue(app.staticTexts["Coming soon"].waitForExistence(timeout: 5), soon)
+            reveal(soon, app: app)
+            XCTAssertTrue(marked("\(soon)-badge", app: app).waitForExistence(timeout: 5), soon)
             tapMarked(soon, app: app)
-            XCTAssertTrue(app.navigationBars["More"].exists, soon)
+            XCTAssertTrue(app.navigationBars["More"].waitForExistence(timeout: 3), soon)
+        }
+    }
+
+    private func marked(_ identifier: String, app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    private func reveal(_ identifier: String, app: XCUIApplication) {
+        let row = marked(identifier, app: app)
+        for _ in 0 ..< 5 where !row.exists {
+            app.swipeDown()
+        }
+        for _ in 0 ..< 8 where !row.exists {
+            app.swipeUp()
         }
     }
 
@@ -101,19 +121,9 @@ final class TabUITests: XCTestCase {
     }
 
     private func openTab(_ name: String, app: XCUIApplication) {
-        let direct = app.tabBars.buttons[name]
-        if name != "More", direct.waitForExistence(timeout: 8) {
-            direct.tap()
-            return
-        }
-        let overflow = app.tabBars.buttons["More"]
-        XCTAssertTrue(overflow.waitForExistence(timeout: 8), "Missing \(name) tab")
-        let row = app.tables.staticTexts[name]
-        if !row.waitForExistence(timeout: 2) {
-            overflow.tap()
-        }
-        XCTAssertTrue(row.waitForExistence(timeout: 8), "Missing \(name) tab")
-        row.tap()
+        let button = app.buttons["tab-\(name.lowercased())"]
+        XCTAssertTrue(button.waitForExistence(timeout: 8), "Missing \(name) tab")
+        button.tap()
     }
 
     private func capture(_ app: XCUIApplication, name: String) {
