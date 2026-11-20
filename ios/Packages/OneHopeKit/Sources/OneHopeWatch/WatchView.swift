@@ -43,43 +43,43 @@ public struct WatchView: View {
 
     private var watchPage: some View {
         ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    player
-                    if !messages.isEmpty {
-                        Text("Messages").font(.title2.bold())
-                        ForEach(messages) { sermon in
-                            row(sermon)
-                        }
+            VStack(alignment: .leading, spacing: 16) {
+                player
+                if !messages.isEmpty {
+                    Text("Messages").font(.title2.bold())
+                    ForEach(messages) { sermon in
+                        row(sermon)
                     }
-                    if !shorts.isEmpty {
-                        Text("Shorts").font(.title2.bold())
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(shorts) { short in
-                                    Button {
-                                        selected = short.id
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            VideoThumbnail(sermon: short, height: 120)
-                                            Text(short.title).font(.footnote).lineLimit(2).foregroundStyle(BrandColor.ink)
-                                        }
-                                        .frame(width: 160)
+                }
+                if !shorts.isEmpty {
+                    Text("Shorts").font(.title2.bold())
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(shorts) { short in
+                                Button {
+                                    selected = short.id
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        VideoThumbnail(sermon: short, height: 120)
+                                        Text(short.title).font(.footnote).lineLimit(2).foregroundStyle(BrandColor.ink)
                                     }
-                                    .buttonStyle(.plain)
+                                    .frame(width: 160)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
-                    if snapshot.sermons.isEmpty {
-                        PhotoCard("video")
-                        Text(snapshot.sermonNote)
-                    }
                 }
-                .padding()
+                if snapshot.sermons.isEmpty {
+                    PhotoCard("video")
+                    Text(snapshot.sermonNote)
+                }
             }
-            .refreshable { await onRefresh() }
-            .background(BrandColor.paper)
-            .navigationTitle(L10n.text(.watch))
+            .padding()
+        }
+        .refreshable { await onRefresh() }
+        .background(BrandColor.paper)
+        .navigationTitle(L10n.text(.watch))
     }
 
     @ViewBuilder private var player: some View {

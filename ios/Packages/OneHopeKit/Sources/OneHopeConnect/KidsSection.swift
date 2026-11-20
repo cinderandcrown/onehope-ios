@@ -7,15 +7,15 @@ public struct KidsSection: View {
     let kids: [KidLine]
     let perform: (MemberAction) async -> String
     @Binding var notice: String
+    @State private var childName = ""
+    @State private var classroom = "Preschool"
+    @State private var codes: [String: String] = [:]
 
     public init(kids: [KidLine], perform: @escaping (MemberAction) async -> String, notice: Binding<String>) {
         self.kids = kids
         self.perform = perform
         self._notice = notice
     }
-    @State private var childName = ""
-    @State private var classroom = "Preschool"
-    @State private var codes: [String: String] = [:]
 
     public var body: some View {
         Section {

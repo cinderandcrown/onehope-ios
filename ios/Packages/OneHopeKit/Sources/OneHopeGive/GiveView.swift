@@ -38,57 +38,57 @@ public struct GiveView: View {
     private var givingPage: some View {
         let giving = snapshot.giving
         ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(giving.message)
-                    VerseCard(text: giving.verse.text, reference: giving.verse.reference)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Online giving").font(.headline)
-                        Text(giving.online.note)
-                        if let url = URL(string: giving.online.url) {
-                            Link(destination: url) {
-                                Text("Give online").frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .accessibilityIdentifier("give-online")
+            VStack(alignment: .leading, spacing: 16) {
+                Text(giving.message)
+                VerseCard(text: giving.verse.text, reference: giving.verse.reference)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Online giving").font(.headline)
+                    Text(giving.online.note)
+                    if let url = URL(string: giving.online.url) {
+                        Link(destination: url) {
+                            Text("Give online").frame(maxWidth: .infinity)
                         }
-                    }
-                    .churchCard()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Text to give").font(.headline)
-                        Text(giving.text.note)
-                        if let sms = URL(string: "sms:\(giving.text.number)") {
-                            Link("Text \(giving.text.number)", destination: sms).buttonStyle(.bordered)
-                        }
-                    }
-                    .churchCard()
-                    if let seasonal = giving.seasonal {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(seasonal.title).font(.headline)
-                            Text(seasonal.note)
-                            if let url = URL(string: giving.online.url) {
-                                Link("Give to the Giving Tree", destination: url).buttonStyle(.bordered)
-                            }
-                        }
-                        .churchCard()
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("By mail").font(.headline)
-                        Text(giving.mail.note)
-                        Text(giving.mail.address).textSelection(.enabled)
-                    }
-                    .churchCard()
-                    if snapshot.givingOpen {
-                        nativeGift
-                    }
-                    if !snapshot.gifts.isEmpty {
-                        history
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("give-online")
                     }
                 }
-                .padding()
+                .churchCard()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Text to give").font(.headline)
+                    Text(giving.text.note)
+                    if let sms = URL(string: "sms:\(giving.text.number)") {
+                        Link("Text \(giving.text.number)", destination: sms).buttonStyle(.bordered)
+                    }
+                }
+                .churchCard()
+                if let seasonal = giving.seasonal {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(seasonal.title).font(.headline)
+                        Text(seasonal.note)
+                        if let url = URL(string: giving.online.url) {
+                            Link("Give to the Giving Tree", destination: url).buttonStyle(.bordered)
+                        }
+                    }
+                    .churchCard()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("By mail").font(.headline)
+                    Text(giving.mail.note)
+                    Text(giving.mail.address).textSelection(.enabled)
+                }
+                .churchCard()
+                if snapshot.givingOpen {
+                    nativeGift
+                }
+                if !snapshot.gifts.isEmpty {
+                    history
+                }
             }
-            .refreshable { await onRefresh() }
-            .background(BrandColor.paper)
-            .navigationTitle(L10n.text(.give))
+            .padding()
+        }
+        .refreshable { await onRefresh() }
+        .background(BrandColor.paper)
+        .navigationTitle(L10n.text(.give))
     }
 
     /// Native giving with the Church Center frequencies. Shown only when giving is switched on.

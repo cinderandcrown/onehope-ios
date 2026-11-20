@@ -11,20 +11,13 @@ public struct ChurchImages: Equatable, Sendable {
     public static let empty = ChurchImages(hero: "", about: "", video: "", revival: "", og: "")
 
     public func url(named name: String) -> URL? {
-        let raw: String
-        switch name {
-        case "hero":
-            raw = hero
-        case "about":
-            raw = about
-        case "video":
-            raw = video
-        case "revival":
-            raw = revival
-        case "og":
-            raw = og
-        default:
-            raw = ""
+        let raw = switch name {
+        case "hero": hero
+        case "about": about
+        case "video": video
+        case "revival": revival
+        case "og": og
+        default: ""
         }
         guard raw.hasPrefix("https://"), let url = URL(string: raw), url.scheme == "https" else { return nil }
         return url

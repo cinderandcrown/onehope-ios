@@ -95,11 +95,11 @@ struct FeatureMenu<Account: View>: View {
         }
     }
 
-    private func row<Destination: View>(
+    private func row(
         _ identifier: String,
         title: String,
         symbol: String,
-        @ViewBuilder destination: () -> Destination
+        @ViewBuilder destination: () -> some View
     ) -> some View {
         NavigationLink {
             destination()

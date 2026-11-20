@@ -66,7 +66,7 @@ public struct PhotoCard: View {
         if let url = images.url(named: resource) {
             AsyncImage(url: url) { phase in
                 switch phase {
-                case .success(let image):
+                case let .success(image):
                     image.resizable().scaledToFill()
                 case .empty, .failure:
                     BrandTexture()
