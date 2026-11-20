@@ -12,6 +12,8 @@ The TestFlight beta can run against a **Preview** deployment backed by its own d
 
 The demo database is disposable. Drop and re-seed it whenever you like. Nothing in it is church data.
 
+Preview-only env vars that go with the demo database: `DATABASE_URL` (sensitive), `TENANT_MODE=single` with `TENANT_ID=onehope`, because preview hostnames are not in `tenant_domains`, and `ONEHOPE_SAMPLE_DATA=true`. None of them are set for Production.
+
 ## Swap the demo database (hot-swap)
 
 1. Create or reset a demo Postgres. For example, create a new Neon project, or reset the existing one's branch.
