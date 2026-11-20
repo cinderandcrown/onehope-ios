@@ -102,7 +102,7 @@ final class TabUITests: XCTestCase {
             ("more-sign-in", "Sign in"),
         ]
         for route in routes {
-            reveal(route.0, app: app)
+            XCTAssertTrue(scrollTo(route.0, app: app), "Could not scroll to \(route.0)")
             tapMarked(route.0, app: app)
             let bar = app.navigationBars[route.1]
             XCTAssertTrue(bar.waitForExistence(timeout: 10), route.0)
@@ -121,34 +121,36 @@ final class TabUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    /// Scrolls the list until the row sits fully on screen above the tab bar.
-    /// Each step is a press-drag-hold on the list, so there is no fling: a fast swipe could skip past a
-    /// lazily drawn row (or land as a tap on another row) and leave the next row "missing".
-    private func reveal(_ identifier: String, app: XCUIApplication) {
+    /// Scrolls the More list until the row can be tapped, and says whether it got there.
+    /// Slow swipes (no fling, so a swipe cannot land as a tap on another row), checked after every swipe,
+    /// and a nudge when the row is hidden behind the tab bar.
+    @discardableResult
+    private func scrollTo(_ identifier: String, app: XCUIApplication) -> Bool {
         let row = marked(identifier, app: app)
-        // Drag on the screen itself: other tabs keep their own lists alive, so "the first list" may be off screen.
-        let surface = app.windows.firstMatch
         let tabTop = app.buttons["tab-home"].frame.minY
-        func onScreen() -> Bool {
-            row.exists && row.frame.height > 1 && row.frame.minY > 90 && row.frame.maxY < tabTop
-        }
-        func drag(up: Bool) {
-            let low = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.7))
-            let high = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.35))
-            let (start, end) = up ? (low, high) : (high, low)
-            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
-        }
-        for _ in 0 ..< 20 where !onScreen() {
-            // Below the tab bar or not drawn yet (routes run top to bottom): scroll down the list.
-            // A row SwiftUI has not drawn can still "exist" with an empty frame; only a real row above means scroll back.
-            if row.exists, row.frame.height > 1, row.frame.maxY <= 90 {
-                break
+        func ready() -> Bool {
+            guard row.exists, row.isHittable else { return false }
+            if row.frame.maxY > tabTop - 4 {
+                app.swipeUp(velocity: .slow)
             }
-            drag(up: true)
+            return row.exists && row.isHittable
         }
-        for _ in 0 ..< 20 where !onScreen() {
-            drag(up: false)
+        if ready() {
+            return true
         }
+        for _ in 0 ..< 12 {
+            app.swipeUp(velocity: .slow)
+            if ready() {
+                return true
+            }
+        }
+        for _ in 0 ..< 16 {
+            app.swipeDown(velocity: .slow)
+            if ready() {
+                return true
+            }
+        }
+        return false
     }
 
     private func tapMarked(_ identifier: String, app: XCUIApplication) {
