@@ -7,6 +7,11 @@ export const ROLES = [
   "team_leader",
   "volunteer",
   "member",
+  "shop_owner",
+  "shop_manager",
+  "barista",
+  "customer",
+  "platform_operator",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -77,6 +82,13 @@ export function actionsFor(role: Role): readonly Action[] {
       ];
     case "master_admin":
       return ACTIONS;
+    case "shop_owner":
+    case "shop_manager":
+    case "barista":
+    case "customer":
+      return ["view_public", "edit_own_profile"];
+    case "platform_operator":
+      return ["view_public"];
     default:
       return assertNever(role);
   }
@@ -91,6 +103,11 @@ const PERMISSIONS: Record<Role, ReadonlySet<Action>> = {
   team_leader: new Set(actionsFor("team_leader")),
   volunteer: new Set(actionsFor("volunteer")),
   member: new Set(actionsFor("member")),
+  shop_owner: new Set(actionsFor("shop_owner")),
+  shop_manager: new Set(actionsFor("shop_manager")),
+  barista: new Set(actionsFor("barista")),
+  customer: new Set(actionsFor("customer")),
+  platform_operator: new Set(actionsFor("platform_operator")),
 };
 
 export function allows(role: Role, action: Action): boolean {
@@ -217,6 +234,16 @@ export function labelRole(role: Role): string {
       return "Volunteer";
     case "member":
       return "Member";
+    case "shop_owner":
+      return "Shop owner";
+    case "shop_manager":
+      return "Shop manager";
+    case "barista":
+      return "Barista";
+    case "customer":
+      return "Customer";
+    case "platform_operator":
+      return "Platform operator";
     default:
       return assertNever(role);
   }

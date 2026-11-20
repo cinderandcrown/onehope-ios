@@ -110,6 +110,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var emailPublic: Bool
     public var phonePublic: Bool
     public var listedInDirectory: Bool
+    public var isStaff: Bool
+    public var images: ChurchImages
 
     public static func bundled(offline: Bool = false) -> ChurchSnapshot {
         ChurchSnapshot(
@@ -149,7 +151,9 @@ public struct ChurchSnapshot: Equatable, Sendable {
             givingOpen: false,
             emailPublic: false,
             phonePublic: false,
-            listedInDirectory: false
+            listedInDirectory: false,
+            isStaff: false,
+            images: .empty
         )
     }
 }
@@ -255,10 +259,15 @@ public struct GiftLine: Equatable, Sendable, Identifiable {
 public struct ChurchClient: Sendable {
     public let baseURL: URL
     public let transport: any HTTPTransport
+    /// Read-through cache. The server decides the tenant from the host. This client does not send a tenant id.
+    public let cache: ResponseCache?
+    public let cacheAge: CacheAge
 
-    public init(baseURL: URL, transport: any HTTPTransport) {
+    public init(baseURL: URL, transport: any HTTPTransport, cache: ResponseCache? = nil, cacheAge: CacheAge = CacheAge()) {
         self.baseURL = baseURL
         self.transport = transport
+        self.cache = cache
+        self.cacheAge = cacheAge
     }
 
     public func login(email: String, password: String) async throws -> String {
@@ -347,23 +356,17 @@ public struct ChurchClient: Sendable {
         token: String?,
         json: Data?
     ) async throws -> Response {
-        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
-            throw ChurchAPIError.transport("We couldn't reach the church just now.")
-        }
-        let (status, data) = try await transport.send(url: url, method: method, body: json, bearer: token)
-        if status >= 400 {
-            let failure = try? JSONDecoder().decode(FailureBody.self, from: data)
-            throw ChurchAPIError(status: status, code: failure?.code ?? "error", message: failure?.error ?? "Request failed.")
-        }
-        do {
-            return try JSONDecoder().decode(Response.self, from: data)
-        } catch {
-            throw ChurchAPIError.transport("We couldn't read the church's reply. Please try again.")
-        }
+        try await ChurchRequest.send(
+            ChurchRequest.Call(
+                baseURL: baseURL,
+                transport: transport,
+                cache: cache,
+                cacheAge: cacheAge,
+                path: path,
+                method: method,
+                token: token,
+                json: json
+            )
+        )
     }
-}
-
-private struct FailureBody: Decodable {
-    let error: String
-    let code: String
 }

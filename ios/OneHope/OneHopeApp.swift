@@ -13,6 +13,8 @@ private let authLog = Logger(subsystem: "com.cinderandcrown.onehope", category: 
 
 @main
 struct OneHopeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -22,40 +24,40 @@ struct OneHopeApp: App {
 }
 
 struct RootView: View {
-    private let client: ChurchClient? = APIEndpoint.resolve().map { ChurchClient(baseURL: $0, transport: URLSessionTransport()) }
+    private let client: ChurchClient? = {
+        guard let url = APIEndpoint.resolve() else { return nil }
+        let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("onehope-reads", isDirectory: true)
+        return ChurchClient(baseURL: url, transport: URLSessionTransport(), cache: folder.map { ResponseCache(directory: $0) })
+    }()
+
     @State private var token: String? = SessionKeychain.load()
     @State private var snapshot = ChurchSnapshot.bundled()
     @State private var authError = ""
     @State private var tab = "home"
     @State private var videoId: String?
+    @State private var orderCoffee = false
 
-    /// Home, Watch, Know Jesus, Plan a Visit, and Give are open to guests. Connect asks for an account.
+    /// Home, Watch, Prayer, Give, and Connect stay. More is the last tab.
     var body: some View {
-        TabView(selection: $tab) {
-            HomeView(snapshot: snapshot, onRefresh: load, perform: perform) { id in
-                videoId = id
-                tab = "watch"
+        ChurchShell(
+            selection: ChurchSelection(tab: $tab, videoId: $videoId),
+            chrome: ChurchChrome(snapshot: snapshot, onRefresh: load, perform: perform),
+            knowJesus: KnowJesusView(snapshot: snapshot, perform: perform, embedded: true),
+            account: account
+        )
+        .environment(\.churchImages, snapshot.images)
+        .sheet(isPresented: $orderCoffee) {
+            NavigationStack {
+                CoffeeView()
             }
-            .tabItem { Label(L10n.text(.home), systemImage: "house") }
-            .tag("home")
-            WatchView(snapshot: snapshot, selected: $videoId, onRefresh: load)
-                .tabItem { Label(L10n.text(.watch), systemImage: "play.rectangle") }
-                .tag("watch")
-            KnowJesusView(snapshot: snapshot, perform: perform)
-                .tabItem { Label(L10n.text(.knowJesus), systemImage: "cross") }
-                .tag("jesus")
-            GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
-                .tabItem { Label(L10n.text(.give), systemImage: "heart") }
-                .tag("give")
-            ConnectView(snapshot: snapshot, onRefresh: load, perform: perform) {
-                account
-            }
-            .id(token != nil)
-            .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
-            .tag("connect")
         }
-        .background(BrandColor.paper)
         .task(id: token) { await load() }
+        .onAppear {
+            if CoffeeShortcut.consume() {
+                orderCoffee = true
+            }
+        }
     }
 
     @ViewBuilder private var account: some View {
@@ -110,6 +112,10 @@ struct RootView: View {
                 snapshot = try await client.loadMember(token: token)
             } else {
                 snapshot = try await client.loadGuest()
+            }
+            let note = await client.cacheAge.consume()
+            if !note.isEmpty {
+                snapshot.offlineNote = note
             }
         } catch let error as ChurchAPIError where error.status == 401 && token != nil {
             signOut(message: "Please sign in again.")

@@ -3,7 +3,7 @@ import { ChurchStore } from "./store";
 export { createApi, API_ROUTES } from "./api";
 export { loadSermons } from "./adapters";
 export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
-export { loadConfig } from "./config";
+export { churchImages, loadConfig } from "./config";
 export * from "./contracts";
 export * from "./domain";
 export * from "./faith";
@@ -19,7 +19,27 @@ export {
   SAMPLE_TOTP_BASE32,
 } from "./sample-accounts";
 export { ChurchStore } from "./store";
-export { databaseUrl, withStore } from "./persist";
+export {
+  databaseUrl,
+  isWriteConflict,
+  retryWrite,
+  runRequest,
+  seedTenantIfEmpty,
+  storeErrorResponse,
+  withStore,
+  UnknownTenantError,
+} from "./persist";
+export { ADAPTERS, assertTruthful, projectCapabilities } from "./adapter-registry";
+export { tablesFor } from "./request-tables";
+export { WriteConflictError } from "./document-store";
+export { localAuthProvider } from "./auth-provider";
+export { emptyDocument, loadDocument, saveDocumentDiff } from "./document-store";
+export { enqueueJob, claimJobs, finishJob } from "./outbox";
+export { fakeEmailAdapter, readTenantSecret, saveTenantSecret } from "./integrations";
+export { importLegacySnapshot } from "./snapshot-import";
+export { exportTenant, restoreTenant } from "./tenant-bundle";
+export { resolveTenant, tenantProfile } from "./tenancy";
+export { withServiceRole } from "./service-role";
 export { memorySyncStore, runSync } from "./sync";
 export { totpCode, decodeBase32 } from "./totp";
 export { VERSION } from "./version";

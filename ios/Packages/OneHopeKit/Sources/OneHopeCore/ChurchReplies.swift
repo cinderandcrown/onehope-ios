@@ -24,6 +24,15 @@ struct HomeReply: Decodable {
     let giving: GivingInfo
     let invite: InviteInfo
     let social: [SocialLink]?
+    let images: ChurchImagesReply?
+}
+
+struct ChurchImagesReply: Decodable {
+    let hero: String?
+    let about: String?
+    let video: String?
+    let revival: String?
+    let og: String?
 }
 
 struct KnowJesusReply: Decodable {
@@ -116,6 +125,7 @@ struct MeReply: Decodable {
         let emailPublic: Bool?
         let phonePublic: Bool?
         let listedInDirectory: Bool?
+        let role: String?
     }
 
     let person: Person

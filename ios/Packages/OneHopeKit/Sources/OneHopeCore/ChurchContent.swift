@@ -1,5 +1,29 @@
 import Foundation
 
+/// Remote church photos. Empty strings mean the app draws a brand-colored fallback.
+public struct ChurchImages: Equatable, Sendable {
+    public var hero: String
+    public var about: String
+    public var video: String
+    public var revival: String
+    public var og: String
+
+    public static let empty = ChurchImages(hero: "", about: "", video: "", revival: "", og: "")
+
+    public func url(named name: String) -> URL? {
+        let raw = switch name {
+        case "hero": hero
+        case "about": about
+        case "video": video
+        case "revival": revival
+        case "og": og
+        default: ""
+        }
+        guard raw.hasPrefix("https://"), let url = URL(string: raw), url.scheme == "https" else { return nil }
+        return url
+    }
+}
+
 /// Plan a Visit wording from weareonehope.com, served by `/api/home`.
 public struct VisitInfo: Decodable, Equatable, Sendable {
     public let welcome: String
@@ -63,6 +87,8 @@ public struct GospelInfo: Decodable, Equatable, Sendable {
     public let baptism: String
     public let baptismVerse: VerseLine
     public let growthTrack: String
+    /// "pending" until a pastor approves the church's salvation and baptism wording. Scripture is unaffected.
+    public let pastoralCopy: String?
 }
 
 public struct JourneyDay: Decodable, Equatable, Sendable, Identifiable {

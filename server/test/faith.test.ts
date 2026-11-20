@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createApi } from "../src/api.ts";
 import { loadConfig } from "../src/config.ts";
-import { parseYoutubeRss } from "../src/domain.ts";
+import { CHURCH, parseYoutubeRss } from "../src/domain.ts";
 import { DAILY_READINGS, DEFAULT_PATHWAY, currentStreak, dailyReading, nextStreak } from "../src/faith.ts";
 import { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "../src/sample-accounts.ts";
 import { ChurchStore, type StoreDocument } from "../src/store.ts";
@@ -322,4 +322,32 @@ test("YouTube Shorts are told apart from full messages", () => {
       ["clip1", "short", "Why Reading God's Word Changes Everything"],
     ],
   );
+});
+
+test("Sunday gathers at 1251 S. Sherman St. Ste. 112", () => {
+  assert.equal(CHURCH.addressLine, "1251 S. Sherman St., Ste. 112");
+  assert.equal(CHURCH.city, "Richardson");
+  assert.equal(CHURCH.region, "TX");
+  assert.equal(CHURCH.postalCode, "75081");
+});
+
+test("salvation and baptism copy waits for pastor approval", () => {
+  const previous = process.env.CONTENT_SALVATION_BAPTISM_APPROVED;
+  delete process.env.CONTENT_SALVATION_BAPTISM_APPROVED;
+  try {
+    const pending = new ChurchStore(loadConfig({})).knowJesus();
+    assert.equal(pending.gospel.pastoralCopy, "pending");
+    assert.equal(pending.gospel.prayer.includes("Lord Jesus"), false);
+    assert.equal(pending.gospel.baptism.includes("outward profession"), false);
+    assert.equal(pending.journey.find((day) => day.day === 6)?.prompt.includes("baptism"), false);
+    assert.match(pending.gospel.steps[0]?.text ?? "", /For God so loved the world/);
+    process.env.CONTENT_SALVATION_BAPTISM_APPROVED = "true";
+    const approved = new ChurchStore(loadConfig({})).knowJesus();
+    assert.equal(approved.gospel.pastoralCopy, "approved");
+    assert.match(approved.gospel.prayer, /Lord Jesus/);
+    assert.match(approved.gospel.baptism, /outward profession/);
+  } finally {
+    if (previous === undefined) delete process.env.CONTENT_SALVATION_BAPTISM_APPROVED;
+    else process.env.CONTENT_SALVATION_BAPTISM_APPROVED = previous;
+  }
 });

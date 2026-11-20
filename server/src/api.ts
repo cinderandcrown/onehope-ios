@@ -1,3 +1,4 @@
+import { assertTruthful } from "./adapter-registry";
 import { CAPABILITIES } from "./capabilities";
 import { AccessError, assertNever, assertNoCardData, isAccessError } from "./domain";
 import { originAllowed } from "./public-url";
@@ -48,6 +49,7 @@ import type { ZodType } from "zod";
 
 export const API_ROUTES = [
   ["GET", "/api/health"],
+  ["GET", "/api/tenant"],
   ["POST", "/api/auth/login"],
   ["POST", "/api/auth/signup"],
   ["POST", "/api/auth/claim"],
@@ -242,6 +244,7 @@ async function route(
     return token;
   };
   if (method === "GET" && path === "/api/health") return parseOut(healthSchema, store.status(VERSION));
+  if (method === "GET" && path === "/api/tenant") return { tenant: store.currentTenant() };
   if (method === "POST" && path === "/api/auth/login") {
     const input = parse(loginBodySchema, body);
     return store.login({ ...input, ip: "api", userAgent: "api" });
@@ -347,6 +350,7 @@ async function route(
     return { proposal: store.proposeMasterAdmin(need(), parse(proposalBodySchema, body)) };
   }
   if (method === "GET" && path === "/api/capabilities") {
+    assertTruthful();
     return {
       capabilities: CAPABILITIES,
       facebook: facebookLive({ pageId: store.config.facebookPageId, token: store.config.facebookPageToken }),

@@ -1,5 +1,5 @@
 import { withStore } from "@onehope/server";
-import Image from "next/image";
+import { ChurchImage } from "@/components/church-image";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +9,12 @@ function money(cents: number | null) {
 }
 
 export default async function CoffeePage() {
-  const coffee = await withStore((store) => store.coffeePublic());
+  const loaded = await withStore((store) => ({ guide: store.coffeePublic(), images: store.churchImages() }));
+  const coffee = loaded.guide;
   return (
     <main className="public-page">
       <section className="public-hero">
-        <Image src="/photos/revival.jpg" alt="The counter at Revival Coffee" width={1400} height={900} />
+        <ChurchImage src={loaded.images.revival} alt="" />
         <div>
           <p>{coffee.shop.name}</p>
           <h1>{coffee.shop.tagline}</h1>

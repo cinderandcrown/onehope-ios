@@ -47,6 +47,8 @@ public struct SampleBadge: View {
 public struct PhotoCard: View {
     private let resource: String
     private let height: CGFloat
+    @Environment(\.churchImages) private var images
+
     public init(_ resource: String, height: CGFloat = 180) {
         self.resource = resource
         self.height = height
@@ -57,15 +59,55 @@ public struct PhotoCard: View {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .clipShape(RoundedRectangle(cornerRadius: 18))
-            .accessibilityHidden(true)
+            .accessibilityIdentifier("church-photo-\(resource)")
     }
 
     @ViewBuilder private var photo: some View {
-        if let image = BundledPhoto.image(named: resource) {
-            Image(uiImage: image).resizable().scaledToFill()
+        if let url = images.url(named: resource) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().scaledToFill()
+                case .empty, .failure:
+                    BrandTexture()
+                @unknown default:
+                    BrandTexture()
+                }
+            }
         } else {
-            BrandColor.olive
+            BrandTexture()
         }
+    }
+}
+
+/// Neutral stand-in when a church photo URL is unset or the phone is offline.
+public struct BrandTexture: View {
+    public init() {}
+
+    public var body: some View {
+        LinearGradient(
+            colors: [BrandColor.olive, BrandColor.terracotta, BrandColor.paper],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay(
+            Circle()
+                .fill(BrandColor.sky.opacity(0.55))
+                .frame(width: 180, height: 180)
+                .offset(x: 80, y: -40)
+        )
+        .accessibilityLabel("Church photo")
+    }
+}
+
+private struct ChurchImagesKey: EnvironmentKey {
+    static let defaultValue = ChurchImages.empty
+}
+
+public extension EnvironmentValues {
+    var churchImages: ChurchImages {
+        get { self[ChurchImagesKey.self] }
+        set { self[ChurchImagesKey.self] = newValue }
     }
 }
 

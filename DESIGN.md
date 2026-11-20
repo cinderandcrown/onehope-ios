@@ -27,7 +27,7 @@ Cards are 20px corners with a soft shadow (`0 10px 28px` at 8% ink). Buttons are
 Only files already published by the church:
 
 - Wordmark: `web/public/brand/logo.svg` and the ink/dove wordmark PNGs (fill `#1C1B1B` on the SVG).
-- Photos already in `web/public/photos/`: `hero.jpg`, `about.jpg`, `community1.jpg`, `times.jpg`, `video.jpg`.
+- Church photos are not in git. The app and the site load `hero`, `about`, `video`, `revival`, and `og` from `ONEHOPE_IMAGE_*` at runtime. A brand-colored gradient stands in when a URL is empty or offline.
 
 No stock photos are labeled as One Hope. No extra symbols.
 

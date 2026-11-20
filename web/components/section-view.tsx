@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { ChurchImage } from "@/components/church-image";
 
 import {
   addPersonAction,
@@ -96,12 +96,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                 .
               </p>
             </div>
-            <Image
-              src="/photos/hero.jpg"
-              alt="A parent and child from the One Hope site"
-              width={1400}
-              height={816}
-            />
+            <ChurchImage src={home.images.hero} alt="" />
           </section>
           <div className="grid" style={{ marginTop: "1rem" }}>
             <article className="card">
@@ -498,13 +493,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       return (
         <section>
           <h1>Kids and students</h1>
-          <Image
-            className="photo"
-            src="/photos/community1.jpg"
-            alt="Children from the One Hope site"
-            width={882}
-            height={1246}
-          />
+          <ChurchImage className="photo" src={store.churchImages().hero} alt="" />
           {lessons.map((lesson) => (
             <article className="card" key={lesson.id}>
               <h2>{lesson.title}</h2>
@@ -690,7 +679,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       const media = store.ministry(token).media;
       return (
         <section className="hero">
-          <Image src="/photos/video.jpg" alt="A gathering from the One Hope site" width={710} height={1026} />
+          <ChurchImage src={store.churchImages().video} alt="" />
           <div>
             <h1>Media</h1>
             {media.series.map((series) => (
@@ -752,7 +741,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
                   </td>
                   <td className={row.read ? "yes" : "no"}>{row.read ? "Yes" : "No"}</td>
                   <td className={row.write ? "yes" : "no"}>{row.write ? "Yes" : "No"}</td>
-                  <td>{row.status === "enforced-demo" ? "Ready" : "Not connected"}</td>
+                  <td>{row.status === "live" ? "Live" : row.status === "dry_run" ? "Dry run" : "Not built"}</td>
                 </tr>
               ))}
             </tbody>

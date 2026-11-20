@@ -50,7 +50,20 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.sermonNote = messages.isEmpty ? "Sunday messages will appear here." : "From the church YouTube channel."
     snapshot.sermons = parts.sermons.videos.map(sermonLine)
     snapshot.groups = parts.groups.groups.map(groupLine)
+    snapshot.images = churchImages(home.images)
     return snapshot
+}
+
+private let staffRoles: Set<String> = ["master_admin", "pastor", "care_team", "finance", "kids_director", "team_leader"]
+
+private func churchImages(_ reply: ChurchImagesReply?) -> ChurchImages {
+    ChurchImages(
+        hero: reply?.hero ?? "",
+        about: reply?.about ?? "",
+        video: reply?.video ?? "",
+        revival: reply?.revival ?? "",
+        og: reply?.og ?? ""
+    )
 }
 
 func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
@@ -85,6 +98,7 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
     snapshot.emailPublic = parts.me.person.emailPublic ?? false
     snapshot.phonePublic = parts.me.person.phonePublic ?? false
     snapshot.listedInDirectory = parts.me.person.listedInDirectory ?? false
+    snapshot.isStaff = staffRoles.contains(parts.me.person.role ?? "")
     return snapshot
 }
 

@@ -11,11 +11,18 @@ public struct WatchView: View {
     private let onRefresh: () async -> Void
     @Binding private var selected: String?
     @State private var failedVideo: String?
+    private let embedded: Bool
 
-    public init(snapshot: ChurchSnapshot, selected: Binding<String?>, onRefresh: @escaping () async -> Void = {}) {
+    public init(
+        snapshot: ChurchSnapshot,
+        selected: Binding<String?>,
+        onRefresh: @escaping () async -> Void = {},
+        embedded: Bool = false
+    ) {
         self.snapshot = snapshot
         _selected = selected
         self.onRefresh = onRefresh
+        self.embedded = embedded
     }
 
     private var messages: [SermonLine] {
@@ -27,46 +34,52 @@ public struct WatchView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    player
-                    if !messages.isEmpty {
-                        Text("Messages").font(.title2.bold())
-                        ForEach(messages) { sermon in
-                            row(sermon)
-                        }
+        if embedded {
+            watchPage
+        } else {
+            NavigationStack { watchPage }
+        }
+    }
+
+    private var watchPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                player
+                if !messages.isEmpty {
+                    Text("Messages").font(.title2.bold())
+                    ForEach(messages) { sermon in
+                        row(sermon)
                     }
-                    if !shorts.isEmpty {
-                        Text("Shorts").font(.title2.bold())
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(shorts) { short in
-                                    Button {
-                                        selected = short.id
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            VideoThumbnail(sermon: short, height: 120)
-                                            Text(short.title).font(.footnote).lineLimit(2).foregroundStyle(BrandColor.ink)
-                                        }
-                                        .frame(width: 160)
+                }
+                if !shorts.isEmpty {
+                    Text("Shorts").font(.title2.bold())
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(shorts) { short in
+                                Button {
+                                    selected = short.id
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        VideoThumbnail(sermon: short, height: 120)
+                                        Text(short.title).font(.footnote).lineLimit(2).foregroundStyle(BrandColor.ink)
                                     }
-                                    .buttonStyle(.plain)
+                                    .frame(width: 160)
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
-                    if snapshot.sermons.isEmpty {
-                        PhotoCard("video")
-                        Text(snapshot.sermonNote)
-                    }
                 }
-                .padding()
+                if snapshot.sermons.isEmpty {
+                    PhotoCard("video")
+                    Text(snapshot.sermonNote)
+                }
             }
-            .refreshable { await onRefresh() }
-            .background(BrandColor.paper)
-            .navigationTitle(L10n.text(.watch))
+            .padding()
         }
+        .refreshable { await onRefresh() }
+        .background(BrandColor.paper)
+        .navigationTitle(L10n.text(.watch))
     }
 
     @ViewBuilder private var player: some View {

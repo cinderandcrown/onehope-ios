@@ -14,15 +14,9 @@ export async function loadSermons(fetchImpl: typeof fetch, channelId: string): P
 }
 
 export function facebookLive(input: { pageId: string; token: string }) {
-  if (!input.pageId || !input.token) {
-    return {
-      mode: "placeholder" as const,
-      message: "Facebook Live stays empty until a Page token is set on the server.",
-    };
-  }
+  void input;
   return {
-    mode: "ready" as const,
-    message: "A Page token is set on the server. The app never receives it.",
-    pageId: input.pageId,
+    mode: "not_built" as const,
+    message: "No Facebook Graph call is implemented. A Page token is not used.",
   };
 }

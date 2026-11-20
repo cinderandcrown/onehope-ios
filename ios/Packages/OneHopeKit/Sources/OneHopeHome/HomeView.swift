@@ -29,6 +29,7 @@ public struct HomeView: View {
                         .font(.hopeDisplay)
                         .foregroundStyle(BrandColor.ink)
                     HeroPhoto("hero", title: "Welcome home", subtitle: snapshot.visit.serviceTime)
+                    coffeeCard
                     if !snapshot.offlineNote.isEmpty {
                         Text(snapshot.offlineNote).font(.footnote)
                     }
@@ -59,13 +60,6 @@ public struct HomeView: View {
                     Text("Lead pastors \(snapshot.pastors.joined(separator: " and ")).").font(.footnote)
                     FollowAlong(links: snapshot.social)
                     ReminderToggle()
-                    NavigationLink {
-                        CoffeeView()
-                    } label: {
-                        Text("Revival Coffee").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("home-coffee")
                 }
                 .padding()
             }
@@ -73,6 +67,30 @@ public struct HomeView: View {
             .background(BrandColor.paper)
             .navigationTitle(L10n.text(.home))
         }
+    }
+
+    private var coffeeCard: some View {
+        NavigationLink {
+            CoffeeView()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                PhotoCard("revival", height: 180)
+                Text("Revival Coffee").font(.hopeTitle).foregroundStyle(BrandColor.ink)
+                Text("Coffee, community, and a welcome in our building.")
+                    .font(.body)
+                    .foregroundStyle(BrandColor.ink)
+                Text("Order coffee")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .foregroundStyle(.white)
+                    .background(BrandColor.terracotta)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .churchCard()
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home-coffee")
+        .accessibilityLabel("Revival Coffee. Order coffee.")
     }
 
     private var callsToAction: some View {

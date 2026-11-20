@@ -9,12 +9,13 @@ Set these in the Vercel project (Production and Preview). Names only; values sta
 | Name                           | Required                    | Notes                                                                                                                |
 | ------------------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                 | Yes, for a shared live demo | Neon pooled connection string, or the Supabase transaction pooler URI. `POSTGRES_URL` is accepted as the same thing. |
-| `ONEHOPE_ENV`                  | Yes                         | Set to `demo`. `production` refuses to boot this store.                                                              |
+| `ONEHOPE_ENV`                  | Yes                         | `demo` or `production`. Production requires `FIELD_ENCRYPTION_KEY`.                                                  |
 | `MASTER_ADMIN_PRIMARY_EMAIL`   | No                          | Defaults to `nicholas.will@cinderandcrown.com`.                                                                      |
 | `MASTER_ADMIN_PRIMARY_NAME`    | No                          | Defaults to `Nicholas Will`.                                                                                         |
 | `MASTER_ADMIN_SECONDARY_NAME`  | No                          | Defaults to `Lead Pastor`.                                                                                           |
 | `MASTER_ADMIN_SECONDARY_EMAIL` | Leave unset                 | The second Master Admin seat stays empty until this is set.                                                          |
-| `FIELD_ENCRYPTION_KEY`         | No                          | 32-byte key, base64. Empty uses the demo key. Do not invent one in git.                                              |
+| `FIELD_ENCRYPTION_KEY`         | Production                  | 32-byte key, base64. Required when `ONEHOPE_ENV=production`. Do not invent one in git.                               |
+| `CONTENT_SALVATION_BAPTISM_APPROVED` | No                   | Leave unset until a pastor approves that wording. Scripture still shows.                                            |
 | `YOUTUBE_CHANNEL_ID`           | No                          | Defaults to the public One Hope channel.                                                                             |
 
 Leave Stripe, Planning Center, Resend, Twilio, Facebook, and Apple Pay flags unset. Giving stays a demo and nothing is sent.
@@ -23,15 +24,15 @@ Leave Stripe, Planning Center, Resend, Twilio, Facebook, and Apple Pay flags uns
 
 1. Create a Vercel project from `cinderandcrown/onehope-ios`. Root directory is `web`. The install still uses the workspace lockfile at the repository root.
 2. Provision Postgres. On this Vercel team the preferred path is the Neon marketplace integration (`vercel integration add neon`), which writes `DATABASE_URL` for you. Supabase is the other preferred host: create a project, run nothing in the Data API for these tables, and paste the pooler URI into `DATABASE_URL`.
-3. Set `ONEHOPE_ENV=demo`. Do not set `MASTER_ADMIN_SECONDARY_EMAIL`.
-4. From a machine that has the database URL in its environment, apply the migrations and seed the labeled demo:
+3. Set `ONEHOPE_ENV`. Do not set `MASTER_ADMIN_SECONDARY_EMAIL` until the Lead Pastor seat is real. Leave `CONTENT_SALVATION_BAPTISM_APPROVED` unset.
+4. From a machine that has the database URL in its environment, apply migrations and import the existing blob. Read `docs/runbooks/phase-1-migration.md` before production.
 
    ```bash
    npm ci
    node --import tsx server/scripts/seed.ts
    ```
 
-   The script reads `DATABASE_URL` or `POSTGRES_URL`. It does not print the URL. Re-running it skips migrations that already applied. It fills `households` and the other RLS tables only when `households` is empty, then saves the demo snapshot.
+   The script reads `DATABASE_URL` or `POSTGRES_URL`. It does not print the URL. Re-running it skips migrations that already applied. The blob import runs once.
 
 5. Deploy the branch. Open `/` for the staff Command Center and `/member` for the member demo. `/member` is a PWA (`manifest.webmanifest`, Apple web app title One Hope). Add it to a phone home screen from the browser share sheet.
 6. Point a future iPhone build at the same origin with `API_BASE_URL` or the launch argument `-apiBaseURL`. The simulator CI argument still wins, so tests keep using the local API.

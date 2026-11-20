@@ -128,9 +128,22 @@ test("Master Admin is the first row of the permission matrix", () => {
   assert.equal(matrix[0]?.grants.propose_master_admin, true);
   assert.equal(matrix.find((row) => row.role === "pastor")?.grants.manage_integrations, false);
   assert.equal(matrix.find((row) => row.role === "member")?.grants.view_all_giving, false);
+  const householdReaders = new Set([
+    "master_admin",
+    "pastor",
+    "care_team",
+    "finance",
+    "kids_director",
+    "team_leader",
+    "volunteer",
+    "member",
+  ]);
   assert.equal(
-    matrix.every((row) => row.grants.view_household_tier3),
+    matrix.every((row) => row.grants.view_household_tier3 === householdReaders.has(row.role)),
     true,
   );
+  assert.equal(matrix.find((row) => row.role === "platform_operator")?.grants.view_household_tier3, false);
+  assert.equal(matrix.find((row) => row.role === "shop_owner")?.grants.view_all_giving, false);
+  assert.equal(matrix.find((row) => row.role === "barista")?.grants.view_kids_medical, false);
   assert.equal(SAMPLE_FUNNEL.sample, true);
 });
