@@ -4,18 +4,6 @@ enum CoffeeShortcut {
     static let kind = "com.cinderandcrown.onehope.orderCoffee"
     private static let pendingKey = "onehope.orderCoffee"
 
-    static func install() {
-        UIApplication.shared.shortcutItems = [
-            UIApplicationShortcutItem(
-                type: kind,
-                localizedTitle: "Order Revival Coffee",
-                localizedSubtitle: nil,
-                icon: UIApplicationShortcutIcon(systemImageName: "cup.and.saucer"),
-                userInfo: nil
-            ),
-        ]
-    }
-
     static func request() {
         UserDefaults.standard.set(true, forKey: pendingKey)
     }
@@ -32,7 +20,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        CoffeeShortcut.install()
         if let item = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem, item.type == CoffeeShortcut.kind {
             CoffeeShortcut.request()
         }
