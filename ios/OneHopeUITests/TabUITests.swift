@@ -55,7 +55,7 @@ final class TabUITests: XCTestCase {
         app.launchArguments = ["-uiTesting", "-apiBaseURL", "http://127.0.0.1:8787", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         openTab("More", app: app)
-        if !app.buttons["more-revival"].waitForExistence(timeout: 3) {
+        if !marked("more-revival", app: app).waitForExistence(timeout: 3) {
             let nested = app.cells["More"]
             if nested.waitForExistence(timeout: 3) {
                 nested.tap()
@@ -81,19 +81,23 @@ final class TabUITests: XCTestCase {
             ("more-sign-in", "Sign in"),
         ]
         for route in routes {
-            let row = app.buttons[route.0]
+            let row = marked(route.0, app: app)
             XCTAssertTrue(row.waitForExistence(timeout: 10), "Missing \(route.0)")
             row.tap()
             XCTAssertTrue(app.navigationBars[route.1].waitForExistence(timeout: 10), route.0)
             app.navigationBars.buttons["More"].tap()
         }
         for soon in ["more-household", "more-live"] {
-            let row = app.descendants(matching: .any)[soon]
+            let row = marked(soon, app: app)
             XCTAssertTrue(row.waitForExistence(timeout: 5), soon)
             XCTAssertTrue(app.staticTexts["Coming soon"].exists)
             row.tap()
             XCTAssertTrue(app.navigationBars["More"].exists)
         }
+    }
+
+    private func marked(_ identifier: String, app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)[identifier]
     }
 
     private func openTab(_ name: String, app: XCUIApplication) {

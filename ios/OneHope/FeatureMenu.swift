@@ -107,8 +107,8 @@ struct FeatureMenu<Account: View>: View {
             Label(title, systemImage: symbol)
                 .font(.body)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .accessibilityIdentifier(identifier)
         }
-        .accessibilityIdentifier(identifier)
         .accessibilityLabel(title)
     }
 
