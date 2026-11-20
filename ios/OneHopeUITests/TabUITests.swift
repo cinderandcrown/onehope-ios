@@ -46,7 +46,9 @@ final class TabUITests: XCTestCase {
         password.tap()
         password.typeText("gathering1")
         app.buttons["submit-account"].tap()
-        XCTAssertTrue(app.buttons["Account and directory"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["sign-out"].waitForExistence(timeout: 20))
+        app.navigationBars["Account"].buttons["BackButton"].tap()
+        XCTAssertTrue(app.buttons["Account and directory"].waitForExistence(timeout: 10))
         capture(app, name: "Member Connect")
     }
 
@@ -76,8 +78,9 @@ final class TabUITests: XCTestCase {
         ]
         for route in routes {
             tapMarked(route.0, app: app)
-            XCTAssertTrue(app.navigationBars[route.1].waitForExistence(timeout: 10), route.0)
-            app.navigationBars.buttons["More"].tap()
+            let bar = app.navigationBars[route.1]
+            XCTAssertTrue(bar.waitForExistence(timeout: 10), route.0)
+            bar.buttons["BackButton"].tap()
         }
         for soon in ["more-household", "more-live"] {
             XCTAssertTrue(app.staticTexts["Coming soon"].waitForExistence(timeout: 5), soon)
