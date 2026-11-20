@@ -39,6 +39,7 @@ struct CreditsScreen: View {
                         Text(item.name).font(.body.weight(.semibold))
                         Text(item.license).font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.8))
                     }
+                    .frame(minHeight: 44, alignment: .leading)
                     .accessibilityElement(children: .combine)
                 }
                 if let repo = URL(string: "https://github.com/cinderandcrown/onehope-ios") {
@@ -63,9 +64,10 @@ struct CreditsScreen: View {
         }
         if let link = credit.link {
             Link(destination: link) { content }
+                .frame(minHeight: 44, alignment: .leading)
                 .accessibilityHint("Opens in your browser")
         } else {
-            content.accessibilityElement(children: .combine)
+            content.frame(minHeight: 44, alignment: .leading).accessibilityElement(children: .combine)
         }
     }
 
