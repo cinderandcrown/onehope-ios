@@ -9,7 +9,7 @@ struct GrowSection: View {
     let perform: (MemberAction) async -> String
 
     var body: some View {
-        Section("Grow and care") {
+        TitledSection("Grow and care") {
             NavigationLink(growth.toolkit.title) {
                 ToolkitView(toolkit: growth.toolkit)
             }
@@ -36,7 +36,7 @@ struct ToolkitView: View {
                 link(toolkit.proclamations)
                 link(toolkit.playlist)
             }
-            Section("Scriptures to speak") {
+            TitledSection("Scriptures to speak") {
                 ForEach(toolkit.scriptures, id: \.reference) { verse in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verse.text)
@@ -44,7 +44,7 @@ struct ToolkitView: View {
                     }
                 }
             }
-            Section("Staff reads") {
+            TitledSection("Staff reads") {
                 ForEach(toolkit.staffReads) { book in
                     VStack(alignment: .leading) {
                         Text(book.title)
@@ -52,7 +52,7 @@ struct ToolkitView: View {
                     }
                 }
             }
-            Section("Podcast picks") {
+            TitledSection("Podcast picks") {
                 ForEach(toolkit.podcasts, id: \.self) { podcast in
                     Text(podcast)
                 }
@@ -77,7 +77,7 @@ struct RecoveryView: View {
     var body: some View {
         List {
             if let group = recovery.group {
-                Section(group.name) {
+                TitledSection(group.name) {
                     Text(group.schedule)
                     if !group.area.isEmpty {
                         Text(group.area).font(.footnote)
@@ -157,7 +157,7 @@ struct SupportFormView: View {
                 Text(support.intro)
             }
             if !signedIn {
-                Section("How can we reach you?") {
+                TitledSection("How can we reach you?") {
                     TextField("Your name", text: $name).textContentType(.name)
                     TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress)
                     TextField("Phone", text: $phone).textContentType(.telephoneNumber).keyboardType(.phonePad)

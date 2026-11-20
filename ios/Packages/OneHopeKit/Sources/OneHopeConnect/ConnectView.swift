@@ -59,7 +59,7 @@ public struct ConnectView<Account: View, KnowJesus: View>: View {
                 }
                 eventsSection
                 ForEach(categories, id: \.self) { category in
-                    Section(category) {
+                    TitledSection(category) {
                         ForEach(snapshot.groups.filter { $0.category == category }) { group in
                             groupRow(group)
                         }
@@ -80,7 +80,7 @@ public struct ConnectView<Account: View, KnowJesus: View>: View {
     }
 
     private var eventsSection: some View {
-        Section("Events") {
+        TitledSection("Events") {
             ForEach(snapshot.events) { event in
                 VStack(alignment: .leading, spacing: 8) {
                     Text(event.title).font(.headline)
@@ -151,7 +151,7 @@ private struct MemberSections: View {
     @State private var message = ""
 
     var body: some View {
-        Section("Next steps") {
+        TitledSection("Next steps") {
             ForEach(snapshot.pathway) { step in
                 VStack(alignment: .leading) {
                     Text(step.title)
@@ -159,7 +159,7 @@ private struct MemberSections: View {
                 }
             }
         }
-        Section("Serving") {
+        TitledSection("Serving") {
             if snapshot.serving.isEmpty {
                 Text("No serving assignment yet. Ask about a team at Growth Track.")
             }
@@ -175,7 +175,7 @@ private struct MemberSections: View {
     }
 
     private var groupNote: some View {
-        Section("Group note") {
+        TitledSection("Group note") {
             if let group = snapshot.groups.first(where: \.joined) {
                 TextField("Message your group", text: $message)
                 Button("Send to \(group.name)") {

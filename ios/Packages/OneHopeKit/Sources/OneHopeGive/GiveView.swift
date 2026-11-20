@@ -57,7 +57,7 @@ public struct GiveView: View {
                     Text("Text to give").font(.headline)
                     Text(giving.text.note)
                     if let sms = URL(string: "sms:\(giving.text.number)") {
-                        Link("Text \(giving.text.number)", destination: sms).buttonStyle(.bordered).controlSize(.large)
+                        Link("Text \(giving.text.number)", destination: sms).buttonStyle(SecondaryButtonStyle())
                     }
                 }
                 .churchCard()
@@ -66,7 +66,7 @@ public struct GiveView: View {
                         Text(seasonal.title).font(.headline)
                         Text(seasonal.note)
                         if let url = URL(string: giving.online.url) {
-                            Link("Give to the Giving Tree", destination: url).buttonStyle(.bordered).controlSize(.large)
+                            Link("Give to the Giving Tree", destination: url).buttonStyle(SecondaryButtonStyle())
                         }
                     }
                     .churchCard()

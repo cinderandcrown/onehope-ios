@@ -24,7 +24,7 @@ public struct InviteCard: View {
                     .accessibilityIdentifier("share-invite")
                 }
                 if let maps = URL(string: invite.mapsUrl) {
-                    Link("Maps", destination: maps).buttonStyle(.bordered).controlSize(.large)
+                    Link("Maps", destination: maps).buttonStyle(SecondaryButtonStyle())
                 }
             }
         }
@@ -58,7 +58,7 @@ public struct DailyWordCard: View {
                 Button(readToday(daily.day) ? "Read today" : "I read today's Word") {
                     Task { await markRead(today: daily.day) }
                 }
-                .buttonStyle(.bordered).controlSize(.large)
+                .buttonStyle(SecondaryButtonStyle())
                 .disabled(readToday(daily.day))
                 .accessibilityIdentifier("daily-word-read")
                 if days > 0 {

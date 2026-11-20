@@ -230,3 +230,25 @@ public struct PhotoOverlay<Content: View>: View {
             .accessibilityElement(children: .combine)
     }
 }
+
+/// A titled group of rows with a header dark enough to read on the paper background.
+public struct TitledSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    public init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    public var body: some View {
+        Section {
+            content
+        } header: {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(BrandColor.ink.opacity(0.8))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+}

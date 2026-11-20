@@ -10,13 +10,13 @@ struct NextStepsScreen: View {
 
     var body: some View {
         List {
-            Section("Salvation and baptism") {
+            TitledSection("Salvation and baptism") {
                 Text("The next step starts with Scripture, then a pastor follows up.")
                 NavigationLink("Open Know Jesus") {
                     KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
                 }
             }
-            Section("Your path") {
+            TitledSection("Your path") {
                 if snapshot.pathway.isEmpty {
                     Text(snapshot.signedIn ? "No steps are on your path yet." : "Sign in to see the steps saved to your account.")
                 }

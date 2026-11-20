@@ -77,7 +77,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var faith: some View {
-        MenuSection("Faith") {
+        TitledSection("Faith") {
             row("more-know-jesus", MenuLabel(title: "Know Jesus", symbol: "cross", detail: "The good news, from the Bible", tint: BrandColor.olive)) {
                 KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
             }
@@ -88,7 +88,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var family: some View {
-        MenuSection("Family") {
+        TitledSection("Family") {
             row("more-kids", MenuLabel(title: "Children's Church", symbol: "figure.and.child.holdinghands", detail: "Check in and pick up")) {
                 KidsScreen(snapshot: snapshot, perform: perform)
             }
@@ -96,7 +96,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var connect: some View {
-        MenuSection("Connect") {
+        TitledSection("Connect") {
             row("more-groups", MenuLabel(title: "Groups", symbol: "person.3", detail: "Find your people", tint: BrandColor.olive)) {
                 GroupsScreen(snapshot: snapshot, perform: perform)
             }
@@ -110,7 +110,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var giveAndShop: some View {
-        MenuSection("Give and Shop") {
+        TitledSection("Give and Shop") {
             row("more-giving", MenuLabel(title: "Giving", symbol: "heart", detail: "Online, text, or by mail")) {
                 GiveView(snapshot: snapshot, onRefresh: onRefresh, perform: perform, embedded: true)
             }
@@ -119,7 +119,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var watch: some View {
-        MenuSection("Watch and Media") {
+        TitledSection("Watch and Media") {
             row("more-sermons", MenuLabel(title: "Sermons", symbol: "play.rectangle", detail: "Messages and shorts")) {
                 WatchView(snapshot: snapshot, selected: $videoId, onRefresh: onRefresh, embedded: true)
             }
@@ -127,7 +127,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var church: some View {
-        MenuSection("Church") {
+        TitledSection("Church") {
             row("more-visit", MenuLabel(title: "Plan a Visit", symbol: "mappin.and.ellipse", detail: "What to expect on Sunday")) {
                 PlanVisitView(snapshot: snapshot, perform: perform)
             }
@@ -149,7 +149,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var accountSection: some View {
-        MenuSection("Account") {
+        TitledSection("Account") {
             row("more-profile", MenuLabel(title: "Profile", symbol: "person", detail: snapshot.signedIn ? snapshot.accountName : "Sign in to see yours", tint: BrandColor.olive)) {
                 account.navigationTitle(snapshot.signedIn ? "Profile" : "Sign in")
             }
@@ -195,27 +195,5 @@ struct FeatureMenu<Account: View>: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-    }
-}
-
-/// A titled group of rows with a header dark enough to read on the paper background.
-private struct MenuSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        Section {
-            content
-        } header: {
-            Text(title)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(BrandColor.ink.opacity(0.8))
-                .accessibilityAddTraits(.isHeader)
-        }
     }
 }

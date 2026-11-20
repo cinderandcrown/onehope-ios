@@ -27,10 +27,10 @@ public struct PlanVisitView: View {
                     Text(visit.directions).font(.footnote)
                     HStack {
                         if let maps = URL(string: visit.mapsUrl) {
-                            Link("Open in Maps", destination: maps).buttonStyle(.bordered).controlSize(.large)
+                            Link("Open in Maps", destination: maps).buttonStyle(SecondaryButtonStyle())
                         }
                         Button("Add to calendar") { addSundayToCalendar() }
-                            .buttonStyle(.bordered).controlSize(.large)
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                 }
                 .churchCard()

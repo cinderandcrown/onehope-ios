@@ -15,25 +15,25 @@ struct CreditsScreen: View {
 
     var body: some View {
         List {
-            Section("This app") {
+            TitledSection("This app") {
                 Text("One Hope, version \(version)")
                 Text("Built for One Hope Church. The app's own source code is open source under the MIT License.")
             }
-            Section("Photos and church content") {
+            TitledSection("Photos and church content") {
                 Text("Pictures of the church, its team, its ministries, and Revival Coffee are shown from the church's own websites and belong to their owners.")
                 ForEach(credits) { credit in
                     creditRow(credit)
                 }
             }
-            Section("Scripture, video, and maps") {
+            TitledSection("Scripture, video, and maps") {
                 Text("Scripture is the King James Version, which is in the public domain in the United States.")
                 Text("Sermon videos and thumbnails come from the church's YouTube channel and play in YouTube's player under YouTube's terms.")
                 Text("Maps open in Apple Maps. Symbols are Apple's SF Symbols, used under Apple's license.")
             }
-            Section("Music") {
+            TitledSection("Music") {
                 Text("This app does not play music.")
             }
-            Section("Open-source software") {
+            TitledSection("Open-source software") {
                 ForEach(Self.licenses) { item in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(.body.weight(.semibold))
