@@ -55,12 +55,6 @@ final class TabUITests: XCTestCase {
         app.launchArguments = ["-uiTesting", "-apiBaseURL", "http://127.0.0.1:8787", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         openTab("More", app: app)
-        if !marked("more-revival", app: app).waitForExistence(timeout: 3) {
-            let nested = app.tables.staticTexts["More"]
-            if nested.waitForExistence(timeout: 3) {
-                nested.tap()
-            }
-        }
         XCTAssertFalse(app.buttons["more-staff"].exists)
         let routes: [(String, String)] = [
             ("more-revival", "Revival Coffee"),
@@ -81,40 +75,42 @@ final class TabUITests: XCTestCase {
             ("more-sign-in", "Sign in"),
         ]
         for route in routes {
-            let row = marked(route.0, app: app)
-            XCTAssertTrue(row.waitForExistence(timeout: 10), "Missing \(route.0)")
-            row.tap()
+            tapMarked(route.0, app: app)
             XCTAssertTrue(app.navigationBars[route.1].waitForExistence(timeout: 10), route.0)
             app.navigationBars.buttons["More"].tap()
         }
         for soon in ["more-household", "more-live"] {
-            let row = marked(soon, app: app)
-            XCTAssertTrue(row.waitForExistence(timeout: 5), soon)
-            XCTAssertTrue(app.staticTexts["Coming soon"].exists)
-            row.tap()
-            XCTAssertTrue(app.navigationBars["More"].exists)
+            XCTAssertTrue(app.staticTexts["Coming soon"].waitForExistence(timeout: 5), soon)
+            tapMarked(soon, app: app)
+            XCTAssertTrue(app.navigationBars["More"].exists, soon)
         }
     }
 
-    private func marked(_ identifier: String, app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any)[identifier]
+    private func tapMarked(_ identifier: String, app: XCUIApplication) {
+        let matches = app.descendants(matching: .any).matching(identifier: identifier)
+        XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 10), "Missing \(identifier)")
+        let button = app.buttons.matching(identifier: identifier).firstMatch
+        if button.exists {
+            button.tap()
+        } else {
+            matches.firstMatch.tap()
+        }
     }
 
     private func openTab(_ name: String, app: XCUIApplication) {
         let direct = app.tabBars.buttons[name]
-        if direct.waitForExistence(timeout: 8) {
+        if name != "More", direct.waitForExistence(timeout: 8) {
             direct.tap()
             return
         }
         let overflow = app.tabBars.buttons["More"]
         XCTAssertTrue(overflow.waitForExistence(timeout: 8), "Missing \(name) tab")
-        overflow.tap()
-        let cell = app.cells[name]
-        if cell.waitForExistence(timeout: 5) {
-            cell.tap()
-            return
+        let row = app.tables.staticTexts[name]
+        if !row.waitForExistence(timeout: 2) {
+            overflow.tap()
         }
-        app.buttons[name].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 8), "Missing \(name) tab")
+        row.tap()
     }
 
     private func capture(_ app: XCUIApplication, name: String) {
