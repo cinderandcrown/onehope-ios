@@ -7,17 +7,14 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      # Name of the Developer Portal integration in the Codemagic UI.
-      # Set CM_ASC_INTEGRATION in the onehope_signing environment group.
-      app_store_connect: $CM_ASC_INTEGRATION
+      # Name of the App Store Connect integration in the Codemagic team settings.
+      app_store_connect: "CC App Store Connect"
     environment:
-      groups:
-        - onehope_signing
       ios_signing:
         provisioning_profiles:
           - onehope_appstore
         certificates:
-          - $CM_DISTRIBUTION_CERTIFICATE
+          - cc_dist
       vars:
         BUNDLE_ID: com.cinderandcrown.onehope
         XCODE_PROJECT: ios/OneHope.xcodeproj
@@ -56,7 +53,7 @@ workflows:
             exit 1
           fi
           if ! ls "$CERTS_DIR"/* >/dev/null 2>&1; then
-            echo "Missing certificate ${CM_DISTRIBUTION_CERTIFICATE:-<unset>}."
+            echo "Missing certificate cc_dist."
             exit 1
           fi
           security find-identity -v -p codesigning
