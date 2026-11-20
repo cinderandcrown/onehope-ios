@@ -56,7 +56,7 @@ final class TabUITests: XCTestCase {
         app.launch()
         openTab("More", app: app)
         if !marked("more-revival", app: app).waitForExistence(timeout: 3) {
-            let nested = app.cells["More"]
+            let nested = app.tables.staticTexts["More"]
             if nested.waitForExistence(timeout: 3) {
                 nested.tap()
             }
