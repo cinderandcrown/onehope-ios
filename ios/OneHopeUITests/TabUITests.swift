@@ -122,8 +122,8 @@ final class TabUITests: XCTestCase {
     }
 
     /// Scrolls the list until the row sits fully on screen above the tab bar.
-    /// Swipes go to the list itself (not the whole app) so a swipe never lands as a tap on a row,
-    /// which used to open the wrong screen and leave the next row "missing".
+    /// Each step is a press-drag-hold on the list, so there is no fling: a fast swipe could skip past a
+    /// lazily drawn row (or land as a tap on another row) and leave the next row "missing".
     private func reveal(_ identifier: String, app: XCUIApplication) {
         let row = marked(identifier, app: app)
         let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
@@ -132,11 +132,21 @@ final class TabUITests: XCTestCase {
         func onScreen() -> Bool {
             row.exists && row.frame.minY > 90 && row.frame.maxY < tabTop
         }
-        for _ in 0 ..< 10 where !onScreen() {
-            surface.swipeUp(velocity: .default)
+        func drag(up: Bool) {
+            let low = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.7))
+            let high = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.35))
+            let (start, end) = up ? (low, high) : (high, low)
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
         }
-        for _ in 0 ..< 10 where !onScreen() {
-            surface.swipeDown(velocity: .default)
+        for _ in 0 ..< 20 where !onScreen() {
+            // Below the tab bar or not drawn yet (routes run top to bottom): scroll down the list.
+            if row.exists, row.frame.minY <= 90 {
+                break
+            }
+            drag(up: true)
+        }
+        for _ in 0 ..< 20 where !onScreen() {
+            drag(up: false)
         }
     }
 
