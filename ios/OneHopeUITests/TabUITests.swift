@@ -28,6 +28,11 @@ final class TabUITests: XCTestCase {
             capture(app, name: "Guest \(name)")
         }
         XCTAssertFalse(app.tabBars.buttons["Know Jesus"].exists)
+        signUp(app)
+        capture(app, name: "Member Connect")
+    }
+
+    private func signUp(_ app: XCUIApplication) {
         let account = app.buttons["connect-account"]
         XCTAssertTrue(account.waitForExistence(timeout: 10))
         account.tap()
@@ -54,7 +59,6 @@ final class TabUITests: XCTestCase {
             }
         }
         XCTAssertTrue(member.waitForExistence(timeout: 10))
-        capture(app, name: "Member Connect")
     }
 
     func testMoreReachesEveryRow() {
