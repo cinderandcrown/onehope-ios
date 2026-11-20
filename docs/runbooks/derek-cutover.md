@@ -14,6 +14,13 @@ The demo database is disposable. Drop and re-seed it whenever you like. Nothing 
 
 Preview-only env vars that go with the demo database: `DATABASE_URL` (sensitive), `TENANT_MODE=single` with `TENANT_ID=onehope`, because preview hostnames are not in `tenant_domains`, and `ONEHOPE_SAMPLE_DATA=true`. None of them are set for Production.
 
+## Stable demo address
+
+- Stable alias: `https://onehope-preview-crowncampaignconsulting.vercel.app`. TestFlight build 10 (Codemagic workflow `ios-testflight-demo`) uses it as `API_BASE_URL`.
+- Vercel Authentication is off for Preview deployments (Nicholas approved this on 2026-11-20), so the app can reach the alias without signing in.
+- After a new preview deploy, move the alias to that deployment with `vercel alias set <deployment-url> onehope-preview-crowncampaignconsulting.vercel.app`. Previews never move it on their own.
+- At cutover, ship a build from workflow `ios-testflight` (production API) rather than repointing this alias at production.
+
 ## Swap the demo database (hot-swap)
 
 1. Create or reset a demo Postgres. For example, create a new Neon project, or reset the existing one's branch.
