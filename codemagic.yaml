@@ -21,10 +21,11 @@ workflows:
         # The home-screen name stays "One Hope".
         APP_STORE_APPLE_ID: "6836197983"
         # Defaults keep the production build: prod API, internal testing only,
-        # next build number. The demo workflow below overrides them.
+        # next build number. The demo workflow below overrides them. Codemagic
+        # rejects empty values, so BUILD_NUMBER_OVERRIDE is left unset here and
+        # the script reads it with ${BUILD_NUMBER_OVERRIDE:-}.
         ONEHOPE_API_BASE_URL: "https://onehope-beryl.vercel.app"
         TESTFLIGHT_INTERNAL_ONLY: "true"
-        BUILD_NUMBER_OVERRIDE: ""
       xcode: latest
     # Start this from the Codemagic UI. Pushes do not spend a Mac build
     # until the App Store Connect integration and the app record exist.
@@ -81,6 +82,7 @@ workflows:
             LATEST_BUILD_NUMBER=0
           fi
           NEXT=$((LATEST_BUILD_NUMBER + 1))
+          BUILD_NUMBER_OVERRIDE="${BUILD_NUMBER_OVERRIDE:-}"
           if [ -n "$BUILD_NUMBER_OVERRIDE" ]; then
             if ! [[ "$BUILD_NUMBER_OVERRIDE" =~ ^[0-9]+$ ]] || [ "$BUILD_NUMBER_OVERRIDE" -le "$LATEST_BUILD_NUMBER" ]; then
               echo "BUILD_NUMBER_OVERRIDE=$BUILD_NUMBER_OVERRIDE must be a number above the latest TestFlight build $LATEST_BUILD_NUMBER."
