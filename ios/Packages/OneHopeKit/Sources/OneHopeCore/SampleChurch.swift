@@ -70,7 +70,7 @@ public enum L10n {
     }
 
     public enum Key: String, Sendable {
-        case home, watch, give, connect, knowJesus, prayer
+        case home, watch, give, connect, knowJesus, prayer, more
         case sample
         case signIn
     }
@@ -82,6 +82,7 @@ public enum L10n {
         .connect: "Connect",
         .knowJesus: "Know Jesus",
         .prayer: "Prayer",
+        .more: "More",
         .sample: "Sample",
         .signIn: "Continue as sample member",
     ]
@@ -93,6 +94,7 @@ public enum L10n {
         .connect: "Conectar",
         .knowJesus: "Conoce a Jesús",
         .prayer: "Oración",
+        .more: "Más",
         .sample: "Muestra",
         .signIn: "Continuar como miembro de muestra",
     ]

@@ -3,7 +3,7 @@ import { ChurchStore } from "./store";
 export { createApi, API_ROUTES } from "./api";
 export { loadSermons } from "./adapters";
 export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
-export { loadConfig } from "./config";
+export { churchImages, loadConfig } from "./config";
 export * from "./contracts";
 export * from "./domain";
 export * from "./faith";

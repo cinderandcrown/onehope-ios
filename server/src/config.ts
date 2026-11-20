@@ -32,7 +32,37 @@ export type AppConfig = {
   squareEnvironment: string;
   squareWebhookSignatureKey: string;
   squareWebhookNotificationUrl: string;
+  images: ChurchImages;
 };
+
+export type ChurchImages = {
+  hero: string;
+  about: string;
+  video: string;
+  revival: string;
+  og: string;
+};
+
+function httpsURL(value: string | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw.startsWith("https://")) return "";
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function churchImages(env: NodeJS.ProcessEnv): ChurchImages {
+  return {
+    hero: httpsURL(env.ONEHOPE_IMAGE_HERO),
+    about: httpsURL(env.ONEHOPE_IMAGE_ABOUT),
+    video: httpsURL(env.ONEHOPE_IMAGE_VIDEO),
+    revival: httpsURL(env.ONEHOPE_IMAGE_REVIVAL),
+    og: httpsURL(env.ONEHOPE_IMAGE_OG),
+  };
+}
 
 /** Only for reading snapshots written before a configured key. New writes use FIELD_ENCRYPTION_KEY. */
 export function demoFieldKey(): Buffer {
@@ -87,5 +117,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     squareEnvironment: env.SQUARE_ENVIRONMENT || "sandbox",
     squareWebhookSignatureKey: env.SQUARE_WEBHOOK_SIGNATURE_KEY || "",
     squareWebhookNotificationUrl: env.SQUARE_WEBHOOK_NOTIFICATION_URL || "",
+    images: churchImages(env),
   };
 }

@@ -1,15 +1,15 @@
 import { neighborhoodPrayerAction } from "@/app/actions";
 import { withStore } from "@onehope/server";
-import Image from "next/image";
+import { ChurchImage } from "@/components/church-image";
 
 export const dynamic = "force-dynamic";
 
 export default async function NeighborhoodPage() {
-  const board = await withStore((store) => store.community(null));
+  const board = await withStore((store) => ({ posts: store.community(null), images: store.churchImages() }));
   return (
     <main className="public-page">
       <section className="public-hero">
-        <Image src="/photos/community1.jpg" alt="One Hope community" width={1400} height={816} />
+        <ChurchImage src={board.images.hero} alt="" />
         <div>
           <p>Richardson</p>
           <h1>Prayer for the neighborhood</h1>
@@ -31,10 +31,10 @@ export default async function NeighborhoodPage() {
         </form>
       </article>
       <h2>Serve the neighborhood</h2>
-      {board.outreach.length === 0 ? (
+      {board.posts.outreach.length === 0 ? (
         <p>Nothing is posted yet. When the church adds a serve day, it will show up here.</p>
       ) : (
-        board.outreach.map((item) => (
+        board.posts.outreach.map((item) => (
           <article className="card" key={item.id}>
             <h3>{item.title}</h3>
             <p>{item.detail}</p>

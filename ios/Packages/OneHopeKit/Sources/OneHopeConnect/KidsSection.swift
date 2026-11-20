@@ -3,15 +3,21 @@ import SwiftUI
 
 /// Household check-in. Each child shows whether they are checked in; pickup needs
 /// the code from check-in, a verified guardian, and two adults at the station.
-struct KidsSection: View {
+public struct KidsSection: View {
     let kids: [KidLine]
     let perform: (MemberAction) async -> String
     @Binding var notice: String
+
+    public init(kids: [KidLine], perform: @escaping (MemberAction) async -> String, notice: Binding<String>) {
+        self.kids = kids
+        self.perform = perform
+        self._notice = notice
+    }
     @State private var childName = ""
     @State private var classroom = "Preschool"
     @State private var codes: [String: String] = [:]
 
-    var body: some View {
+    public var body: some View {
         Section {
             ForEach(kids) { child in
                 row(child)

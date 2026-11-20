@@ -1,4 +1,7 @@
 import Image from "next/image";
+
+import { ChurchImage } from "@/components/church-image";
+import { churchImages } from "@onehope/server";
 import Link from "next/link";
 
 import { copy, isLanguage } from "@/lib/i18n";
@@ -52,14 +55,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </button>
         </form>
       </section>
-      <Image
-        className="login-photo"
-        src="/photos/hero.jpg"
-        alt="A parent and child from the One Hope site"
-        width={1400}
-        height={816}
-        priority
-      />
+      <ChurchImage className="login-photo" src={churchImages(process.env).hero} alt="" />
     </main>
   );
 }

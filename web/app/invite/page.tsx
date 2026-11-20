@@ -1,6 +1,6 @@
 import { FollowAlong } from "@/components/follow-along";
 import { withStore } from "@onehope/server";
-import Image from "next/image";
+import { ChurchImage } from "@/components/church-image";
 
 export const dynamic = "force-dynamic";
 
@@ -8,12 +8,12 @@ export default async function InvitePage({ searchParams }: { searchParams: Promi
   const note = ((await searchParams).note ?? "").trim().slice(0, 280);
   const page = await withStore((store) => {
     const home = store.publicHome();
-    return { home, social: store.socialLinks() };
+    return { home, social: store.socialLinks(), images: home.images };
   });
   return (
     <main className="public-page">
       <section className="public-hero">
-        <Image src="/photos/hero.jpg" alt="People gathered at One Hope" width={1400} height={816} />
+        <ChurchImage src={page.images.hero} alt="" />
         <div>
           <p>One Hope Church</p>
           <h1>Come sit with us</h1>

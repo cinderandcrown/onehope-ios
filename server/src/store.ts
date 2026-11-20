@@ -489,15 +489,24 @@ export class ChurchStore {
     this.boundTenant = tenant;
   }
 
-  currentTenant(): { id: string; name: string; timezone: string; pickupOnly: boolean } {
-    return (
-      this.boundTenant ?? {
-        id: "onehope",
-        name: "One Hope",
-        timezone: "America/Chicago",
-        pickupOnly: false,
-      }
-    );
+  churchImages(): AppConfig["images"] {
+    return this.config.images;
+  }
+
+  currentTenant(): {
+    id: string;
+    name: string;
+    timezone: string;
+    pickupOnly: boolean;
+    images: AppConfig["images"];
+  } {
+    const tenant = this.boundTenant ?? {
+      id: "onehope",
+      name: "One Hope",
+      timezone: "America/Chicago",
+      pickupOnly: false,
+    };
+    return { ...tenant, images: this.config.images };
   }
 
   status(version: string) {
@@ -733,6 +742,7 @@ export class ChurchStore {
         speaker: "One Hope",
         passage: "",
       },
+      images: this.config.images,
     };
   }
 

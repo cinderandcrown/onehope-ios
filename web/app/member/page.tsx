@@ -78,6 +78,7 @@ export default async function MemberPage({
         funds: store.funds(),
         frequencies: GIVING_FREQUENCIES,
         growth: store.growth(),
+        images: home.images,
         social: store.socialLinks(),
         greeting: greeting(store.clock(), null),
         journeyMonth: knowJesus.journeyMonth,

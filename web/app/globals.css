@@ -454,13 +454,23 @@ pre {
   min-height: 22rem;
   box-shadow: 0 16px 40px rgb(28 27 27 / 12%);
 }
-.member-hero img {
+.church-fallback {
+  display: block;
+  width: 100%;
+  min-height: 16rem;
+  background:
+    radial-gradient(120% 80% at 12% 8%, #df8052 0%, transparent 46%),
+    radial-gradient(90% 70% at 100% 0%, #caddf6 0%, transparent 42%),
+    linear-gradient(165deg, #3f4903 0%, #6d7a2e 42%, #e5e4d0 100%);
+}
+.member-hero img,
+.member-hero .church-fallback {
   display: block;
   width: 100%;
   height: 22rem;
   object-fit: cover;
 }
-.member-hero div {
+.member-hero div:not(.church-fallback) {
   position: absolute;
   inset: auto 0 0 0;
   padding: 1.25rem;
@@ -691,13 +701,15 @@ pre {
   margin-bottom: 1rem;
   border: 1px solid var(--ink);
 }
-.public-hero img {
+.public-hero img,
+.public-hero .church-fallback,
+.login-photo.church-fallback {
   width: 100%;
   height: 22rem;
   object-fit: cover;
   display: block;
 }
-.public-hero div {
+.public-hero div:not(.church-fallback) {
   position: absolute;
   inset: auto 0 0 0;
   padding: 1.3rem;

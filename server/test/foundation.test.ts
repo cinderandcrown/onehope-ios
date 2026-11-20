@@ -668,3 +668,20 @@ test("a home request does not read the rest of the tenant", async () => {
   assert.equal(/from announcements/i.test(joined), true);
   assert.equal(/from gifts|from people|from audit_log|from sessions/i.test(joined), false);
 });
+
+test("church image URLs come from the environment and ignore anything else", () => {
+  const empty = loadConfig({});
+  assert.equal(empty.images.hero, "");
+  assert.equal(empty.images.revival, "");
+  const configured = loadConfig({
+    ONEHOPE_IMAGE_HERO: "https://example.com/hero.jpg",
+    ONEHOPE_IMAGE_REVIVAL: "http://example.com/revival.jpg",
+    ONEHOPE_IMAGE_OG: "not a url",
+  });
+  assert.equal(configured.images.hero, "https://example.com/hero.jpg");
+  assert.equal(configured.images.revival, "");
+  assert.equal(configured.images.og, "");
+  const home = new ChurchStore(configured).publicHome();
+  assert.equal(home.images.hero, "https://example.com/hero.jpg");
+  assert.equal(home.images.about, "");
+});

@@ -23,6 +23,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.cinderandcrown.onehope.orderCoffee</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Order Revival Coffee</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>cup.and.saucer</string>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

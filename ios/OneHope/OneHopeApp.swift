@@ -13,6 +13,8 @@ private let authLog = Logger(subsystem: "com.cinderandcrown.onehope", category: 
 
 @main
 struct OneHopeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -34,42 +36,28 @@ struct RootView: View {
     @State private var authError = ""
     @State private var tab = "home"
     @State private var videoId: String?
+    @State private var orderCoffee = false
 
-    /// Home, Watch, Prayer, Give, and Connect. Know Jesus is a card on Home and a link in Connect.
+    /// Home, Watch, Prayer, Give, and Connect stay. More is the last tab.
     var body: some View {
-        TabView(selection: $tab) {
-            HomeView(snapshot: snapshot, onRefresh: load, perform: perform) { id in
-                videoId = id
-                tab = "watch"
+        ChurchShell(
+            selection: ChurchSelection(tab: $tab, videoId: $videoId),
+            chrome: ChurchChrome(snapshot: snapshot, onRefresh: load, perform: perform),
+            knowJesus: KnowJesusView(snapshot: snapshot, perform: perform, embedded: true),
+            account: account
+        )
+        .environment(\.churchImages, snapshot.images)
+        .sheet(isPresented: $orderCoffee) {
+            NavigationStack {
+                CoffeeView()
             }
-            .tabItem { Label(L10n.text(.home), systemImage: "house") }
-            .tag("home")
-            WatchView(snapshot: snapshot, selected: $videoId, onRefresh: load)
-                .tabItem { Label(L10n.text(.watch), systemImage: "play.rectangle") }
-                .tag("watch")
-            PrayerView(snapshot: snapshot, onRefresh: load, perform: perform)
-                .tabItem { Label(L10n.text(.prayer), systemImage: "hands.sparkles") }
-                .tag("prayer")
-            GiveView(snapshot: snapshot, onRefresh: load, perform: perform)
-                .tabItem { Label(L10n.text(.give), systemImage: "heart") }
-                .tag("give")
-            ConnectView(
-                snapshot: snapshot,
-                onRefresh: load,
-                perform: perform,
-                knowJesus: {
-                    KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
-                },
-                account: {
-                    account
-                }
-            )
-            .id(token != nil)
-            .tabItem { Label(L10n.text(.connect), systemImage: "person.2") }
-            .tag("connect")
         }
-        .background(BrandColor.paper)
         .task(id: token) { await load() }
+        .onAppear {
+            if CoffeeShortcut.consume() {
+                orderCoffee = true
+            }
+        }
     }
 
     @ViewBuilder private var account: some View {

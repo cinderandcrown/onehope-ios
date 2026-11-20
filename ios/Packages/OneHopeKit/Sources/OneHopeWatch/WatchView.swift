@@ -11,11 +11,18 @@ public struct WatchView: View {
     private let onRefresh: () async -> Void
     @Binding private var selected: String?
     @State private var failedVideo: String?
+    private let embedded: Bool
 
-    public init(snapshot: ChurchSnapshot, selected: Binding<String?>, onRefresh: @escaping () async -> Void = {}) {
+    public init(
+        snapshot: ChurchSnapshot,
+        selected: Binding<String?>,
+        onRefresh: @escaping () async -> Void = {},
+        embedded: Bool = false
+    ) {
         self.snapshot = snapshot
         _selected = selected
         self.onRefresh = onRefresh
+        self.embedded = embedded
     }
 
     private var messages: [SermonLine] {
@@ -27,8 +34,15 @@ public struct WatchView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
+        if embedded {
+            watchPage
+        } else {
+            NavigationStack { watchPage }
+        }
+    }
+
+    private var watchPage: some View {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     player
                     if !messages.isEmpty {
@@ -66,7 +80,6 @@ public struct WatchView: View {
             .refreshable { await onRefresh() }
             .background(BrandColor.paper)
             .navigationTitle(L10n.text(.watch))
-        }
     }
 
     @ViewBuilder private var player: some View {

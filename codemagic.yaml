@@ -7,15 +7,17 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      # Existing Codemagic Developer Portal integration for this API key.
-      # The key is not stored in git.
-      app_store_connect: "EquiTex ASC"
+      # Name of the Developer Portal integration in the Codemagic UI.
+      # Set CM_ASC_INTEGRATION in the onehope_signing environment group.
+      app_store_connect: $CM_ASC_INTEGRATION
     environment:
+      groups:
+        - onehope_signing
       ios_signing:
         provisioning_profiles:
           - onehope_appstore
         certificates:
-          - equitex_dist
+          - $CM_DISTRIBUTION_CERTIFICATE
       vars:
         BUNDLE_ID: com.cinderandcrown.onehope
         XCODE_PROJECT: ios/OneHope.xcodeproj
@@ -54,7 +56,7 @@ workflows:
             exit 1
           fi
           if ! ls "$CERTS_DIR"/* >/dev/null 2>&1; then
-            echo "Missing certificate equitex_dist."
+            echo "Missing certificate ${CM_DISTRIBUTION_CERTIFICATE:-<unset>}."
             exit 1
           fi
           security find-identity -v -p codesigning

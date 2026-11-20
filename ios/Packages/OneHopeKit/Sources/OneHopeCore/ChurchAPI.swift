@@ -110,6 +110,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var emailPublic: Bool
     public var phonePublic: Bool
     public var listedInDirectory: Bool
+    public var isStaff: Bool
+    public var images: ChurchImages
 
     public static func bundled(offline: Bool = false) -> ChurchSnapshot {
         ChurchSnapshot(
@@ -149,7 +151,9 @@ public struct ChurchSnapshot: Equatable, Sendable {
             givingOpen: false,
             emailPublic: false,
             phonePublic: false,
-            listedInDirectory: false
+            listedInDirectory: false,
+            isStaff: false,
+            images: .empty
         )
     }
 }

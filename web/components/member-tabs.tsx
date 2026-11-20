@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
+import { ChurchImage } from "@/components/church-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -49,6 +50,7 @@ export type ChurchView = {
   social: SocialLink[];
   greeting: string;
   journeyMonth: KnowJesus["journey"];
+  images: { hero: string; about: string; video: string; revival: string; og: string };
 };
 
 export type ChurchGroup = {
@@ -441,7 +443,7 @@ function Home({
   return (
     <>
       <section className="member-hero">
-        <Image src="/photos/hero.jpg" alt="" width={1400} height={816} priority />
+        <ChurchImage src={church.images.hero} alt="" />
         <div>
           <p>{church.greeting}</p>
           <h2>Sundays at 10:30 a.m.</h2>
@@ -484,18 +486,18 @@ function Home({
       <DailyWord church={church} signedIn={signedIn} onNotice={onNotice} />
       <FollowAlong links={church.social} />
       <Link className="card coffee-card" href="/coffee">
-        <Image src="/photos/revival.jpg" alt="" width={900} height={600} />
+        <ChurchImage src={church.images.revival} alt="" />
         <strong>Revival Coffee</strong>
         <span>Menu, hours, and directions. The shop is in our building.</span>
         <span className="button">See menu</span>
       </Link>
       <button type="button" className="card photo-card" onClick={() => onGo("Jesus")}>
-        <Image src="/photos/about.jpg" alt="" width={900} height={600} />
+        <ChurchImage src={church.images.about} alt="" />
         <strong>Know Jesus</strong>
         <span>God loves you. See what the Bible says and take your next step.</span>
       </button>
       <button type="button" className="card photo-card" onClick={() => onGo("Visit")}>
-        <Image src="/photos/times.jpg" alt="" width={900} height={600} />
+        <ChurchImage src={church.images.about} alt="" />
         <strong>Plan a Visit</strong>
         <span>{church.visit.welcome} What to expect, kids, and directions.</span>
       </button>
@@ -871,7 +873,7 @@ function PlanVisit({
   return (
     <>
       <section className="member-hero">
-        <Image src="/photos/community1.jpg" alt="" width={1400} height={900} />
+        <ChurchImage src={church.images.hero} alt="" />
         <div>
           <h2>{visit.welcome}</h2>
           <p>{church.service}</p>

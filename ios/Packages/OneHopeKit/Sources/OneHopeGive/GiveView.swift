@@ -8,6 +8,7 @@ public struct GiveView: View {
     private let snapshot: ChurchSnapshot
     private let onRefresh: () async -> Void
     private let perform: (MemberAction) async -> String
+    private let embedded: Bool
     @State private var amount = ""
     @State private var fundId = ""
     @State private var frequency = GivingFrequency.once
@@ -17,17 +18,26 @@ public struct GiveView: View {
     public init(
         snapshot: ChurchSnapshot,
         onRefresh: @escaping () async -> Void = {},
-        perform: @escaping (MemberAction) async -> String = { _ in "" }
+        perform: @escaping (MemberAction) async -> String = { _ in "" },
+        embedded: Bool = false
     ) {
         self.snapshot = snapshot
         self.onRefresh = onRefresh
         self.perform = perform
+        self.embedded = embedded
     }
 
     public var body: some View {
+        if embedded {
+            givingPage
+        } else {
+            NavigationStack { givingPage }
+        }
+    }
+
+    private var givingPage: some View {
         let giving = snapshot.giving
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(giving.message)
                     VerseCard(text: giving.verse.text, reference: giving.verse.reference)
@@ -79,7 +89,6 @@ public struct GiveView: View {
             .refreshable { await onRefresh() }
             .background(BrandColor.paper)
             .navigationTitle(L10n.text(.give))
-        }
     }
 
     /// Native giving with the Church Center frequencies. Shown only when giving is switched on.
