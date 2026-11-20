@@ -130,7 +130,7 @@ final class TabUITests: XCTestCase {
         let surface: XCUIElement = list.exists ? list : app
         let tabTop = app.buttons["tab-home"].frame.minY
         func onScreen() -> Bool {
-            row.exists && row.frame.minY > 90 && row.frame.maxY < tabTop
+            row.exists && row.frame.height > 1 && row.frame.minY > 90 && row.frame.maxY < tabTop
         }
         func drag(up: Bool) {
             let low = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.7))
@@ -140,7 +140,8 @@ final class TabUITests: XCTestCase {
         }
         for _ in 0 ..< 20 where !onScreen() {
             // Below the tab bar or not drawn yet (routes run top to bottom): scroll down the list.
-            if row.exists, row.frame.minY <= 90 {
+            // A row SwiftUI has not drawn can still "exist" with an empty frame; only a real row above means scroll back.
+            if row.exists, row.frame.height > 1, row.frame.maxY <= 90 {
                 break
             }
             drag(up: true)
