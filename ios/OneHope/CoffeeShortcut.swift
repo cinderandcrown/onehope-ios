@@ -2,7 +2,7 @@ import UIKit
 
 enum CoffeeShortcut {
     static let kind = "com.cinderandcrown.onehope.orderCoffee"
-    static var pending = false
+    private static let pendingKey = "onehope.orderCoffee"
 
     static func install() {
         UIApplication.shared.shortcutItems = [
@@ -16,9 +16,13 @@ enum CoffeeShortcut {
         ]
     }
 
+    static func request() {
+        UserDefaults.standard.set(true, forKey: pendingKey)
+    }
+
     static func consume() -> Bool {
-        let open = pending
-        pending = false
+        let open = UserDefaults.standard.bool(forKey: pendingKey)
+        UserDefaults.standard.removeObject(forKey: pendingKey)
         return open
     }
 }
@@ -30,7 +34,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         CoffeeShortcut.install()
         if let item = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem, item.type == CoffeeShortcut.kind {
-            CoffeeShortcut.pending = true
+            CoffeeShortcut.request()
         }
         return true
     }
