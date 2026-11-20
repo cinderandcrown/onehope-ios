@@ -104,7 +104,6 @@ private struct ChurchTabBar: View {
         .background(BrandColor.paper)
         .overlay(alignment: .top) { Rectangle().fill(BrandColor.ink.opacity(0.12)).frame(height: 1) }
         .accessibilityElement(children: .contain)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func item(_ id: String, title: String, symbol: String, filled: String) -> some View {
@@ -119,7 +118,7 @@ private struct ChurchTabBar: View {
                 Text(title)
                     .font(.caption2.weight(selection == id ? .semibold : .regular))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.5)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
             .foregroundStyle(selection == id ? BrandColor.terracottaDeep : BrandColor.ink.opacity(0.75))

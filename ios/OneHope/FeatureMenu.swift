@@ -42,7 +42,7 @@ struct FeatureMenu<Account: View>: View {
                 accountSection
                 LegalLinks()
                 if snapshot.isStaff {
-                    Section("Staff") {
+                    MenuSection("Staff") {
                         soon("more-staff", MenuLabel(title: "Staff", symbol: "lock", detail: "Tools for church staff"))
                     }
                 }
@@ -69,17 +69,11 @@ struct FeatureMenu<Account: View>: View {
         NavigationLink {
             CoffeeView()
         } label: {
-            ZStack(alignment: .bottomLeading) {
-                PhotoCard("revival", height: 150)
-                LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                    .accessibilityHidden(true)
+            PhotoOverlay("revival", minHeight: 150) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Revival Coffee").font(.title2.bold()).foregroundStyle(.white)
                     Text("Menu, hours, and order ahead soon").font(.footnote).foregroundStyle(.white)
                 }
-                .padding(Space.lg)
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             .accessibilityIdentifier("more-revival")
         }
@@ -88,7 +82,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var faith: some View {
-        Section("Faith") {
+        MenuSection("Faith") {
             row("more-know-jesus", MenuLabel(title: "Know Jesus", symbol: "cross", detail: "The good news, from the Bible", tint: BrandColor.olive)) {
                 KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
             }
@@ -99,7 +93,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var family: some View {
-        Section("Family") {
+        MenuSection("Family") {
             row("more-kids", MenuLabel(title: "Children's Church", symbol: "figure.and.child.holdinghands", detail: "Check in and pick up")) {
                 KidsScreen(snapshot: snapshot, perform: perform)
             }
@@ -108,7 +102,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var connect: some View {
-        Section("Connect") {
+        MenuSection("Connect") {
             row("more-groups", MenuLabel(title: "Groups", symbol: "person.3", detail: "Find your people", tint: BrandColor.olive)) {
                 GroupsScreen(snapshot: snapshot, perform: perform)
             }
@@ -122,7 +116,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var giveAndShop: some View {
-        Section("Give and Shop") {
+        MenuSection("Give and Shop") {
             row("more-giving", MenuLabel(title: "Giving", symbol: "heart", detail: "Online, text, or by mail")) {
                 GiveView(snapshot: snapshot, onRefresh: onRefresh, perform: perform, embedded: true)
             }
@@ -131,7 +125,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var watch: some View {
-        Section("Watch and Media") {
+        MenuSection("Watch and Media") {
             row("more-sermons", MenuLabel(title: "Sermons", symbol: "play.rectangle", detail: "Messages and shorts")) {
                 WatchView(snapshot: snapshot, selected: $videoId, onRefresh: onRefresh, embedded: true)
             }
@@ -140,7 +134,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var church: some View {
-        Section("Church") {
+        MenuSection("Church") {
             row("more-visit", MenuLabel(title: "Plan a Visit", symbol: "mappin.and.ellipse", detail: "What to expect on Sunday")) {
                 PlanVisitView(snapshot: snapshot, perform: perform)
             }
@@ -162,7 +156,7 @@ struct FeatureMenu<Account: View>: View {
     }
 
     private var accountSection: some View {
-        Section("Account") {
+        MenuSection("Account") {
             row("more-profile", MenuLabel(title: "Profile", symbol: "person", detail: snapshot.signedIn ? snapshot.accountName : "Sign in to see yours", tint: BrandColor.olive)) {
                 account.navigationTitle(snapshot.signedIn ? "Profile" : "Sign in")
             }
@@ -204,7 +198,7 @@ struct FeatureMenu<Account: View>: View {
             FeatureIcon(label.symbol, tint: label.tint)
             VStack(alignment: .leading, spacing: 1) {
                 Text(label.title).font(.body.weight(.medium))
-                Text(label.detail).font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.7)).lineLimit(1)
+                Text(label.detail).font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.7))
             }
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
@@ -226,5 +220,27 @@ struct FeatureMenu<Account: View>: View {
         .accessibilityIdentifier(identifier)
         .accessibilityLabel("\(label.title), coming soon")
         .listRowBackground(BrandColor.card)
+    }
+}
+
+/// A titled group of rows with a header dark enough to read on the paper background.
+private struct MenuSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        Section {
+            content
+        } header: {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(BrandColor.ink.opacity(0.8))
+                .accessibilityAddTraits(.isHeader)
+        }
     }
 }

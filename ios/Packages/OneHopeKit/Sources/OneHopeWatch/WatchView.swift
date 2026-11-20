@@ -61,7 +61,7 @@ public struct WatchView: View {
                                 } label: {
                                     VStack(alignment: .leading, spacing: 6) {
                                         VideoThumbnail(sermon: short, height: 120)
-                                        Text(short.title).font(.footnote).lineLimit(2).foregroundStyle(BrandColor.ink)
+                                        Text(short.title).font(.footnote).foregroundStyle(BrandColor.ink)
                                     }
                                     .frame(width: 160, alignment: .leading)
                                 }
@@ -137,12 +137,12 @@ public struct WatchView: View {
             let button = Button {
                 openOnYouTube(url)
             } label: {
-                Label("Play on YouTube", systemImage: "play.rectangle.fill")
+                Label("Play on YouTube", systemImage: "play.rectangle.fill").frame(minHeight: 44)
             }
             if prominent {
                 button.buttonStyle(PrimaryButtonStyle())
             } else {
-                button.font(.footnote.weight(.semibold)).frame(minHeight: 44)
+                button.font(.footnote.weight(.semibold))
             }
         }
     }
@@ -164,7 +164,7 @@ public struct WatchView: View {
                     VideoThumbnail(sermon: sermon, height: 64).frame(width: 112)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(sermon.title).font(.subheadline.weight(.semibold)).foregroundStyle(BrandColor.ink)
-                            .multilineTextAlignment(.leading).lineLimit(3)
+                            .multilineTextAlignment(.leading)
                         if let published = sermon.published {
                             Text(published.formatted(date: .abbreviated, time: .omitted)).font(.caption)
                         }

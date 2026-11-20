@@ -9,18 +9,12 @@ struct HomeHero: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
-                PhotoCard("hero", height: 300)
-                LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                    .accessibilityHidden(true)
+            PhotoOverlay("hero", minHeight: 300) {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text("This Sunday").eyebrow(.white)
                     Text("Welcome home").font(.largeTitle.bold()).foregroundStyle(.white)
                     sundayLine
                 }
-                .padding(Space.lg)
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Space.md) { heroButtons }
@@ -90,7 +84,7 @@ struct HomeShortcuts: View {
     private func tile(_ title: String, symbol: String, tint: Color) -> some View {
         VStack(spacing: Space.sm) {
             FeatureIcon(symbol, tint: tint, size: 44)
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(BrandColor.ink).lineLimit(2).minimumScaleFactor(0.8)
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(BrandColor.ink)
         }
         .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.vertical, Space.md)

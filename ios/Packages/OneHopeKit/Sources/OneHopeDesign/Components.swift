@@ -107,23 +107,15 @@ public struct PhotoTile: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            RemoteImage(url)
-            LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
+        PhotoOverlay(url: url, minHeight: height, width: width) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline).foregroundStyle(.white).lineLimit(2)
+                Text(title).font(.headline).foregroundStyle(.white)
                 if !detail.isEmpty {
-                    Text(detail).font(.caption).foregroundStyle(.white).lineLimit(3)
+                    Text(detail).font(.caption).foregroundStyle(.white)
                 }
             }
-            .multilineTextAlignment(.leading)
-            .padding(Space.md)
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .shadow(color: BrandColor.ink.opacity(0.12), radius: 10, x: 0, y: 5)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -201,5 +193,40 @@ public struct LabeledField<Content: View>: View {
                 Text(hint).font(.caption).foregroundStyle(BrandColor.ink.opacity(0.8))
             }
         }
+    }
+}
+
+/// Text laid over a church photo. The photo is the background, so the box grows with the text
+/// (large Dynamic Type sizes never push words off the picture) and a shade keeps the words readable.
+public struct PhotoOverlay<Content: View>: View {
+    private let resource: String
+    private let direct: URL?
+    private let minHeight: CGFloat
+    private let width: CGFloat?
+    private let content: Content
+    @Environment(\.churchImages) private var images
+
+    public init(_ resource: String = "", url: URL? = nil, minHeight: CGFloat, width: CGFloat? = nil, @ViewBuilder content: () -> Content) {
+        self.resource = resource
+        direct = url
+        self.minHeight = minHeight
+        self.width = width
+        self.content = content()
+    }
+
+    public var body: some View {
+        content
+            .multilineTextAlignment(.leading)
+            .padding(Space.lg)
+            .frame(maxWidth: width ?? .infinity, minHeight: minHeight, alignment: .bottomLeading)
+            .frame(width: width)
+            .background {
+                ZStack {
+                    RemoteImage(direct ?? images.url(named: resource))
+                    LinearGradient(colors: [.black.opacity(0.3), .black.opacity(0.82)], startPoint: .top, endPoint: .bottom)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .accessibilityElement(children: .combine)
     }
 }

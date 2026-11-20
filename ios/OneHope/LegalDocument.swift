@@ -60,7 +60,7 @@ struct LegalDocument: View {
 /// Privacy, Terms and Credits as three rows, for the More menu.
 struct LegalLinks: View {
     var body: some View {
-        Section("Legal") {
+        Section {
             NavigationLink {
                 PrivacyScreen()
             } label: {
@@ -75,6 +75,8 @@ struct LegalLinks: View {
             }
             .accessibilityIdentifier("more-terms")
             .listRowBackground(BrandColor.card)
+        } header: {
+            Text("Legal").font(.footnote.weight(.semibold)).foregroundStyle(BrandColor.ink.opacity(0.8))
         }
     }
 }

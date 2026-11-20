@@ -227,21 +227,14 @@ public struct HeroPhoto: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            PhotoCard(resource, height: 260)
-            LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                .accessibilityHidden(true)
+        PhotoOverlay(resource, minHeight: 260) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(.headline).foregroundStyle(.white)
                 }
             }
-            .padding()
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
-        .accessibilityElement(children: .combine)
     }
 }
 
