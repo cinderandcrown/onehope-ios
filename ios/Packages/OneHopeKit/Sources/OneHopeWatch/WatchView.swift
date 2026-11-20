@@ -41,7 +41,7 @@ public struct WatchView: View {
         }
     }
 
-    private var watchPage: some View {
+    @ViewBuilder private var watchPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 player

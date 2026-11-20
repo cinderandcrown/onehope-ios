@@ -35,7 +35,7 @@ public struct GiveView: View {
         }
     }
 
-    private var givingPage: some View {
+    @ViewBuilder private var givingPage: some View {
         let giving = snapshot.giving
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
