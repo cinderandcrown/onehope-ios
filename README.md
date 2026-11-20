@@ -89,7 +89,7 @@ Repository secrets, none of which are committed:
 
 Run the manual **TestFlight** workflow. It decodes the key in the runner temp directory, archives with automatic signing (`-allowProvisioningUpdates`), uploads, and deletes the key. The team id `GDNRT9DJ58` is in the Xcode project, not a secret.
 
-Codemagic can publish the same app without those secrets in GitHub. The workflow is `ios-testflight` in `codemagic.yaml`. It uses the Codemagic App Store Connect integration `CC App Store Connect`, the distribution certificate reference `cc_dist`, and the provisioning profile reference `onehope_appstore`. It uploads the build and does not submit it for Beta App Review. The Release build reads `API_BASE_URL` from `ios/Config/Release.xcconfig`. Debug leaves it empty, and the labeled sample remains the fallback.
+Codemagic can publish the same app without those secrets in GitHub. The workflow is `ios-testflight` in `codemagic.yaml`. It uses the Codemagic App Store Connect integration `CC App Store Connect`, and App Store signing matched by bundle ID from the uploaded code signing identities. It uploads the build and does not submit it for Beta App Review. The Release build reads `API_BASE_URL` from `ios/Config/Release.xcconfig`. Debug leaves it empty, and the labeled sample remains the fallback.
 
 ## What is enforced and tested
 

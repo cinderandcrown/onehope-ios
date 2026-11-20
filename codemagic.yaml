@@ -11,10 +11,8 @@ workflows:
       app_store_connect: "CC App Store Connect"
     environment:
       ios_signing:
-        provisioning_profiles:
-          - onehope_appstore
-        certificates:
-          - cc_dist
+        distribution_type: app_store
+        bundle_identifier: com.cinderandcrown.onehope
       vars:
         BUNDLE_ID: com.cinderandcrown.onehope
         XCODE_PROJECT: ios/OneHope.xcodeproj
@@ -49,11 +47,11 @@ workflows:
           PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           CERTS_DIR="$HOME/Library/MobileDevice/Certificates"
           if ! ls "$PROFILES_DIR"/*.mobileprovision >/dev/null 2>&1; then
-            echo "Missing provisioning profile onehope_appstore."
+            echo "Missing App Store provisioning profile for $BUNDLE_ID."
             exit 1
           fi
           if ! ls "$CERTS_DIR"/* >/dev/null 2>&1; then
-            echo "Missing certificate cc_dist."
+            echo "Missing App Store distribution certificate."
             exit 1
           fi
           security find-identity -v -p codesigning
