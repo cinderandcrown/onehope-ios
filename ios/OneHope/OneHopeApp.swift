@@ -18,7 +18,7 @@ struct OneHopeApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .tint(BrandColor.terracotta)
+                .tint(BrandColor.terracottaDeep)
         }
     }
 }
@@ -205,6 +205,7 @@ struct AccountGate: View {
     @State private var creating = false
     @State private var busy = false
     @State private var message = ""
+    @State private var legal: LegalPage?
 
     var body: some View {
         ScrollView {
@@ -212,13 +213,15 @@ struct AccountGate: View {
                 intro
                 credentials
                 if !message.isEmpty {
-                    Text(message).font(.footnote).foregroundStyle(BrandColor.terracotta)
+                    Text(message).font(.footnote).foregroundStyle(BrandColor.terracottaDeep)
                 }
                 actions
             }
             .padding()
         }
         .background(BrandColor.paper)
+        .announce(message)
+        .sheet(item: $legal) { LegalSheet(page: $0) }
         .onAppear { showStoredMessage() }
     }
 
@@ -266,14 +269,31 @@ struct AccountGate: View {
                     Text(creating ? "Create account" : "Sign in")
                 }
             })
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(busy)
             .accessibilityIdentifier("submit-account")
+            agreement
             Button(action: toggleMode, label: {
                 Text(creating ? "I already have an account" : "Create an account")
             })
             .disabled(busy)
             .accessibilityIdentifier("toggle-account")
+        }
+    }
+
+    @ViewBuilder private var agreement: some View {
+        if creating {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("By creating an account you agree to the Terms of Use and acknowledge the Privacy Policy.")
+                    .font(.footnote)
+                HStack(spacing: Space.lg) {
+                    Button("Terms of Use") { legal = .terms }
+                        .accessibilityIdentifier("signup-terms")
+                    Button("Privacy Policy") { legal = .privacy }
+                        .accessibilityIdentifier("signup-privacy")
+                }
+                .frame(minHeight: 44)
+            }
         }
     }
 
@@ -321,7 +341,7 @@ private struct AccountField: View {
                 .padding(12)
                 .background(BrandColor.card)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(BrandColor.ink.opacity(0.28), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(BrandColor.ink.opacity(0.55), lineWidth: 1))
         }
     }
 

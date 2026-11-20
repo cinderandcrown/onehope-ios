@@ -63,9 +63,10 @@ public struct WatchView: View {
                                         VideoThumbnail(sermon: short, height: 120)
                                         Text(short.title).font(.footnote).lineLimit(2).foregroundStyle(BrandColor.ink)
                                     }
-                                    .frame(width: 160)
+                                    .frame(width: 160, alignment: .leading)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityHint("Plays this short")
                             }
                         }
                     }
@@ -98,10 +99,15 @@ public struct WatchView: View {
                     }
                     .frame(height: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .accessibilityLabel("Video player for \(sermon.title)")
+                    Text("Captions turn on when YouTube has them. For a transcript, open this message on YouTube.")
+                        .font(.caption)
+                        .foregroundStyle(BrandColor.ink.opacity(0.8))
                 } else {
                     Button { selected = sermon.id } label: { VideoThumbnail(sermon: sermon, height: 220) }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Play \(sermon.title)")
+                        .accessibilityHint("Plays the message here")
                 }
                 Text(sermon.title).font(.title3.bold())
                 HStack {
@@ -134,9 +140,9 @@ public struct WatchView: View {
                 Label("Play on YouTube", systemImage: "play.rectangle.fill")
             }
             if prominent {
-                button.buttonStyle(.borderedProminent)
+                button.buttonStyle(PrimaryButtonStyle())
             } else {
-                button.font(.footnote.weight(.semibold))
+                button.font(.footnote.weight(.semibold)).frame(minHeight: 44)
             }
         }
     }
@@ -167,6 +173,7 @@ public struct WatchView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityHint("Plays this message")
             share(sermon)
         }
         .churchCard()
@@ -175,7 +182,7 @@ public struct WatchView: View {
     @ViewBuilder private func share(_ sermon: SermonLine) -> some View {
         if let link = sermon.link {
             ShareLink(item: link, subject: Text(sermon.title), message: Text("Watch \"\(sermon.title)\" from One Hope.")) {
-                Image(systemName: "square.and.arrow.up")
+                Image(systemName: "square.and.arrow.up").frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Share \(sermon.title)")
         }

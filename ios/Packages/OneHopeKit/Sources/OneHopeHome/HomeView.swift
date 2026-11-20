@@ -113,7 +113,7 @@ public struct VideoThumbnail: View {
             .overlay {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 44))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.3), radius: 6)
             }
             .accessibilityHidden(true)

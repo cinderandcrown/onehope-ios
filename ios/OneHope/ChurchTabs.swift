@@ -25,6 +25,7 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
     var chrome: ChurchChrome
     var knowJesus: KnowJesus
     var account: Account
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(selection: ChurchSelection, chrome: ChurchChrome, knowJesus: KnowJesus, account: Account) {
         _tab = selection.tab
@@ -38,7 +39,7 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
         screen
             .id(tab)
             .transition(.opacity)
-            .animation(HopeMotion.fade, value: tab)
+            .animation(reduceMotion ? nil : HopeMotion.fade, value: tab)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(BrandColor.paper)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -87,6 +88,7 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
 
 private struct ChurchTabBar: View {
     @Binding var selection: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 0) {
@@ -102,24 +104,25 @@ private struct ChurchTabBar: View {
         .background(BrandColor.paper)
         .overlay(alignment: .top) { Rectangle().fill(BrandColor.ink.opacity(0.12)).frame(height: 1) }
         .accessibilityElement(children: .contain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func item(_ id: String, title: String, symbol: String, filled: String) -> some View {
         Button {
             guard selection != id else { return }
             Haptics.tap()
-            withAnimation(HopeMotion.fade) { selection = id }
+            withAnimation(reduceMotion ? nil : HopeMotion.fade) { selection = id }
         } label: {
             VStack(spacing: 2) {
                 Image(systemName: selection == id ? filled : symbol)
-                    .symbolEffect(.bounce, value: selection == id)
+                    .symbolEffect(.bounce, value: reduceMotion ? false : selection == id)
                 Text(title)
                     .font(.caption2.weight(selection == id ? .semibold : .regular))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
-            .foregroundStyle(selection == id ? BrandColor.terracotta : BrandColor.ink.opacity(0.75))
+            .foregroundStyle(selection == id ? BrandColor.terracottaDeep : BrandColor.ink.opacity(0.75))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-\(id)")

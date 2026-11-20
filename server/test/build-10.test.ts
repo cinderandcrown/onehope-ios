@@ -5,6 +5,7 @@ import { createApi } from "../src/api.ts";
 import { loadConfig } from "../src/config.ts";
 import { clearSermonCache } from "../src/http-cache.ts";
 import { churchMedia, httpsURL } from "../src/media.ts";
+import { SAMPLE_PASSWORD } from "../src/sample-accounts.ts";
 import { ChurchStore } from "../src/store.ts";
 
 const MEDIA = {
@@ -30,6 +31,11 @@ const MEDIA = {
     },
   ],
   revival: { gallery: [{ id: "one", caption: "Latte", url: "https://img.example.org/latte.jpg" }] },
+  credits: [
+    { title: "Sample photography", detail: "Used by the church.", url: "https://example.org/credits" },
+    { title: "Bad link", detail: "", url: "http://example.org/x" },
+    { title: "  ", detail: "dropped", url: "" },
+  ],
 };
 
 function store(extra: NodeJS.ProcessEnv = {}) {
@@ -52,6 +58,29 @@ test("media JSON keeps only https URLs, valid slot names and named people", () =
   );
   assert.equal(media.ministries[0]?.url, "https://example.org/kids");
   assert.equal(media.revival.gallery.length, 1);
+  assert.deepEqual(
+    media.credits.map((credit) => [credit.title, credit.url]),
+    [
+      ["Sample photography", "https://example.org/credits"],
+      ["Bad link", ""],
+    ],
+  );
+});
+
+test("a giving statement says no goods or services were provided and claims nothing more", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const session = store.login({
+    email: "avery@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "t",
+    userAgent: "t",
+  });
+  store.stepUp(session.token, { password: SAMPLE_PASSWORD });
+  const year = new Date().getUTCFullYear();
+  const { text } = store.statement(session.token, year);
+  assert.match(text, /No goods or services were provided/);
+  assert.match(text, /SAMPLE STATEMENT/);
+  assert.doesNotMatch(text, /tax[- ]deductible/i);
 });
 
 test("broken media JSON and oversized lists fall back to nothing", () => {

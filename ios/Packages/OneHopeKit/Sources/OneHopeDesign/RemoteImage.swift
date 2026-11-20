@@ -105,13 +105,14 @@ public struct RemoteImage: View {
                 }
             }
             .clipped()
+            .accessibilityHidden(true)
             .task(id: url) { await fetch() }
     }
 
     private func fetch() async {
         for candidate in [url, fallback].compactMap({ $0 }) {
             if let image = await ImagePipeline.image(candidate) {
-                withAnimation(HopeMotion.fade) { loaded = image }
+                withAnimation(reduceMotion ? nil : HopeMotion.fade) { loaded = image }
                 return
             }
         }

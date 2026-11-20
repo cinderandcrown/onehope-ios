@@ -10,6 +10,9 @@
 - Our Team screen, a redesigned More menu with icons and one-line descriptions, and friendlier empty states.
 - Images are cached in memory and on disk, warmed after the church loads, and fade in.
 
+- Accessibility: text and icon colors reach 4.5:1 (a darker orange for anything readable, dark-mode safe), 44 pt tap targets, Dynamic Type layouts that reflow instead of clipping, Reduce Motion respected, labeled photos and silent decorative ones, visible form labels, VoiceOver announcements for form results, YouTube captions on by default, and an automated accessibility audit in UI tests.
+- Legal drafts in More: Privacy Policy and Terms of Use (marked DRAFT pending church and attorney review, also reachable from signup), and an About & Credits screen with photo credits and open-source licenses. `LICENSE` (MIT) and `THIRD_PARTY_NOTICES.md` added. Giving statements say no goods or services were provided. App Store privacy answers are in `docs/app-store-privacy.md`.
+
 ### Changed
 
 - Smoother tab changes, a haptic tap, and filled icons for the selected tab.

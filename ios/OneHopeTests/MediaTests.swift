@@ -20,6 +20,13 @@ final class MediaTests: XCTestCase {
         XCTAssertNil(person.photoURL)
     }
 
+    func testCreditsKeepOnlySafeLinks() throws {
+        let secure = try JSONDecoder().decode(CreditLine.self, from: Data(#"{"title":"Photos","detail":"Used by the church.","url":"https://example.org/c"}"#.utf8))
+        XCTAssertEqual(secure.link?.host, "example.org")
+        let insecure = try JSONDecoder().decode(CreditLine.self, from: Data(#"{"title":"Photos","detail":"","url":"http://example.org/c"}"#.utf8))
+        XCTAssertNil(insecure.link)
+    }
+
     func testWarmListPutsTheFirstScreenFirstAndHasNoRepeats() throws {
         var snapshot = ChurchSnapshot.bundled()
         snapshot.images = ChurchImages(slots: [

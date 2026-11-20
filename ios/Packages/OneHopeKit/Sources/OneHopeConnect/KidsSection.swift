@@ -1,4 +1,5 @@
 import OneHopeCore
+import OneHopeDesign
 import SwiftUI
 
 /// Household check-in. Each child shows whether they are checked in; pickup needs
@@ -22,7 +23,9 @@ public struct KidsSection: View {
             ForEach(kids) { child in
                 row(child)
             }
-            TextField("Child's name", text: $childName)
+            LabeledField("Child's name") {
+                TextField("Child's name", text: $childName)
+            }
             Picker("Classroom", selection: $classroom) {
                 Text("Nursery").tag("Nursery")
                 Text("Preschool").tag("Preschool")
@@ -44,6 +47,7 @@ public struct KidsSection: View {
         } footer: {
             Text("Keep the security code from check-in. Pickup works once, for a guardian with that code, when two adults are at the station.")
         }
+        .announce(notice)
     }
 
     private func row(_ child: KidLine) -> some View {
@@ -53,13 +57,15 @@ public struct KidsSection: View {
                 Spacer()
                 Text(child.checkedIn ? "Checked in" : "Not checked in")
                     .font(.footnote)
-                    .foregroundStyle(child.checkedIn ? Color.green : Color.secondary)
+                    .foregroundStyle(child.checkedIn ? BrandColor.olive : BrandColor.ink.opacity(0.8))
             }
             Text(child.classroom).font(.footnote)
             if child.checkedIn {
-                TextField("Security code", text: binding(for: child.id))
-                    .keyboardType(.numberPad)
-                    .accessibilityIdentifier("pickup-code-\(child.id)")
+                LabeledField("Security code", hint: "The 4 digits you got at check-in") {
+                    TextField("Security code", text: binding(for: child.id))
+                        .keyboardType(.numberPad)
+                        .accessibilityIdentifier("pickup-code-\(child.id)")
+                }
                 Button("Pick up \(child.displayName)") {
                     let code = (codes[child.id] ?? "").trimmingCharacters(in: .whitespaces)
                     guard code.count == 4, code.allSatisfy(\.isNumber) else {

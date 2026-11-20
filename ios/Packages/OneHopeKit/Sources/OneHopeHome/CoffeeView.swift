@@ -42,7 +42,7 @@ public struct CoffeeView: View {
             Text("Revival Coffee shares the building with One Hope. Menu and hours are from their site.")
                 .font(.body)
                 .foregroundStyle(BrandColor.ink)
-            Text("Order ahead coming soon.").font(.headline).foregroundStyle(BrandColor.terracotta)
+            Text("Order ahead coming soon.").font(.headline).foregroundStyle(BrandColor.terracottaDeep)
         }
     }
 
@@ -100,7 +100,7 @@ public struct CoffeeView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text(item.name).font(.headline)
                         Spacer(minLength: Space.sm)
-                        Text(item.price).font(.subheadline.weight(.semibold)).foregroundStyle(BrandColor.terracotta)
+                        Text(item.price).font(.subheadline.weight(.semibold)).foregroundStyle(BrandColor.terracottaDeep)
                     }
                     Text(item.detail).font(.footnote)
                 }

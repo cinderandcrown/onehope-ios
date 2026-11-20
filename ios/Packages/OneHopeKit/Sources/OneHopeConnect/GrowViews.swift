@@ -1,4 +1,5 @@
 import OneHopeCore
+import OneHopeDesign
 import SwiftUI
 
 /// Links to the church's Toolkit, Recovery page, and Support/Assistance form.
@@ -39,7 +40,7 @@ struct ToolkitView: View {
                 ForEach(toolkit.scriptures, id: \.reference) { verse in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verse.text)
-                        Text("\(verse.reference) (KJV)").font(.footnote).foregroundStyle(.secondary)
+                        Text("\(verse.reference) (KJV)").font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.8))
                     }
                 }
             }
@@ -47,7 +48,7 @@ struct ToolkitView: View {
                 ForEach(toolkit.staffReads) { book in
                     VStack(alignment: .leading) {
                         Text(book.title)
-                        Text(book.author).font(.footnote).foregroundStyle(.secondary)
+                        Text(book.author).font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.8))
                     }
                 }
             }

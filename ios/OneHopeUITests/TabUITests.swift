@@ -92,12 +92,16 @@ final class TabUITests: XCTestCase {
             ("more-sermons", "Watch"),
             ("more-visit", "Plan a Visit"),
             ("more-about", "About"),
+            ("more-credits", "About & Credits"),
+            ("more-privacy", "Privacy Policy"),
+            ("more-terms", "Terms of Use"),
             ("more-social", "Social media"),
             ("more-profile", "Sign in"),
             ("more-settings", "Settings"),
             ("more-sign-in", "Sign in"),
         ]
         for route in routes {
+            reveal(route.0, app: app)
             tapMarked(route.0, app: app)
             let bar = app.navigationBars[route.1]
             XCTAssertTrue(bar.waitForExistence(timeout: 10), route.0)
@@ -119,11 +123,11 @@ final class TabUITests: XCTestCase {
 
     private func reveal(_ identifier: String, app: XCUIApplication) {
         let row = marked(identifier, app: app)
-        for _ in 0 ..< 5 where !row.exists {
-            app.swipeDown()
-        }
         for _ in 0 ..< 8 where !row.exists {
             app.swipeUp()
+        }
+        for _ in 0 ..< 8 where !row.exists {
+            app.swipeDown()
         }
     }
 

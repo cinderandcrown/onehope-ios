@@ -48,7 +48,7 @@ public struct GiveView: View {
                         Link(destination: url) {
                             Text("Give online").frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .accessibilityIdentifier("give-online")
                     }
                 }
@@ -57,7 +57,7 @@ public struct GiveView: View {
                     Text("Text to give").font(.headline)
                     Text(giving.text.note)
                     if let sms = URL(string: "sms:\(giving.text.number)") {
-                        Link("Text \(giving.text.number)", destination: sms).buttonStyle(.bordered)
+                        Link("Text \(giving.text.number)", destination: sms).buttonStyle(.bordered).controlSize(.large)
                     }
                 }
                 .churchCard()
@@ -66,7 +66,7 @@ public struct GiveView: View {
                         Text(seasonal.title).font(.headline)
                         Text(seasonal.note)
                         if let url = URL(string: giving.online.url) {
-                            Link("Give to the Giving Tree", destination: url).buttonStyle(.bordered)
+                            Link("Give to the Giving Tree", destination: url).buttonStyle(.bordered).controlSize(.large)
                         }
                     }
                     .churchCard()
@@ -96,9 +96,11 @@ public struct GiveView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Give in the app").font(.headline)
             if snapshot.signedIn {
-                TextField("Amount", text: $amount)
-                    .keyboardType(.decimalPad)
-                    .accessibilityIdentifier("gift-amount")
+                LabeledField("Amount", hint: "In US dollars") {
+                    TextField("Amount", text: $amount)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("gift-amount")
+                }
                 Picker("Fund", selection: $fundId) {
                     ForEach(snapshot.funds) { fund in
                         Text(fund.name).tag(fund.id)
@@ -109,12 +111,14 @@ public struct GiveView: View {
                         Text(item.label).tag(item)
                     }
                 }
-                SecureField("Password", text: $password)
-                    .textContentType(.password)
+                LabeledField("Password", hint: "Confirms it is you before a gift is made") {
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                }
                 Button("Give") {
                     give()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 if !notice.isEmpty {
                     Text(notice).font(.footnote)
                 }
@@ -123,6 +127,7 @@ public struct GiveView: View {
             }
         }
         .churchCard()
+        .announce(notice)
         .onAppear {
             if fundId.isEmpty {
                 fundId = snapshot.funds.first?.id ?? ""

@@ -966,6 +966,8 @@ export class ChurchStore {
         `${CHURCH.name}, ${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
         `Year ${year}`,
         ...lines,
+        "No goods or services were provided in exchange for these contributions, unless a line above says otherwise.",
+        "Keep this for your records. Ask a tax adviser how your gifts apply to you.",
       ].join("\n"),
     };
   }

@@ -11,30 +11,36 @@ struct HomeHero: View {
         VStack(spacing: 0) {
             ZStack(alignment: .bottomLeading) {
                 PhotoCard("hero", height: 300)
-                LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("This Sunday").eyebrow(.white.opacity(0.9))
+                    Text("This Sunday").eyebrow(.white)
                     Text("Welcome home").font(.largeTitle.bold()).foregroundStyle(.white)
                     sundayLine
                 }
                 .padding(Space.lg)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
-            HStack(spacing: Space.md) {
-                NavigationLink {
-                    PlanVisitView(snapshot: snapshot, perform: perform)
-                } label: {
-                    Text("Plan a Visit")
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .accessibilityIdentifier("home-plan-visit")
-                if let maps = URL(string: snapshot.visit.mapsUrl) {
-                    Link(destination: maps) { Text("Directions") }
-                        .buttonStyle(SecondaryButtonStyle())
-                }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.md) { heroButtons }
+                VStack(spacing: Space.md) { heroButtons }
             }
             .padding(.top, Space.md)
+        }
+    }
+
+    @ViewBuilder private var heroButtons: some View {
+        NavigationLink {
+            PlanVisitView(snapshot: snapshot, perform: perform)
+        } label: {
+            Text("Plan a Visit")
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .accessibilityIdentifier("home-plan-visit")
+        if let maps = URL(string: snapshot.visit.mapsUrl) {
+            Link(destination: maps) { Text("Directions") }
+                .buttonStyle(SecondaryButtonStyle())
         }
     }
 
@@ -48,7 +54,7 @@ struct HomeHero: View {
         } else {
             Text(snapshot.visit.serviceTime).font(.headline).foregroundStyle(.white)
         }
-        Text(snapshot.visit.arrival).font(.footnote).foregroundStyle(.white.opacity(0.9))
+        Text(snapshot.visit.arrival).font(.footnote).foregroundStyle(.white)
     }
 }
 
@@ -58,11 +64,13 @@ struct HomeShortcuts: View {
     let perform: (MemberAction) async -> String
     let onOpenTab: (String) -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
-        HStack(spacing: Space.sm) {
-            shortcut("Watch", symbol: "play.rectangle.fill", tint: BrandColor.terracotta) { onOpenTab("watch") }
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: typeSize.isAccessibilitySize ? 2 : 4), spacing: Space.sm) {
+            shortcut("Watch", symbol: "play.rectangle.fill", tint: BrandColor.terracottaDeep) { onOpenTab("watch") }
             shortcut("Pray", symbol: "hands.sparkles.fill", tint: BrandColor.olive) { onOpenTab("prayer") }
-            shortcut("Give", symbol: "heart.fill", tint: BrandColor.terracotta) { onOpenTab("give") }
+            shortcut("Give", symbol: "heart.fill", tint: BrandColor.terracottaDeep) { onOpenTab("give") }
             NavigationLink {
                 KnowJesusView(snapshot: snapshot, perform: perform, embedded: true)
             } label: {
@@ -82,7 +90,7 @@ struct HomeShortcuts: View {
     private func tile(_ title: String, symbol: String, tint: Color) -> some View {
         VStack(spacing: Space.sm) {
             FeatureIcon(symbol, tint: tint, size: 44)
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(BrandColor.ink).lineLimit(1).minimumScaleFactor(0.8)
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(BrandColor.ink).lineLimit(2).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.vertical, Space.md)
@@ -110,9 +118,9 @@ struct RevivalFeature: View {
                 HStack(spacing: Space.md) {
                     Text("Menu and hours").frame(maxWidth: .infinity)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(BrandColor.onAccent)
                         .frame(minHeight: 44)
-                        .background(BrandColor.terracotta)
+                        .background(BrandColor.terracottaDeep)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
                     InfoPill("Order ahead soon")
                 }
@@ -167,7 +175,7 @@ struct LatestMessages: View {
                             VStack(alignment: .leading, spacing: Space.xs) {
                                 VideoThumbnail(sermon: sermon, height: 100).frame(width: 180)
                                 Text(sermon.title).font(.footnote.weight(.semibold)).foregroundStyle(BrandColor.ink)
-                                    .lineLimit(2).multilineTextAlignment(.leading).frame(width: 180, alignment: .leading)
+                                    .multilineTextAlignment(.leading).frame(width: 180, alignment: .leading)
                             }
                         }
                         .buttonStyle(PressableStyle())

@@ -59,6 +59,7 @@ public struct PrayerView: View {
                 }
             }
             .refreshable { await onRefresh() }
+            .announce(notice)
             .navigationTitle(L10n.text(.prayer))
         }
     }
@@ -66,14 +67,18 @@ public struct PrayerView: View {
     /// The same fields as the church's Prayer Request form on Church Center.
     private var requestForm: some View {
         Section("Prayer request") {
-            TextField("How can we serve you?", text: $serve)
-                .accessibilityIdentifier("prayer-serve")
+            LabeledField("How can we serve you?") {
+                TextField("How can we serve you?", text: $serve)
+                    .accessibilityIdentifier("prayer-serve")
+            }
             Picker("Please check a box below", selection: $contact) {
                 Text("Just pray for me").tag(false)
                 Text("Please contact me").tag(true)
             }
-            TextField("Please describe your prayer need", text: $prayer, axis: .vertical)
-                .accessibilityIdentifier("prayer-need")
+            LabeledField("Please describe your prayer need", hint: "Pastors and the care team will read this.") {
+                TextField("Please describe your prayer need", text: $prayer, axis: .vertical)
+                    .accessibilityIdentifier("prayer-need")
+            }
             Button("Send prayer request") {
                 let serveText = serve.trimmingCharacters(in: .whitespacesAndNewlines)
                 let body = prayer.trimmingCharacters(in: .whitespacesAndNewlines)

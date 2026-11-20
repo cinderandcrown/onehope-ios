@@ -22,13 +22,17 @@ export type TeamMember = { id: string; name: string; role: string; photo: string
 export type MinistryCard = { id: string; title: string; blurb: string; photo: string; url: string };
 export type GalleryPhoto = { id: string; caption: string; url: string };
 
+export type CreditLine = { title: string; detail: string; url: string };
+
 export type ChurchMedia = {
   team: TeamMember[];
   ministries: MinistryCard[];
   revival: { gallery: GalleryPhoto[] };
+  /** Who made or owns the pictures and other material shown, for the About & Credits screen. */
+  credits: CreditLine[];
 };
 
-export const EMPTY_MEDIA: ChurchMedia = { team: [], ministries: [], revival: { gallery: [] } };
+export const EMPTY_MEDIA: ChurchMedia = { team: [], ministries: [], revival: { gallery: [] }, credits: [] };
 
 const MAX_URL = 600;
 
@@ -74,6 +78,10 @@ const mediaSchema = z.object({
         .default([]),
     })
     .default({ gallery: [] }),
+  credits: z
+    .array(z.object({ title: text(80), detail: text(300).default(""), url: z.string().default("") }))
+    .max(20)
+    .default([]),
 });
 
 export function blankImages(): ChurchImages {
@@ -129,6 +137,9 @@ export function loadMedia(env: NodeJS.ProcessEnv): Loaded {
         .map((photo) => ({ ...photo, url: httpsURL(photo.url) }))
         .filter((photo) => photo.url.length > 0),
     },
+    credits: value.credits
+      .map((credit) => ({ ...credit, url: httpsURL(credit.url) }))
+      .filter((credit) => credit.title.length > 0),
   };
 }
 
@@ -136,7 +147,12 @@ export function churchMedia(env: NodeJS.ProcessEnv): { images: ChurchImages; med
   const loaded = loadMedia(env);
   return {
     images: mergeImages(env, loaded.images),
-    media: { team: loaded.team, ministries: loaded.ministries, revival: loaded.revival },
+    media: {
+      team: loaded.team,
+      ministries: loaded.ministries,
+      revival: loaded.revival,
+      credits: loaded.credits,
+    },
   };
 }
 

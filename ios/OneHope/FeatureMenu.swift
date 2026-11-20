@@ -12,7 +12,7 @@ struct MenuLabel {
     let title: String
     let symbol: String
     let detail: String
-    var tint: Color = BrandColor.terracotta
+    var tint: Color = BrandColor.terracottaDeep
 }
 
 /// The last tab. Every feature that is not already a tab is a row here.
@@ -40,6 +40,7 @@ struct FeatureMenu<Account: View>: View {
                 watch
                 church
                 accountSection
+                LegalLinks()
                 if snapshot.isStaff {
                     Section("Staff") {
                         soon("more-staff", MenuLabel(title: "Staff", symbol: "lock", detail: "Tools for church staff"))
@@ -70,14 +71,15 @@ struct FeatureMenu<Account: View>: View {
         } label: {
             ZStack(alignment: .bottomLeading) {
                 PhotoCard("revival", height: 150)
-                LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
                     .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Revival Coffee").font(.title2.bold()).foregroundStyle(.white)
-                    Text("Menu, hours, and order ahead soon").font(.footnote).foregroundStyle(.white.opacity(0.92))
+                    Text("Menu, hours, and order ahead soon").font(.footnote).foregroundStyle(.white)
                 }
                 .padding(Space.lg)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             .accessibilityIdentifier("more-revival")
         }
@@ -152,6 +154,9 @@ struct FeatureMenu<Account: View>: View {
             }
             row("more-social", MenuLabel(title: "Social media", symbol: "bubble.left.and.bubble.right", detail: "Follow along")) {
                 SocialScreen(links: snapshot.social)
+            }
+            row("more-credits", MenuLabel(title: "About & Credits", symbol: "heart.text.square", detail: "Photos, scripture, open source", tint: BrandColor.olive)) {
+                CreditsScreen(credits: snapshot.media.credits)
             }
         }
     }

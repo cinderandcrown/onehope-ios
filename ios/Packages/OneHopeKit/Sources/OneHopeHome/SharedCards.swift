@@ -20,11 +20,11 @@ public struct InviteCard: View {
                     ShareLink(item: url, subject: Text(invite.title), message: Text(invite.shareText)) {
                         Label("Send an invite", systemImage: "square.and.arrow.up")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("share-invite")
                 }
                 if let maps = URL(string: invite.mapsUrl) {
-                    Link("Maps", destination: maps).buttonStyle(.bordered)
+                    Link("Maps", destination: maps).buttonStyle(.bordered).controlSize(.large)
                 }
             }
         }
@@ -56,7 +56,7 @@ public struct DailyWordCard: View {
                 Button(readToday(daily.day) ? "Read today" : "I read today's Word") {
                     Task { await markRead(today: daily.day) }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.bordered).controlSize(.large)
                 .disabled(readToday(daily.day))
                 .accessibilityIdentifier("daily-word-read")
                 if days > 0 {
@@ -67,6 +67,7 @@ public struct DailyWordCard: View {
                 }
             }
             .churchCard()
+            .announce(notice)
         }
     }
 
@@ -136,7 +137,7 @@ public struct FollowUpForm: View {
                     Text("Nothing is shared outside the church staff.")
                 }
                 if !notice.isEmpty {
-                    Text(notice).font(.footnote).foregroundStyle(BrandColor.terracotta)
+                    Text(notice).font(.footnote).foregroundStyle(BrandColor.terracottaDeep)
                 }
                 Button(busy ? "Sending…" : "Send") {
                     Task { await send() }

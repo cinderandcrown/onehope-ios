@@ -7,9 +7,9 @@ public struct PrimaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(BrandColor.onAccent)
             .frame(maxWidth: .infinity, minHeight: 48)
-            .background(BrandColor.terracotta.opacity(configuration.isPressed ? 0.85 : 1))
+            .background(BrandColor.terracottaDeep.opacity(configuration.isPressed ? 0.85 : 1))
             .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(HopeMotion.press, value: configuration.isPressed)
@@ -51,7 +51,7 @@ public struct FeatureIcon: View {
     private let tint: Color
     private let size: CGFloat
 
-    public init(_ symbol: String, tint: Color = BrandColor.terracotta, size: CGFloat = 36) {
+    public init(_ symbol: String, tint: Color = BrandColor.terracottaDeep, size: CGFloat = 36) {
         self.symbol = symbol
         self.tint = tint
         self.size = size
@@ -109,15 +109,16 @@ public struct PhotoTile: View {
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
             RemoteImage(url)
-            LinearGradient(colors: [.clear, .black.opacity(0.72)], startPoint: .center, endPoint: .bottom)
+            LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline).foregroundStyle(.white).lineLimit(2)
                 if !detail.isEmpty {
-                    Text(detail).font(.caption).foregroundStyle(.white.opacity(0.9)).lineLimit(3)
+                    Text(detail).font(.caption).foregroundStyle(.white).lineLimit(3)
                 }
             }
             .multilineTextAlignment(.leading)
             .padding(Space.md)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
@@ -166,5 +167,39 @@ public struct EmptyState: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, Space.xl)
         .accessibilityElement(children: .combine)
+    }
+}
+
+public extension View {
+    /// Reads a message aloud to VoiceOver users when it changes, such as "Your prayer request was sent."
+    func announce(_ message: String) -> some View {
+        onChange(of: message) { _, new in
+            if !new.isEmpty {
+                AccessibilityNotification.Announcement(new).post()
+            }
+        }
+    }
+}
+
+/// A form field with a label that stays visible after typing, not just a placeholder.
+public struct LabeledField<Content: View>: View {
+    private let title: String
+    private let hint: String
+    private let content: Content
+
+    public init(_ title: String, hint: String = "", @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.hint = hint
+        self.content = content()
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text(title).font(.footnote.weight(.semibold)).foregroundStyle(BrandColor.ink)
+            content.frame(minHeight: 44)
+            if !hint.isEmpty {
+                Text(hint).font(.caption).foregroundStyle(BrandColor.ink.opacity(0.8))
+            }
+        }
     }
 }

@@ -92,7 +92,7 @@ public struct KnowJesusView: View {
                 } label: {
                     Text(kind.label).frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("decision-\(kind.rawValue)")
             }
             if !notice.isEmpty {

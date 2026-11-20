@@ -7,13 +7,17 @@ public enum BrandColor {
     public static let olive = Color(uiColor: dynamic(light: 0x3F4903, dark: 0xC6CC8E))
     /// weareonehope.com --orange
     public static let terracotta = Color(uiColor: dynamic(light: 0xDF8052, dark: 0xE79A74))
+    /// The orange, darkened so text and icons on paper or cards reach 4.5:1. Use this for anything readable.
+    public static let terracottaDeep = Color(uiColor: dynamic(light: 0x9A3F14, dark: 0xE79A74))
+    /// Text and icons that sit on `terracottaDeep` (6.8:1 in light, 8.1:1 in dark).
+    public static let onAccent = Color(uiColor: dynamic(light: 0xFFFFFF, dark: 0x14140F))
     /// weareonehope.com --dove
     public static let paper = Color(uiColor: dynamic(light: 0xE5E4D0, dark: 0x14140F))
     /// weareonehope.com --black-2
     public static let ink = Color(uiColor: dynamic(light: 0x1C1B1B, dark: 0xE5E4D0))
     public static let card = Color(uiColor: dynamic(light: 0xF7F4EA, dark: 0x222218))
     /// weareonehope.com --blue
-    public static let sky = Color(uiColor: dynamic(light: 0xCADDF6, dark: 0x8AA4C4))
+    public static let sky = Color(uiColor: dynamic(light: 0xCADDF6, dark: 0x33465F))
 
     private static func dynamic(light: UInt32, dark: UInt32) -> UIColor {
         UIColor { traits in
@@ -68,8 +72,24 @@ public struct PhotoCard: View {
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.altText[resource] ?? "")
+            .accessibilityAddTraits(.isImage)
+            .accessibilityHidden(direct != nil || Self.altText[resource] == nil)
             .accessibilityIdentifier("church-photo-\(resource)")
     }
+
+    /// What a screen reader says for each named photo. Photos shown by URL sit beside their own text and stay silent.
+    private static let altText: [String: String] = [
+        "hero": "Photo of the church family",
+        "revival": "Inside Revival Coffee",
+        "kids": "Children at church",
+        "about": "The church family",
+        "video": "Message artwork",
+        "visit": "Welcome to the church",
+        "groups": "People in a small group",
+        "growth": "Growing in faith together",
+    ]
 }
 
 /// Neutral stand-in when a church photo URL is unset or the phone is offline.
@@ -88,7 +108,7 @@ public struct BrandTexture: View {
                 .frame(width: 180, height: 180)
                 .offset(x: 80, y: -40)
         )
-        .accessibilityLabel("Church photo")
+        .accessibilityHidden(true)
     }
 }
 
@@ -209,7 +229,7 @@ public struct HeroPhoto: View {
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
             PhotoCard(resource, height: 260)
-            LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
+            LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
@@ -219,6 +239,7 @@ public struct HeroPhoto: View {
                 }
             }
             .padding()
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .accessibilityElement(children: .combine)
     }

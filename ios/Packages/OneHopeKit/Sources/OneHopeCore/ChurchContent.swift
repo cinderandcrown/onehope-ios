@@ -63,16 +63,33 @@ public struct GalleryPhoto: Equatable, Sendable, Identifiable, Decodable {
     }
 }
 
+/// Who made or owns a picture or piece of content shown in the app, for the About & Credits screen.
+public struct CreditLine: Equatable, Sendable, Identifiable, Decodable {
+    public let title: String
+    public let detail: String
+    public let url: String
+
+    public var id: String {
+        title + url
+    }
+
+    public var link: URL? {
+        ChurchImages.httpsURL(url)
+    }
+}
+
 /// People, ministries and the Revival gallery from the church's own sites. Empty until the server sends them.
 public struct ChurchMedia: Equatable, Sendable {
     public var team: [TeamMember]
     public var ministries: [MinistryCard]
     public var revivalGallery: [GalleryPhoto]
+    public var credits: [CreditLine]
 
-    public init(team: [TeamMember] = [], ministries: [MinistryCard] = [], revivalGallery: [GalleryPhoto] = []) {
+    public init(team: [TeamMember] = [], ministries: [MinistryCard] = [], revivalGallery: [GalleryPhoto] = [], credits: [CreditLine] = []) {
         self.team = team
         self.ministries = ministries
         self.revivalGallery = revivalGallery
+        self.credits = credits
     }
 
     public static let empty = ChurchMedia()
