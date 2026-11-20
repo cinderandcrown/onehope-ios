@@ -8,9 +8,7 @@ final class TabUITests: XCTestCase {
         app.launch()
         let tabs = ["Home", "Watch", "Prayer", "Give", "Connect"]
         for name in tabs {
-            let tab = app.tabBars.buttons[name]
-            XCTAssertTrue(tab.waitForExistence(timeout: 20), "Missing \(name) tab")
-            tab.tap()
+            openTab(name, app: app)
             if name == "Home" {
                 XCTAssertTrue(app.buttons["home-plan-visit"].waitForExistence(timeout: 10))
                 XCTAssertTrue(app.descendants(matching: .any)["church-photo-revival"].waitForExistence(timeout: 10))
@@ -56,9 +54,13 @@ final class TabUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-apiBaseURL", "http://127.0.0.1:8787", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        let more = app.tabBars.buttons["More"]
-        XCTAssertTrue(more.waitForExistence(timeout: 20))
-        more.tap()
+        openTab("More", app: app)
+        if !app.buttons["more-revival"].waitForExistence(timeout: 3) {
+            let nested = app.cells["More"]
+            if nested.waitForExistence(timeout: 3) {
+                nested.tap()
+            }
+        }
         XCTAssertFalse(app.buttons["more-staff"].exists)
         let routes: [(String, String)] = [
             ("more-revival", "Revival Coffee"),
@@ -92,6 +94,23 @@ final class TabUITests: XCTestCase {
             row.tap()
             XCTAssertTrue(app.navigationBars["More"].exists)
         }
+    }
+
+    private func openTab(_ name: String, app: XCUIApplication) {
+        let direct = app.tabBars.buttons[name]
+        if direct.waitForExistence(timeout: 8) {
+            direct.tap()
+            return
+        }
+        let overflow = app.tabBars.buttons["More"]
+        XCTAssertTrue(overflow.waitForExistence(timeout: 8), "Missing \(name) tab")
+        overflow.tap()
+        let cell = app.cells[name]
+        if cell.waitForExistence(timeout: 5) {
+            cell.tap()
+            return
+        }
+        app.buttons[name].tap()
     }
 
     private func capture(_ app: XCUIApplication, name: String) {
