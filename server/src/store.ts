@@ -575,8 +575,9 @@ export class ChurchStore {
     person.lastIp = input.ip;
     person.lastUserAgent = input.userAgent;
     const staff = isStaff(person.role);
-    const token =
-      this.config.env === "demo" && person.id === "person-avery" ? "session-member-demo" : newId("session");
+    // Every sign-in gets its own token. A fixed token collides with the stored session row
+    // when the demo runs on a database. The published demo sessions come from ensureDemoSessions.
+    const token = newId("session");
     this.sessions.set(token, {
       token,
       personId: person.id,
