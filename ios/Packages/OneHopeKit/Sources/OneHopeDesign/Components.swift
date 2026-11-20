@@ -1,0 +1,170 @@
+import SwiftUI
+
+/// The main action on a screen: terracotta, full width, easy to hit.
+public struct PrimaryButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(BrandColor.terracotta.opacity(configuration.isPressed ? 0.85 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(HopeMotion.press, value: configuration.isPressed)
+    }
+}
+
+/// A quieter action beside the main one.
+public struct SecondaryButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(BrandColor.ink)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(BrandColor.card)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.button, style: .continuous).stroke(BrandColor.ink.opacity(0.18), lineWidth: 1))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(HopeMotion.press, value: configuration.isPressed)
+    }
+}
+
+/// Lets a whole card act as a button with a small press response.
+public struct PressableStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(HopeMotion.press, value: configuration.isPressed)
+    }
+}
+
+/// A colored rounded square holding a symbol, used for menu rows and shortcuts.
+public struct FeatureIcon: View {
+    private let symbol: String
+    private let tint: Color
+    private let size: CGFloat
+
+    public init(_ symbol: String, tint: Color = BrandColor.terracotta, size: CGFloat = 36) {
+        self.symbol = symbol
+        self.tint = tint
+        self.size = size
+    }
+
+    public var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.14))
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// A heading for a block, with an optional action on the right.
+public struct SectionHeader: View {
+    private let title: String
+    private let eyebrowText: String?
+
+    public init(_ title: String, eyebrow: String? = nil) {
+        self.title = title
+        eyebrowText = eyebrow
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            if let eyebrowText {
+                Text(eyebrowText).eyebrow()
+            }
+            Text(title).font(.hopeHeadline).foregroundStyle(BrandColor.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A photo with its title and a line of text laid over a soft shade. Used in carousels and grids.
+public struct PhotoTile: View {
+    private let url: URL?
+    private let title: String
+    private let detail: String
+    private let width: CGFloat
+    private let height: CGFloat
+
+    public init(url: URL?, title: String, detail: String = "", width: CGFloat, height: CGFloat) {
+        self.url = url
+        self.title = title
+        self.detail = detail
+        self.width = width
+        self.height = height
+    }
+
+    public var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            RemoteImage(url)
+            LinearGradient(colors: [.clear, .black.opacity(0.72)], startPoint: .center, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline).foregroundStyle(.white).lineLimit(2)
+                if !detail.isEmpty {
+                    Text(detail).font(.caption).foregroundStyle(.white.opacity(0.9)).lineLimit(3)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .padding(Space.md)
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .shadow(color: BrandColor.ink.opacity(0.12), radius: 10, x: 0, y: 5)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A small label such as "Order ahead coming soon".
+public struct InfoPill: View {
+    private let text: String
+
+    public init(_ text: String) {
+        self.text = text
+    }
+
+    public var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(BrandColor.ink)
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.xs + 2)
+            .background(BrandColor.sky)
+            .clipShape(Capsule())
+    }
+}
+
+/// A friendly empty screen: an icon, what is missing, and what will show up here.
+public struct EmptyState: View {
+    private let symbol: String
+    private let title: String
+    private let message: String
+
+    public init(symbol: String, title: String, message: String) {
+        self.symbol = symbol
+        self.title = title
+        self.message = message
+    }
+
+    public var body: some View {
+        VStack(spacing: Space.sm) {
+            FeatureIcon(symbol, tint: BrandColor.olive, size: 48)
+            Text(title).font(.headline).foregroundStyle(BrandColor.ink)
+            Text(message).font(.subheadline).foregroundStyle(BrandColor.ink.opacity(0.8)).multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.xl)
+        .accessibilityElement(children: .combine)
+    }
+}

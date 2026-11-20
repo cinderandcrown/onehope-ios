@@ -71,6 +71,7 @@ import {
   nextStreak,
   streakEncouragement,
 } from "./faith";
+import { EMPTY_MEDIA, blankImages } from "./media";
 import { inviteUrl } from "./public-url";
 import { SITE_SOCIAL, type SocialLink, cleanSocialLinks } from "./social";
 import {
@@ -489,8 +490,17 @@ export class ChurchStore {
     this.boundTenant = tenant;
   }
 
+  /** Photos belong to one tenant. Another tenant on the same deploy gets the brand-colored fallback. */
+  private mediaApplies(): boolean {
+    return !this.boundTenant || this.boundTenant.id === this.config.mediaTenant;
+  }
+
   churchImages(): AppConfig["images"] {
-    return this.config.images;
+    return this.mediaApplies() ? this.config.images : blankImages();
+  }
+
+  churchMedia(): AppConfig["media"] {
+    return this.mediaApplies() ? this.config.media : EMPTY_MEDIA;
   }
 
   currentTenant(): {
@@ -506,7 +516,7 @@ export class ChurchStore {
       timezone: "America/Chicago",
       pickupOnly: false,
     };
-    return { ...tenant, images: this.config.images };
+    return { ...tenant, images: this.churchImages() };
   }
 
   status(version: string) {
@@ -742,7 +752,8 @@ export class ChurchStore {
         speaker: "One Hope",
         passage: "",
       },
-      images: this.config.images,
+      images: this.churchImages(),
+      media: this.churchMedia(),
     };
   }
 
@@ -1384,12 +1395,21 @@ export class ChurchStore {
 
   coffeePublic() {
     const settings = squareSettings(this.config);
-    return coffeeGuide({
-      live: settings.orderingLive,
-      applicationId: settings.orderingLive ? settings.applicationId : "",
-      locationId: settings.orderingLive ? settings.locationId : "",
-      environment: settings.environment,
-    });
+    const images = this.churchImages();
+    return {
+      ...coffeeGuide({
+        live: settings.orderingLive,
+        applicationId: settings.orderingLive ? settings.applicationId : "",
+        locationId: settings.orderingLive ? settings.locationId : "",
+        environment: settings.environment,
+      }),
+      photos: {
+        hero: images.revival,
+        sign: images.revival_sign ?? "",
+        menu: images.revival_menu ?? "",
+        gallery: this.churchMedia().revival.gallery,
+      },
+    };
   }
 
   async coffeeCatalog() {

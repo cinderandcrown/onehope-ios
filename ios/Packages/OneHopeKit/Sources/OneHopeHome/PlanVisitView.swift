@@ -19,7 +19,7 @@ public struct PlanVisitView: View {
         let visit = snapshot.visit
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HeroPhoto("about", title: "Plan a Visit", subtitle: visit.welcome)
+                HeroPhoto("visit", title: "Plan a Visit", subtitle: visit.welcome)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(visit.serviceTime).font(.title3.bold())
                     Text(visit.arrival)
@@ -35,15 +35,21 @@ public struct PlanVisitView: View {
                 }
                 .churchCard()
                 VStack(alignment: .leading, spacing: 8) {
+                    if let kids = snapshot.images.url(named: "kids") {
+                        PhotoCard(url: kids, height: 160)
+                    }
                     Text("One Hope Kids").font(.headline)
                     Text(visit.kids)
                 }
                 .churchCard()
+                if let welcome = snapshot.images.url(named: "welcome") {
+                    PhotoCard(url: welcome, height: 200)
+                }
                 if !notice.isEmpty {
                     Text(notice).font(.callout.weight(.semibold)).foregroundStyle(BrandColor.olive)
                 }
                 Button("I'm coming") { asking = true }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("visit-coming")
                 InviteCard(invite: snapshot.invite)
                 if let site = URL(string: visit.websiteUrl) {

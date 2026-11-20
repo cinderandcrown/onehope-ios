@@ -50,19 +50,18 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.sermonNote = messages.isEmpty ? "Sunday messages will appear here." : "From the church YouTube channel."
     snapshot.sermons = parts.sermons.videos.map(sermonLine)
     snapshot.groups = parts.groups.groups.map(groupLine)
-    snapshot.images = churchImages(home.images)
+    snapshot.images = ChurchImages(slots: home.images ?? [:])
+    snapshot.media = churchMedia(home.media)
     return snapshot
 }
 
 private let staffRoles: Set<String> = ["master_admin", "pastor", "care_team", "finance", "kids_director", "team_leader"]
 
-private func churchImages(_ reply: ChurchImagesReply?) -> ChurchImages {
-    ChurchImages(
-        hero: reply?.hero ?? "",
-        about: reply?.about ?? "",
-        video: reply?.video ?? "",
-        revival: reply?.revival ?? "",
-        og: reply?.og ?? ""
+private func churchMedia(_ reply: MediaReply?) -> ChurchMedia {
+    ChurchMedia(
+        team: reply?.team ?? [],
+        ministries: reply?.ministries ?? [],
+        revivalGallery: reply?.revival?.gallery ?? []
     )
 }
 
@@ -120,6 +119,7 @@ private func sermonLine(_ video: SermonsReply.Video) -> SermonLine {
         id: video.id,
         title: video.title,
         thumbnail: video.thumbnail,
+        thumbnailHD: video.thumbnailHd,
         published: video.published.flatMap(parseISODate),
         kind: video.kind ?? "message",
         link: video.link.flatMap(URL.init(string:))

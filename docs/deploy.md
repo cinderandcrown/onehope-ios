@@ -17,6 +17,8 @@ Set these in the Vercel project (Production and Preview). Names only; values sta
 | `FIELD_ENCRYPTION_KEY`         | Production                  | 32-byte key, base64. Required when `ONEHOPE_ENV=production`. Do not invent one in git.                               |
 | `CONTENT_SALVATION_BAPTISM_APPROVED` | No                   | Leave unset until a pastor approves that wording. Scripture still shows.                                            |
 | `YOUTUBE_CHANNEL_ID`           | No                          | Defaults to the public One Hope channel.                                                                             |
+| `ONEHOPE_MEDIA_JSON`           | No                          | The church's own public photos, team, ministry cards and Revival gallery, as JSON. See "Church media" below.         |
+| `ONEHOPE_MEDIA_TENANT`         | With `ONEHOPE_MEDIA_JSON`   | The tenant slug the media belongs to. Other tenants never receive it.                                                |
 
 Leave Stripe, Planning Center, Resend, Twilio, Facebook, and Apple Pay flags unset. Giving stays a demo and nothing is sent.
 
@@ -36,6 +38,24 @@ Leave Stripe, Planning Center, Resend, Twilio, Facebook, and Apple Pay flags uns
 
 5. Deploy the branch. Open `/` for the staff Command Center and `/member` for the member demo. `/member` is a PWA (`manifest.webmanifest`, Apple web app title One Hope). Add it to a phone home screen from the browser share sheet.
 6. Point a future iPhone build at the same origin with `API_BASE_URL` or the launch argument `-apiBaseURL`. The simulator CI argument still wins, so tests keep using the local API.
+
+## Church media (photos, team, ministries)
+
+Photos are never stored in git. They are public `https://` URLs on the church's own sites, held in one environment variable per environment.
+
+```json
+{
+  "images": { "hero": "https://...", "kids": "https://...", "revival": "https://..." },
+  "team": [{ "id": "pat", "name": "...", "role": "...", "photo": "https://..." }],
+  "ministries": [{ "id": "kids", "title": "...", "blurb": "...", "photo": "https://...", "url": "https://..." }],
+  "revival": { "gallery": [{ "id": "latte", "caption": "...", "url": "https://..." }] }
+}
+```
+
+- Set `ONEHOPE_MEDIA_JSON` and `ONEHOPE_MEDIA_TENANT` for the Preview environment first, check the preview, then repeat for Production. Redeploy after changing either (env vars are read at boot).
+- Anything that is not `https://` is dropped, and a bad slot never discards the good ones. An empty or missing slot shows the brand-colored fallback in the apps.
+- `/api/home` and `/api/coffee` carry the media. Public GET responses are cacheable at the CDN for a short time (`s-maxage`, ETag), so a changed photo appears within a few minutes.
+- Sermons and the directory accept `?limit=` and `?offset=` and return `nextOffset`.
 
 ## How to tell it is live
 

@@ -24,15 +24,16 @@ struct HomeReply: Decodable {
     let giving: GivingInfo
     let invite: InviteInfo
     let social: [SocialLink]?
-    let images: ChurchImagesReply?
+    let images: [String: String]?
+    let media: MediaReply?
 }
 
-struct ChurchImagesReply: Decodable {
-    let hero: String?
-    let about: String?
-    let video: String?
-    let revival: String?
-    let og: String?
+struct MediaReply: Decodable {
+    struct Revival: Decodable { let gallery: [GalleryPhoto] }
+
+    let team: [TeamMember]?
+    let ministries: [MinistryCard]?
+    let revival: Revival?
 }
 
 struct KnowJesusReply: Decodable {
@@ -98,6 +99,7 @@ struct SermonsReply: Decodable {
         let id: String
         let title: String
         let thumbnail: String?
+        let thumbnailHd: String?
         let published: String?
         let kind: String?
         let link: String?

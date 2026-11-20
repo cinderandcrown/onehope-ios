@@ -2,7 +2,8 @@ import { assertTruthful } from "./adapter-registry";
 import { CAPABILITIES } from "./capabilities";
 import { AccessError, assertNever, assertNoCardData, isAccessError } from "./domain";
 import { originAllowed } from "./public-url";
-import { facebookLive, loadSermons } from "./adapters";
+import { facebookLive } from "./adapters";
+import { cachedSermons, isCacheablePublicGet, pageOf, withPublicCache } from "./http-cache";
 import {
   bookingBodySchema,
   codeBodySchema,
@@ -191,8 +192,19 @@ export function createApi(deps: Deps) {
           },
         });
       }
-      const result = await route(deps, token, request.method, url.pathname, body, clientAddress(request));
+      const result = await route(
+        deps,
+        token,
+        request.method,
+        url.pathname,
+        body,
+        clientAddress(request),
+        url.searchParams,
+      );
       log.log("info", "request", { method: request.method, path: url.pathname, status: 200 });
+      if (isCacheablePublicGet(request.method, url.pathname, token !== null)) {
+        return finish(deps, request, withPublicCache(request, result));
+      }
       return finish(deps, request, Response.json({ ok: true, ...result }));
     } catch (error) {
       if (isAccessError(error)) {
@@ -237,6 +249,7 @@ async function route(
   path: string,
   body: unknown,
   client: string,
+  query: URLSearchParams = new URLSearchParams(),
 ): Promise<Record<string, unknown>> {
   const store = deps.store;
   const need = () => {
@@ -273,14 +286,34 @@ async function route(
   if (method === "POST" && path === "/api/account/delete") return store.deleteSelf(need());
   if (method === "GET" && path === "/api/home") return store.publicHome();
   if (method === "GET" && path === "/api/sermons") {
-    const videos = await loadSermons(deps.fetchImpl ?? fetch, store.config.youtubeChannelId);
-    return { videos, sample: videos.length === 0 };
+    const all = await cachedSermons(deps.fetchImpl ?? fetch, store.config.youtubeChannelId);
+    const page = pageOf(query, { limit: 50, max: 100 });
+    const kind = query.get("kind");
+    const filtered = kind === "message" || kind === "short" ? all.filter((video) => video.kind === kind) : all;
+    const videos = filtered.slice(page.offset, page.offset + page.limit);
+    const next = page.offset + videos.length;
+    return {
+      videos,
+      sample: all.length === 0,
+      total: filtered.length,
+      nextOffset: next < filtered.length ? next : null,
+    };
   }
   const ics = path.match(/^\/api\/events\/([^/]+)\/ics$/);
   if (method === "GET" && ics?.[1]) return { ics: store.ics(decodeURIComponent(ics[1])) };
   const register = path.match(/^\/api\/events\/([^/]+)\/register$/);
   if (method === "POST" && register?.[1]) return store.register(need(), decodeURIComponent(register[1]));
-  if (method === "GET" && path === "/api/directory") return { people: store.directory(need()) };
+  if (method === "GET" && path === "/api/directory") {
+    const page = pageOf(query, { limit: 200, max: 500 });
+    const needle = (query.get("q") ?? "").trim().toLowerCase();
+    const everyone = store.directory(need());
+    const matching = needle
+      ? everyone.filter((person) => person.displayName.toLowerCase().includes(needle))
+      : everyone;
+    const people = matching.slice(page.offset, page.offset + page.limit);
+    const next = page.offset + people.length;
+    return { people, total: matching.length, nextOffset: next < matching.length ? next : null };
+  }
   if (method === "GET" && path === "/api/giving/funds")
     return { funds: store.funds(), ...store.givingAvailability() };
   if (method === "POST" && path === "/api/giving/gifts")

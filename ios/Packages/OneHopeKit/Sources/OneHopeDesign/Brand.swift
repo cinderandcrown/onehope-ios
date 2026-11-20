@@ -47,36 +47,28 @@ public struct SampleBadge: View {
 public struct PhotoCard: View {
     private let resource: String
     private let height: CGFloat
+    private let direct: URL?
     @Environment(\.churchImages) private var images
 
     public init(_ resource: String, height: CGFloat = 180) {
         self.resource = resource
         self.height = height
+        direct = nil
+    }
+
+    /// A photo at a known URL, such as a ministry or team picture.
+    public init(url: URL?, height: CGFloat = 180) {
+        resource = "url"
+        self.height = height
+        direct = url
     }
 
     public var body: some View {
-        photo
+        RemoteImage(direct ?? images.url(named: resource))
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .accessibilityIdentifier("church-photo-\(resource)")
-    }
-
-    @ViewBuilder private var photo: some View {
-        if let url = images.url(named: resource) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().scaledToFill()
-                case .empty, .failure:
-                    BrandTexture()
-                @unknown default:
-                    BrandTexture()
-                }
-            }
-        } else {
-            BrandTexture()
-        }
     }
 }
 
@@ -104,10 +96,19 @@ private struct ChurchImagesKey: EnvironmentKey {
     static let defaultValue = ChurchImages.empty
 }
 
+private struct ChurchMediaKey: EnvironmentKey {
+    static let defaultValue = ChurchMedia.empty
+}
+
 public extension EnvironmentValues {
     var churchImages: ChurchImages {
         get { self[ChurchImagesKey.self] }
         set { self[ChurchImagesKey.self] = newValue }
+    }
+
+    var churchMedia: ChurchMedia {
+        get { self[ChurchMediaKey.self] }
+        set { self[ChurchMediaKey.self] = newValue }
     }
 }
 
@@ -153,21 +154,21 @@ public enum Haptics {
 }
 
 public extension View {
-    /// A card with the site's ink edge, lifted off the dove background.
+    /// A warm card on the dove background: soft edge, gentle lift.
     func churchCard() -> some View {
-        padding()
+        padding(Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(BrandColor.card)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(BrandColor.ink.opacity(0.85), lineWidth: 1))
-            .shadow(color: BrandColor.olive.opacity(0.18), radius: 0, x: 4, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).stroke(BrandColor.ink.opacity(0.12), lineWidth: 1))
+            .shadow(color: BrandColor.ink.opacity(0.08), radius: 14, x: 0, y: 6)
     }
 }
 
 public extension Font {
     /// Large headlines in the site's scale. Articulat CF is not licensed for the app, so this is SF.
     static var hopeDisplay: Font {
-        .system(size: 40, weight: .semibold, design: .default)
+        .system(.largeTitle, design: .default).weight(.bold)
     }
 
     static var hopeTitle: Font {
@@ -209,7 +210,7 @@ public struct HeroPhoto: View {
         ZStack(alignment: .bottomLeading) {
             PhotoCard(resource, height: 260)
             LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.largeTitle.bold()).foregroundStyle(.white)

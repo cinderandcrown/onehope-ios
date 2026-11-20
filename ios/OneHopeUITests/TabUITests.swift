@@ -12,6 +12,16 @@ final class TabUITests: XCTestCase {
             if name == "Home" {
                 XCTAssertTrue(app.buttons["home-plan-visit"].waitForExistence(timeout: 10))
                 XCTAssertTrue(app.descendants(matching: .any)["church-photo-revival"].waitForExistence(timeout: 10))
+                settle()
+                capture(app, name: "Guest Home top")
+                for part in 2 ... 4 {
+                    app.swipeUp()
+                    settle()
+                    capture(app, name: "Guest Home \(part)")
+                }
+                for _ in 0 ..< 4 {
+                    app.swipeDown()
+                }
                 app.buttons["home-coffee"].tap()
                 XCTAssertTrue(app.staticTexts["Order ahead coming soon."].waitForExistence(timeout: 10))
                 app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -67,6 +77,8 @@ final class TabUITests: XCTestCase {
         app.launch()
         openTab("More", app: app)
         XCTAssertFalse(app.buttons["more-staff"].exists)
+        settle()
+        capture(app, name: "More menu")
         let routes: [(String, String)] = [
             ("more-revival", "Revival Coffee"),
             ("more-know-jesus", "Know Jesus"),
@@ -89,6 +101,8 @@ final class TabUITests: XCTestCase {
             tapMarked(route.0, app: app)
             let bar = app.navigationBars[route.1]
             XCTAssertTrue(bar.waitForExistence(timeout: 10), route.0)
+            settle()
+            capture(app, name: "More \(route.0)")
             bar.buttons["BackButton"].tap()
         }
         for soon in ["more-household", "more-live"] {
@@ -128,6 +142,11 @@ final class TabUITests: XCTestCase {
         let button = app.buttons["tab-\(name.lowercased())"]
         XCTAssertTrue(button.waitForExistence(timeout: 8), "Missing \(name) tab")
         button.tap()
+    }
+
+    /// Gives photos a moment to arrive and fade in before a screenshot.
+    private func settle() {
+        Thread.sleep(forTimeInterval: 1.5)
     }
 
     private func capture(_ app: XCUIApplication, name: String) {

@@ -1,5 +1,20 @@
 # Changelog
 
+## Build 10 - 2026-11-20
+
+### Added
+
+- The church's own photos, from its public websites, replace the colored placeholders on Home, Plan a Visit, Revival Coffee, About, and Watch. Photos, the team, ministry cards, and the Revival gallery arrive at runtime from tenant config (`ONEHOPE_MEDIA_JSON`). None are stored in git, and a missing photo falls back to the brand colors.
+- Home is warmer: a hero photo, quick shortcuts, a Revival Coffee feature, the latest messages with sharp thumbnails, ministries, and a team teaser.
+- Revival Coffee is first in More and on Home, with its menu, hours, gallery, and directions.
+- Our Team screen, a redesigned More menu with icons and one-line descriptions, and friendlier empty states.
+- Images are cached in memory and on disk, warmed after the church loads, and fade in.
+
+### Changed
+
+- Smoother tab changes, a haptic tap, and filled icons for the selected tab.
+- Public GET endpoints send cache headers and ETags; sermons and the directory accept paging; the sermon feed keeps a short cache and serves stale if YouTube is slow; the app loads its sections at the same time.
+
 ## Build 8 - 2026-11-19
 
 ### Added

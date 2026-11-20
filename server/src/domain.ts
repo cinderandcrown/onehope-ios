@@ -583,6 +583,8 @@ export type YoutubeVideo = {
   published: string;
   link: string;
   thumbnail: string | null;
+  /** 1280x720 poster for the latest message. YouTube has none for some old videos, so clients fall back to `thumbnail`. */
+  thumbnailHd: string;
   /** Full Sunday messages and clips are listed apart. */
   kind: "message" | "short";
 };
@@ -607,7 +609,7 @@ export function parseYoutubeRss(xml: string): YoutubeVideo[] {
       const short = link.includes("/shorts/") || /#shorts\b/i.test(rawTitle);
       const title = rawTitle.replace(/\s*#shorts\b/gi, "").trim();
       const kind: YoutubeVideo["kind"] = short ? "short" : "message";
-      return { id, title, published, link, thumbnail, kind };
+      return { id, title, published, link, thumbnail, thumbnailHd: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, kind };
     })
     .filter((video) => video.id.length > 0);
 }

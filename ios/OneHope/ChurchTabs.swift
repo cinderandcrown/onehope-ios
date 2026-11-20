@@ -36,6 +36,9 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
 
     var body: some View {
         screen
+            .id(tab)
+            .transition(.opacity)
+            .animation(HopeMotion.fade, value: tab)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(BrandColor.paper)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -68,10 +71,16 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
                 account: account
             )
         default:
-            HomeView(snapshot: chrome.snapshot, onRefresh: chrome.onRefresh, perform: chrome.perform) { id in
-                videoId = id
-                tab = "watch"
-            }
+            HomeView(
+                snapshot: chrome.snapshot,
+                onRefresh: chrome.onRefresh,
+                perform: chrome.perform,
+                onOpenTab: { tab = $0 },
+                onWatch: { id in
+                    videoId = id
+                    tab = "watch"
+                }
+            )
         }
     }
 }
@@ -81,12 +90,12 @@ private struct ChurchTabBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            item("home", title: L10n.text(.home), symbol: "house")
-            item("watch", title: L10n.text(.watch), symbol: "play.rectangle")
-            item("prayer", title: L10n.text(.prayer), symbol: "hands.sparkles")
-            item("give", title: L10n.text(.give), symbol: "heart")
-            item("connect", title: L10n.text(.connect), symbol: "person.2")
-            item("more", title: L10n.text(.more), symbol: "line.3.horizontal")
+            item("home", title: L10n.text(.home), symbol: "house", filled: "house.fill")
+            item("watch", title: L10n.text(.watch), symbol: "play.rectangle", filled: "play.rectangle.fill")
+            item("prayer", title: L10n.text(.prayer), symbol: "hands.sparkles", filled: "hands.sparkles.fill")
+            item("give", title: L10n.text(.give), symbol: "heart", filled: "heart.fill")
+            item("connect", title: L10n.text(.connect), symbol: "person.2", filled: "person.2.fill")
+            item("more", title: L10n.text(.more), symbol: "line.3.horizontal", filled: "line.3.horizontal")
         }
         .padding(.top, 6)
         .padding(.bottom, 4)
@@ -95,19 +104,22 @@ private struct ChurchTabBar: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func item(_ id: String, title: String, symbol: String) -> some View {
+    private func item(_ id: String, title: String, symbol: String, filled: String) -> some View {
         Button {
-            selection = id
+            guard selection != id else { return }
+            Haptics.tap()
+            withAnimation(HopeMotion.fade) { selection = id }
         } label: {
             VStack(spacing: 2) {
-                Image(systemName: symbol)
+                Image(systemName: selection == id ? filled : symbol)
+                    .symbolEffect(.bounce, value: selection == id)
                 Text(title)
-                    .font(.caption2)
+                    .font(.caption2.weight(selection == id ? .semibold : .regular))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
-            .foregroundStyle(selection == id ? BrandColor.terracotta : BrandColor.ink)
+            .foregroundStyle(selection == id ? BrandColor.terracotta : BrandColor.ink.opacity(0.75))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("tab-\(id)")

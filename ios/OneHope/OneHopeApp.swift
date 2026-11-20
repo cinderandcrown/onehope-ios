@@ -47,6 +47,10 @@ struct RootView: View {
             account: account
         )
         .environment(\.churchImages, snapshot.images)
+        .environment(\.churchMedia, snapshot.media)
+        .onChange(of: snapshot.warmURLs) { _, urls in
+            ImagePipeline.prefetch(urls)
+        }
         .sheet(isPresented: $orderCoffee) {
             NavigationStack {
                 CoffeeView()

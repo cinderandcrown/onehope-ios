@@ -28,6 +28,11 @@ jobs:
           cache: npm
 
       - name: Install and start the API
+        env:
+          # The church's own public photo URLs. Held as a repository secret, never in git.
+          # Forks and Dependabot get no secret, so the app shows its brand-colored fallback.
+          ONEHOPE_MEDIA_JSON: ${{ secrets.ONEHOPE_MEDIA_JSON }}
+          ONEHOPE_MEDIA_TENANT: ${{ secrets.ONEHOPE_MEDIA_TENANT }}
         run: |
           npm ci
           nohup node --import tsx server/src/main.ts > "$RUNNER_TEMP/api.log" 2>&1 &

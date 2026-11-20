@@ -2,8 +2,10 @@ import { ChurchStore } from "./store";
 
 export { createApi, API_ROUTES } from "./api";
 export { loadSermons } from "./adapters";
+export { cachedSermons, clearSermonCache, pageOf } from "./http-cache";
 export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
-export { churchImages, loadConfig } from "./config";
+export { loadConfig } from "./config";
+export { churchImages, churchMedia, loadMedia, httpsURL, type ChurchImages, type ChurchMedia } from "./media";
 export * from "./contracts";
 export * from "./domain";
 export * from "./faith";
