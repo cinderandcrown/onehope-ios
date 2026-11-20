@@ -89,6 +89,7 @@ struct ChurchShell<Account: View, KnowJesus: View>: View {
 private struct ChurchTabBar: View {
     @Binding var selection: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: 0) {
@@ -115,15 +116,23 @@ private struct ChurchTabBar: View {
             VStack(spacing: 2) {
                 Image(systemName: selection == id ? filled : symbol)
                     .symbolEffect(.bounce, value: reduceMotion ? false : selection == id)
-                Text(title)
-                    .font(.caption2.weight(selection == id ? .semibold : .regular))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
+                // Like Apple's own tab bar: at accessibility text sizes the labels would be cut off ("lome", "Mor"),
+                // so the bar shows icons and a long press shows the large label (Large Content Viewer).
+                if !typeSize.isAccessibilitySize {
+                    Text(title)
+                        .font(.caption2.weight(selection == id ? .semibold : .regular))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .frame(maxWidth: .infinity, minHeight: 44)
             .foregroundStyle(selection == id ? BrandColor.terracottaDeep : BrandColor.ink.opacity(0.75))
         }
         .buttonStyle(.plain)
+        .accessibilityShowsLargeContentViewer {
+            Label(title, systemImage: selection == id ? filled : symbol)
+        }
         .accessibilityIdentifier("tab-\(id)")
         .accessibilityLabel(title)
         .accessibilityAddTraits(selection == id ? .isSelected : [])

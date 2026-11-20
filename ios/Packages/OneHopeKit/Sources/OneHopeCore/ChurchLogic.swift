@@ -130,3 +130,28 @@ public enum GivingRules {
         GiftResult(charged: false, processor: live ? "stripe" : "demo", sample: !live)
     }
 }
+
+/// Church times always read in Richardson time, whatever zone the phone is set to.
+public enum ChurchTime {
+    /// "Sunday 10:30 AM": the weekday and time of a service.
+    public static func serviceLine(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        date.formatted(style(.dateTime.weekday(.wide).hour().minute(), locale: locale))
+    }
+
+    /// "Sunday, November 22, 2026 at 10:30 AM": an event start.
+    public static func eventLine(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        date.formatted(style(Date.FormatStyle(date: .complete, time: .shortened), locale: locale))
+    }
+
+    /// "Nov 22, 2026": the day a message was published.
+    public static func dayLine(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        date.formatted(style(Date.FormatStyle(date: .abbreviated, time: .omitted), locale: locale))
+    }
+
+    private static func style(_ base: Date.FormatStyle, locale: Locale) -> Date.FormatStyle {
+        var style = base
+        style.timeZone = ChurchClock.chicago
+        style.locale = locale
+        return style
+    }
+}

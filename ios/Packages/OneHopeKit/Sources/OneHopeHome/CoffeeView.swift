@@ -57,7 +57,6 @@ public struct CoffeeView: View {
             Text("Hours").font(.hopeTitle)
             Text("Monday–Friday 7:00 AM – 3:00 PM")
             Text("Weekends: email the shop for hours.")
-            Text("Questions? Use Email the shop above.").font(.footnote).padding(.top, Space.xs)
         }
         .churchCard()
     }

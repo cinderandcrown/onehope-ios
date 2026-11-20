@@ -9,7 +9,7 @@ struct NextStepsScreen: View {
     let perform: (MemberAction) async -> String
 
     var body: some View {
-        List {
+        HopeList {
             TitledSection("Salvation and baptism") {
                 Text("The next step starts with Scripture, then a pastor follows up.")
                 NavigationLink("Open Know Jesus") {
@@ -39,7 +39,7 @@ struct KidsScreen: View {
     @State private var notice = ""
 
     var body: some View {
-        List {
+        HopeList {
             if !snapshot.signedIn {
                 Text("Sign in before check-in so the code is saved to your household.")
             }
@@ -59,7 +59,7 @@ struct GroupsScreen: View {
     @State private var notice = ""
 
     var body: some View {
-        List {
+        HopeList {
             if !notice.isEmpty {
                 Text(notice)
             }
@@ -89,15 +89,22 @@ struct EventsScreen: View {
     let snapshot: ChurchSnapshot
 
     var body: some View {
-        List {
+        HopeList {
             if snapshot.events.isEmpty {
                 EmptyState(symbol: "calendar", title: "No events yet", message: "Events from the church will show here.")
             }
             ForEach(snapshot.events) { event in
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: Space.xs) {
                     Text(event.title).font(.headline)
+                    if let start = event.start {
+                        Text(ChurchTime.eventLine(start)).font(.subheadline.weight(.semibold)).foregroundStyle(BrandColor.terracottaDeep)
+                    }
                     Text(event.detail).font(.footnote)
+                    if let url = event.url {
+                        Link("Details and registration", destination: url).font(.footnote.weight(.semibold))
+                    }
                 }
+                .padding(.vertical, Space.xs)
                 .frame(minHeight: 44, alignment: .leading)
             }
         }
@@ -110,7 +117,7 @@ struct ServeScreen: View {
     let snapshot: ChurchSnapshot
 
     var body: some View {
-        List {
+        HopeList {
             if snapshot.serving.isEmpty {
                 Text(snapshot.signedIn ? "No serving assignment yet." : "Sign in to see where you serve.")
             }
@@ -130,7 +137,7 @@ struct SocialScreen: View {
     let links: [SocialLink]
 
     var body: some View {
-        List {
+        HopeList {
             if links.isEmpty {
                 EmptyState(symbol: "bubble.left.and.bubble.right", title: "No links yet", message: "Social links will show here when the church publishes them.")
             }
@@ -152,7 +159,7 @@ struct SettingsScreen: View {
     let snapshot: ChurchSnapshot
 
     var body: some View {
-        List {
+        HopeList {
             if snapshot.signedIn {
                 Text("Directory choices are saved from Profile.")
                 Text(snapshot.emailPublic ? "Email is visible." : "Email is hidden.")

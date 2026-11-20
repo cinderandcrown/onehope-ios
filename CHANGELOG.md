@@ -16,6 +16,8 @@
 - App Review fixes: members can report a prayer request (it leaves the wall at once and returns to the pastors' queue, `POST /api/prayers/{id}/report`); unfinished "Coming soon" rows and labels are gone; the unused camera permission is removed; a church contact email (`contactEmail` in tenant config) shows in About, Privacy, and Terms.
 - A branded launch screen, Home ordered for the first 30 seconds (next service, Give / Pray / Revival / Know Jesus, today's encouragement, latest message), and the last photo set is remembered for an instant second launch.
 
+- Fixes from the screenshot review: service, event and sermon dates always show in Richardson (America/Chicago) time, whatever zone the phone is on (Home said 4:30 PM on a UTC device), with unit tests that run on UTC. The privacy manifest now declares the data the app collects, matching the App Store answers. Home's Plan a Visit and Directions grow with text size and stack at large sizes. Lists share the paper background. Events show their date and a details link. At accessibility text sizes the tab bar shows icons with the Large Content Viewer instead of cut-off labels. The More-menu UI test scrolls slowly and waits to return to More, so it no longer flakes.
+
 ### Changed
 
 - Smoother tab changes, a haptic tap, and filled icons for the selected tab.

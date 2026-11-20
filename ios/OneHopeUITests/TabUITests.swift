@@ -35,6 +35,7 @@ final class TabUITests: XCTestCase {
             if name == "Give" {
                 XCTAssertTrue(app.staticTexts["Text to give"].waitForExistence(timeout: 10))
             }
+            settle()
             capture(app, name: "Guest \(name)")
         }
         XCTAssertFalse(app.tabBars.buttons["Know Jesus"].exists)
@@ -108,6 +109,8 @@ final class TabUITests: XCTestCase {
             settle()
             capture(app, name: "More \(route.0)")
             bar.buttons["BackButton"].tap()
+            XCTAssertTrue(app.navigationBars["More"].waitForExistence(timeout: 10), "back to More from \(route.0)")
+            settle()
         }
         for hidden in ["more-household", "more-live", "more-staff"] {
             XCTAssertFalse(marked(hidden, app: app).exists, "\(hidden) is unfinished and must stay hidden")
@@ -118,13 +121,18 @@ final class TabUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
+    /// Scrolls the list slowly until the row is on screen and tappable.
+    /// Slow swipes on the list itself (not the whole app) keep a swipe from landing as a tap on a row,
+    /// which used to open the wrong screen and leave the next row "missing".
     private func reveal(_ identifier: String, app: XCUIApplication) {
         let row = marked(identifier, app: app)
-        for _ in 0 ..< 8 where !row.exists {
-            app.swipeUp()
+        let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
+        let surface: XCUIElement = list.exists ? list : app
+        for _ in 0 ..< 14 where !(row.exists && row.isHittable) {
+            surface.swipeUp(velocity: .slow)
         }
-        for _ in 0 ..< 8 where !row.exists {
-            app.swipeDown()
+        for _ in 0 ..< 14 where !(row.exists && row.isHittable) {
+            surface.swipeDown(velocity: .slow)
         }
     }
 

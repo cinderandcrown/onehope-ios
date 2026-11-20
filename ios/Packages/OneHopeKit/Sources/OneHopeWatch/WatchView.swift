@@ -112,7 +112,7 @@ public struct WatchView: View {
                 Text(sermon.title).font(.title3.bold())
                 HStack {
                     if let published = sermon.published {
-                        Text(published.formatted(date: .abbreviated, time: .omitted)).font(.footnote)
+                        Text(ChurchTime.dayLine(published)).font(.footnote)
                     }
                     Spacer()
                     playOnYouTube(sermon, prominent: false)
@@ -166,7 +166,7 @@ public struct WatchView: View {
                         Text(sermon.title).font(.subheadline.weight(.semibold)).foregroundStyle(BrandColor.ink)
                             .multilineTextAlignment(.leading)
                         if let published = sermon.published {
-                            Text(published.formatted(date: .abbreviated, time: .omitted)).font(.caption)
+                            Text(ChurchTime.dayLine(published)).font(.caption)
                         }
                     }
                     Spacer(minLength: 0)

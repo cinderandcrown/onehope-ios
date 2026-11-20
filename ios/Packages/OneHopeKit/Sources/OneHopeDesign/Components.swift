@@ -8,6 +8,10 @@ public struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .foregroundStyle(BrandColor.onAccent)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, Space.sm)
+            .padding(.horizontal, Space.md)
             .frame(maxWidth: .infinity, minHeight: 48)
             .background(BrandColor.terracottaDeep.opacity(configuration.isPressed ? 0.85 : 1))
             .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
@@ -24,6 +28,10 @@ public struct SecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .foregroundStyle(BrandColor.ink)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, Space.sm)
+            .padding(.horizontal, Space.md)
             .frame(maxWidth: .infinity, minHeight: 48)
             .background(BrandColor.card)
             .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
@@ -250,5 +258,35 @@ public struct TitledSection<Content: View>: View {
                 .foregroundStyle(BrandColor.ink.opacity(0.8))
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+}
+
+/// A List on the paper background, so every screen shares one warm color instead of system gray.
+public struct HopeList<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    public init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    public var body: some View {
+        List { content }
+            .scrollContentBackground(.hidden)
+            .background(BrandColor.paper)
+    }
+}
+
+/// A Form on the paper background.
+public struct HopeForm<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    public init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    public var body: some View {
+        Form { content }
+            .scrollContentBackground(.hidden)
+            .background(BrandColor.paper)
     }
 }

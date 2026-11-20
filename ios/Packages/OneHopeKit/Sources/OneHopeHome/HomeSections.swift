@@ -6,6 +6,7 @@ import SwiftUI
 struct HomeHero: View {
     let snapshot: ChurchSnapshot
     let perform: (MemberAction) async -> String
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,9 +17,13 @@ struct HomeHero: View {
                     sundayLine
                 }
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: Space.md) { heroButtons }
-                VStack(spacing: Space.md) { heroButtons }
+            // Side by side at normal sizes; stacked once the text is large, so the labels grow instead of squeezing.
+            Group {
+                if typeSize >= .xxLarge {
+                    VStack(spacing: Space.md) { heroButtons }
+                } else {
+                    HStack(spacing: Space.md) { heroButtons }
+                }
             }
             .padding(.top, Space.md)
         }
@@ -40,7 +45,7 @@ struct HomeHero: View {
 
     @ViewBuilder private var sundayLine: some View {
         if let date = parseISODate(snapshot.serviceISO) {
-            Text(date.formatted(.dateTime.weekday(.wide).hour().minute()))
+            Text(ChurchTime.serviceLine(date))
                 .font(.headline)
                 .foregroundStyle(.white)
                 + Text(" · ").font(.headline).foregroundStyle(.white)
@@ -152,7 +157,7 @@ struct LatestMessages: View {
                         VideoThumbnail(sermon: latest, height: 200, highRes: true)
                         Text(latest.title).font(.headline).foregroundStyle(BrandColor.ink).multilineTextAlignment(.leading)
                         if let published = latest.published {
-                            Text(published.formatted(date: .abbreviated, time: .omitted)).font(.footnote).foregroundStyle(BrandColor.ink)
+                            Text(ChurchTime.dayLine(published)).font(.footnote).foregroundStyle(BrandColor.ink)
                         }
                     }
                     .churchCard()

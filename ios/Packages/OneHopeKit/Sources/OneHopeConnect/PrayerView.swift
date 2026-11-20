@@ -25,7 +25,7 @@ public struct PrayerView: View {
 
     public var body: some View {
         NavigationStack {
-            List {
+            HopeList {
                 Section {
                     Text("Prayer requests")
                         .font(.headline)

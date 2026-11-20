@@ -118,7 +118,7 @@ public struct FollowUpForm: View {
 
     public var body: some View {
         NavigationStack {
-            Form {
+            HopeForm {
                 if !signedIn {
                     Section("About you") {
                         TextField("Your name", text: $name)

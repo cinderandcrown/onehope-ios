@@ -29,7 +29,7 @@ public struct ConnectView<Account: View, KnowJesus: View>: View {
 
     public var body: some View {
         NavigationStack {
-            List {
+            HopeList {
                 if !notice.isEmpty {
                     Text(notice).font(.footnote)
                 }
@@ -85,7 +85,7 @@ public struct ConnectView<Account: View, KnowJesus: View>: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(event.title).font(.headline)
                     if let start = event.start {
-                        Text(start.formatted(date: .complete, time: .shortened)).font(.footnote)
+                        Text(ChurchTime.eventLine(start)).font(.footnote)
                     }
                     Text(event.detail).font(.footnote)
                     if let url = event.url {

@@ -30,7 +30,7 @@ struct ToolkitView: View {
     let toolkit: ToolkitInfo
 
     var body: some View {
-        List {
+        HopeList {
             Section {
                 link(toolkit.readingPlan)
                 link(toolkit.proclamations)
@@ -75,7 +75,7 @@ struct RecoveryView: View {
     @AppStorage("onehope.recovery.scores") private var stored = ""
 
     var body: some View {
-        List {
+        HopeList {
             if let group = recovery.group {
                 TitledSection(group.name) {
                     Text(group.schedule)
@@ -146,7 +146,7 @@ struct SupportFormView: View {
     @State private var notice = ""
 
     var body: some View {
-        Form {
+        HopeForm {
             Section {
                 ForEach(support.needs) { need in
                     Toggle(need.label, isOn: binding(for: need.id))
