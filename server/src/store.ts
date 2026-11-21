@@ -2318,6 +2318,12 @@ export class ChurchStore {
     if (!(churchRoles as readonly string[]).includes(input.role)) {
       throw new AccessError("forbidden", "That role is not assigned from the church Command Center.");
     }
+    if (!mayIssueInvite(actor.role, person.role) || !mayIssueInvite(actor.role, input.role)) {
+      throw new AccessError(
+        "forbidden",
+        "You can only give a role at or below your own, never a pastor or Master Admin seat.",
+      );
+    }
     const staffMove =
       input.role === "pastor" ||
       input.role === "care_team" ||
@@ -3425,7 +3431,9 @@ export class ChurchStore {
       "forbidden",
       targetRole === "master_admin"
         ? "Only a Master Admin can make a code for a Master Admin seat."
-        : "You can't make a code for someone at your level or above.",
+        : targetRole === "pastor"
+          ? "Only a Master Admin can make a code for a pastor seat."
+          : "You can't make a code for someone above your level.",
     );
   }
 

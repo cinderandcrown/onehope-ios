@@ -780,7 +780,7 @@ test("a lower role cannot invite, claim, or erase a Master Admin seat", () => {
   );
   assert.throws(
     () => store.issueInvite(leader, "reese@sample.onehope"),
-    (error: AccessError) => error.code === "forbidden" && /your level/.test(error.message),
+    (error: AccessError) => error.code === "forbidden" && /pastor/.test(error.message),
   );
   assert.throws(
     () => store.undoAddPerson(leader, "person-nicholas"),
@@ -881,4 +881,52 @@ test("a wrong pickup code and a lockout say so in plain language", () => {
     () => store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: visit.code }),
     (error: AccessError) => error.code === "rate_limited" && /locked/.test(error.message),
   );
+});
+
+test("a team leader can add, code a peer, and edit Home cards, but not a pastor or Master seat", () => {
+  const store = new ChurchStore(loadConfig({}), {
+    passwordOverrides: { "nicholas.will@cinderandcrown.com": "gathering-password" },
+    totpOverrides: { "nicholas.will@cinderandcrown.com": SAMPLE_TOTP_BASE32 },
+  });
+  const lead = pastor(store);
+  const leader = staffOf(store, "gray@sample.onehope");
+  const added = store.addPerson(leader, { displayName: "Sam Neighbor", email: "sam.peer@example.com" });
+  assert.ok(added.inviteToken.length >= 8);
+  const card = store.createAnnouncement(leader, { title: "Team note", body: "Come early for coffee." });
+  assert.equal(card.title, "Team note");
+
+  const peer = store.addPerson(lead, { displayName: "Pat Leader", email: "pat.leader@example.com" });
+  store.changeRole(lead, { personId: peer.id, role: "team_leader" });
+  const coded = store.issueInvite(leader, "pat.leader@example.com");
+  assert.ok(coded.inviteToken.length >= 8);
+  assert.equal(store.staffPeople(leader).find((person) => person.id === peer.id)?.canInvite, true);
+
+  assert.throws(
+    () => store.issueInvite(leader, "reese@sample.onehope"),
+    (error: AccessError) => error.code === "forbidden" && /pastor/.test(error.message),
+  );
+  assert.throws(
+    () => store.changeRole(leader, { personId: added.id, role: "pastor" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.throws(
+    () => store.changeRole(lead, { personId: added.id, role: "pastor" }),
+    (error: AccessError) => error.code === "forbidden" && /pastor/.test(error.message),
+  );
+
+  const pastorSeat = store.addPerson(lead, { displayName: "Future Pastor", email: "future.pastor@example.com" });
+  const master = store.login({
+    email: "nicholas.will@cinderandcrown.com",
+    password: "gathering-password",
+    ip: "203.0.113.9",
+    userAgent: "test",
+  });
+  store.verifyMfa(master.token, code());
+  store.changeRole(master.token, { personId: pastorSeat.id, role: "pastor" });
+  assert.throws(
+    () => store.issueInvite(lead, "future.pastor@example.com"),
+    (error: AccessError) => error.code === "forbidden" && /pastor/.test(error.message),
+  );
+  const fromMaster = store.issueInvite(master.token, "future.pastor@example.com");
+  assert.equal(fromMaster.email, "future.pastor@example.com");
 });

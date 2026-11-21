@@ -82,7 +82,7 @@ When Apple push is actually connected, the button asks you to confirm the group 
 
 ## 10. Security and the audit log
 
-Open **Security**. Create a code for someone below your role who has not set a password yet, or save a role. A team leader cannot make a code for a pastor or a Master Admin. Only a Master Admin can make a code for a Master Admin seat.
+Open **Security**. Create a code for someone at your level or below who has not set a password yet, or save a role. A team leader can still add people, make those codes, and edit Home cards. A team leader cannot make a code for a pastor or a Master Admin, or give someone a role above their own. Only a Master Admin can make a code for a pastor or Master Admin seat.
 
 Open **Admin**. Pick a from date and a to date, tap **Show**, then **Download spreadsheet**. The file is the same audit log, with times in Central. It does not contain passwords or codes.
 

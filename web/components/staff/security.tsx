@@ -43,9 +43,9 @@ export async function SecurityDesk({
       <h1>Roles</h1>
       <p className="help">
         How do I give someone a code? Pick their name and tap Create a code. Read it to them. They open the
-        claim page on their phone. Nothing is emailed. You can make a code only for someone below your role.
-        A Master Admin seat needs a Master Admin. Changing Master Admin still takes both current Master
-        Admins.
+        claim page on their phone. Nothing is emailed. You can make a code for someone at your level or
+        below. A pastor or Master Admin seat needs a Master Admin. Changing Master Admin still takes both
+        current Master Admins.
       </p>
       {one(query, "error") ? (
         <p className="notice">
