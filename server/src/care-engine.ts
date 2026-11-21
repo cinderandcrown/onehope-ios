@@ -1,6 +1,6 @@
 /**
  * Phase 2b: the care engine. Playbooks turn a next step (a first visit, a decision for Jesus) into a short
- * list of tasks for care team seats. Every playbook ships switched off; only a pastor turns one on.
+ * list of tasks for care team seats. Every playbook ships switched off; only a pastor or Master Admin turns one on.
  * Nothing here sends a message. Scripts are suggestions staff copy and send themselves.
  */
 import type { FollowUpKind } from "./faith";
@@ -38,7 +38,7 @@ export type PlaybookDefinition = {
   steps: readonly PlaybookStep[];
 };
 
-/** Written for One Hope. A pastor can turn these on; until then they do nothing. */
+/** Written for One Hope. A pastor or Master Admin can turn these on; until then they do nothing. */
 export const DEFAULT_PLAYBOOKS: readonly PlaybookDefinition[] = [
   {
     id: "playbook-salvation",

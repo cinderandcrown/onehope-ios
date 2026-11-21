@@ -85,7 +85,7 @@ Nothing on People sends a message. Salvation and first-visit playbooks are not p
 
 ### Care tasks and playbooks (Phase 2b)
 
-- **Playbooks** (pastors): "Said yes to Jesus" and "First visit". **Both start off.** Only a pastor can turn one on or off. Turning one on affects new next steps only; turning it off stops new tasks and leaves open ones on the list.
+- **Playbooks** (pastors and Master Admin): "Said yes to Jesus" and "First visit". **Both start off.** Only a pastor or Master Admin can turn one on or off. Editing the steps and wording in the app comes in a later update. Turning one on affects new next steps only; turning it off stops new tasks and leaves open ones on the list.
 - When a playbook is on, a next step from the app (Know Jesus "I said yes", Plan a Visit, "New to One Hope") becomes a short list of tasks. **Tasks go only to care team seats**, shared fairly (whoever has fewer open tasks). If there is no care team seat yet, tasks wait with "Nobody yet" and a pastor moves them.
 - The first salvation call is due within 24 hours and turns red on Overview after that.
 - If someone did not ask to be contacted (or asked us to stop), the only task is to pray for them.

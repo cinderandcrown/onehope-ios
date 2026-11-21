@@ -4,13 +4,13 @@
 
 ### Added
 
-- Playbooks "Said yes to Jesus" (first call within 24 hours, Bible and first steps, mentor or group, baptism, 30-day check-in) and "First visit" (welcome text, card, coffee on us, invite back). Both ship **off**; only a pastor turns one on or off.
+- Playbooks "Said yes to Jesus" (first call within 24 hours, Bible and first steps, mentor or group, baptism, 30-day check-in) and "First visit" (welcome text, card, coffee on us, invite back). Both ship **off**; only a pastor or Master Admin turns one on or off.
 - Care tasks for care team seats only, balanced by open load. Without consent (or after "do not contact") the only task is prayer. Members who leave take their tasks with them; leaving the care team hands open tasks back.
 - My tasks (Overdue, Today, This week, Later) with suggested words to copy, Done, Couldn't reach (three tries), Skip; pastors get Whole team and Move task. Nothing is ever sent.
 - Overview "Today" card: overdue, due today, decisions this week and reached within 24 hours, whole-team numbers for pastors.
 - Person timeline pages 50 touches at a time from Postgres (`interactions.touched_at`); requests read only the newest 500 touches plus the page being viewed. Leaving deletes touches and tasks by person in Postgres, even ones not loaded.
 - Remove from One Hope for pastors and Master Admin (members and volunteers only, step-up, audited).
-- Permissions `work_care_tasks` (Master Admin, pastor, care team), `manage_playbooks` (Master Admin and pastor can view; only a pastor toggles), `remove_people` (step-up).
+- Permissions `work_care_tasks` (Master Admin, pastor, care team), `manage_playbooks` (Master Admin and pastor can view and toggle), `remove_people` (step-up).
 - Migration `0008_care_engine` adds `care_playbooks`, `care_tasks` and `interactions.touched_at`, with forced RLS. Rollback: `server/migrations/rollback/0008_care_engine_down.sql`.
 
 ## Phase 2a (People foundation) - unreleased

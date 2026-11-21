@@ -68,7 +68,7 @@ test("care permissions: who works tasks and who manages playbooks", () => {
   }
 });
 
-test("every playbook starts off, and nothing happens until a pastor turns it on", () => {
+test("every playbook starts off, and nothing happens until a pastor or Master Admin turns it on", () => {
   const { store, clock, config } = clocked();
   const pastor = signIn(store, "reese@sample.onehope", clock.now);
   const book = store.playbooks(pastor);
@@ -80,14 +80,48 @@ test("every playbook starts off, and nothing happens until a pastor turns it on"
   store.submitFollowUp(avery, { kind: "salvation", consent: true }, "test");
   assert.equal(store.careTasksFor(pastor, { team: true }).tasks.length, 0);
 
-  // Care team cannot see or change playbooks; Master Admin can see them but only a pastor flips the switch.
+  // Care team and other roles cannot see or change playbooks; pastors and Master Admin both flip the switch.
   const eden = signIn(store, "eden@sample.onehope", clock.now);
   assert.throws(() => store.playbooks(eden), isCode("forbidden"));
   assert.throws(() => store.setPlaybookActive(eden, "playbook-salvation", true), isCode("forbidden"));
+  const gray = signIn(store, "gray@sample.onehope", clock.now);
+  assert.throws(() => store.setPlaybookActive(gray, "playbook-salvation", true), isCode("forbidden"));
   const nicholas = signIn(store, config.masterAdminPrimaryEmail, clock.now, "seat-password");
-  assert.equal(store.playbooks(nicholas).mayToggle, false);
-  assert.throws(() => store.setPlaybookActive(nicholas, "playbook-salvation", true), isCode("forbidden"));
+  assert.equal(store.playbooks(nicholas).mayToggle, true);
   assert.throws(() => store.setPlaybookActive(pastor, "playbook-nope", true), isCode("not_found"));
+  assert.throws(() => store.setPlaybookActive(nicholas, "playbook-nope", true), isCode("not_found"));
+});
+
+test("Master Admin turns a playbook on and off; turning it off leaves open tasks alone", () => {
+  const { store, clock, config } = clocked();
+  const nicholas = signIn(store, config.masterAdminPrimaryEmail, clock.now, "seat-password");
+  assert.deepEqual(store.setPlaybookActive(nicholas, "playbook-salvation", true), {
+    id: "playbook-salvation",
+    active: true,
+  });
+  const book = store.playbooks(nicholas).playbooks.find((item) => item.id === "playbook-salvation")!;
+  assert.equal(book.active, true);
+  assert.equal(book.updatedBy, config.masterAdminPrimaryName);
+  assert.ok(
+    store
+      .toDocument()
+      .auditLog.some((entry) => entry.resource === "playbook" && entry.resourceId === "playbook-salvation"),
+  );
+
+  const avery = signIn(store, "avery@sample.onehope", clock.now);
+  store.submitFollowUp(avery, { kind: "salvation", consent: true }, "test");
+  const pastor = signIn(store, "reese@sample.onehope", clock.now);
+  const before = store.careTasksFor(pastor, { team: true }).tasks.length;
+  assert.ok(before > 0);
+
+  store.setPlaybookActive(nicholas, "playbook-salvation", false);
+  assert.equal(store.careTasksFor(pastor, { team: true }).tasks.length, before, "open tasks stay");
+  store.submitFollowUp(avery, { kind: "salvation", consent: true }, "test");
+  assert.equal(store.careTasksFor(pastor, { team: true }).tasks.length, before, "no new tasks once off");
+  // A pastor sees the Master Admin's change and can flip it back.
+  assert.equal(store.playbooks(pastor).playbooks.find((item) => item.id === "playbook-salvation")!.active, false);
+  store.setPlaybookActive(pastor, "playbook-salvation", true);
+  assert.equal(store.playbooks(nicholas).playbooks.find((item) => item.id === "playbook-salvation")!.active, true);
 });
 
 test("salvation playbook: five tasks for the care team seat, first call within 24 hours, suggestions only", () => {
@@ -467,5 +501,18 @@ test("pastors remove members or volunteers (never staff), after confirming it's 
     doc.auditLog.some((entry) => entry.resource === "person_delete" && entry.resourceId === "person-casey"),
   );
   // The removed member can no longer sign in.
+  assert.throws(() => signIn(store, "casey@sample.onehope", clock.now));
+});
+
+test("Master Admin can also remove a member, but never a staff seat", () => {
+  const { store, clock, config } = clocked();
+  const nicholas = signIn(store, config.masterAdminPrimaryEmail, clock.now, "seat-password");
+  store.stepUp(nicholas, { code: totpCode(decodeBase32(SAMPLE_TOTP_BASE32), clock.now) });
+  assert.equal(store.personCare(nicholas, "person-casey").mayRemove, true);
+  assert.equal(store.personCare(nicholas, "person-reese").mayRemove, false);
+  assert.throws(() => store.removePerson(nicholas, "person-reese"), isCode("forbidden"));
+  assert.throws(() => store.removePerson(nicholas, "person-eden"), isCode("forbidden"));
+  assert.throws(() => store.removePerson(nicholas, "person-nicholas"), isCode("invalid"));
+  assert.deepEqual(store.removePerson(nicholas, "person-casey"), { id: "person-casey", removed: true });
   assert.throws(() => signIn(store, "casey@sample.onehope", clock.now));
 });

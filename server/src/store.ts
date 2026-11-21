@@ -3337,7 +3337,7 @@ export class ChurchStore {
     return this.playbookRows.find((row) => row.id === definition.id)?.active ?? false;
   }
 
-  /** Called when a next step comes in. Does nothing unless a pastor turned the matching playbook on. */
+  /** Called when a next step comes in. Does nothing unless a pastor or Master Admin turned the matching playbook on. */
   private startPlaybook(row: FollowUpRow) {
     const trigger = triggerFor(row.kind);
     if (!trigger) return;
@@ -3424,12 +3424,12 @@ export class ChurchStore {
     return task.assigneeId === actor.personId;
   }
 
-  /** Playbooks with their on/off state. Pastors and Master Admin can see them; only a pastor turns one on or off. */
+  /** Playbooks with their on/off state. Pastors and Master Admin can see them and turn one on or off. */
   playbooks(token: string) {
     const actor = this.actor(token);
     authorize(actor, "manage_playbooks", this.now());
     return {
-      mayToggle: actor.role === "pastor",
+      mayToggle: actor.role === "pastor" || actor.role === "master_admin",
       careSeats: this.careSeatIds().length,
       playbooks: DEFAULT_PLAYBOOKS.map((definition) => {
         const row = this.playbookRows.find((item) => item.id === definition.id);
@@ -3454,7 +3454,9 @@ export class ChurchStore {
   setPlaybookActive(token: string, playbookId: string, active: boolean) {
     const actor = this.actor(token);
     authorize(actor, "manage_playbooks", this.now());
-    if (actor.role !== "pastor") throw new AccessError("forbidden", "Only a pastor turns playbooks on or off.");
+    if (actor.role !== "pastor" && actor.role !== "master_admin") {
+      throw new AccessError("forbidden", "Only a pastor or Master Admin turns playbooks on or off.");
+    }
     const definition = DEFAULT_PLAYBOOKS.find((item) => item.id === playbookId);
     if (!definition) throw new AccessError("not_found", "That playbook isn't here.");
     const existing = this.playbookRows.find((row) => row.id === definition.id);

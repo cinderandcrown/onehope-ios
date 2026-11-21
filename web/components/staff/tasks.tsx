@@ -56,7 +56,7 @@ export function TodayCard({ store, token }: { store: ChurchStore; token: string 
       <p className="muted">
         {today.activePlaybooks.length > 0
           ? `Playbooks on: ${today.activePlaybooks.join(", ")}.`
-          : "Every playbook is off. A pastor can turn one on under Playbooks."}{" "}
+          : "Every playbook is off. A pastor or Master Admin can turn one on under Playbooks."}{" "}
         Nothing here sends a message.
       </p>
       <Link className="button" href="/tasks">
@@ -204,7 +204,7 @@ export function TasksDesk({ store, token, query }: { store: ChurchStore; token: 
       ) : null}
       {data.tasks.length === 0 ? (
         <p>
-          Nothing to do right now. When a pastor turns on a playbook under Playbooks, new next steps from the
+          Nothing to do right now. When a pastor or Master Admin turns on a playbook under Playbooks, new next steps from the
           app show up here.
         </p>
       ) : null}
@@ -239,7 +239,7 @@ export function PlaybooksDesk({ store, token, query }: { store: ChurchStore; tok
     return (
       <section>
         <h1>Playbooks</h1>
-        <p>Playbooks are for pastors.</p>
+        <p>Playbooks are for pastors and Master Admin.</p>
       </section>
     );
   }
@@ -249,7 +249,7 @@ export function PlaybooksDesk({ store, token, query }: { store: ChurchStore; tok
       <h1>Playbooks</h1>
       <p className="help">
         A playbook turns a next step from the app into a short list of tasks for the care team. Every playbook
-        starts off. {data.mayToggle ? "You can turn one on or off." : "Only a pastor can turn one on or off."}{" "}
+        starts off. {data.mayToggle ? "You can turn one on or off." : "Only a pastor or Master Admin can turn one on or off."}{" "}
         Turning one on affects new next steps only. Nothing is ever texted or emailed for you; the words are
         suggestions.
       </p>
@@ -275,7 +275,7 @@ export function PlaybooksDesk({ store, token, query }: { store: ChurchStore; tok
           <p>{playbook.summary}</p>
           {playbook.updatedAt ? (
             <p className="muted">
-              Last changed by {playbook.updatedBy || "a pastor"} on {formatChicago(playbook.updatedAt)}
+              Last changed by {playbook.updatedBy || "a pastor or Master Admin"} on {formatChicago(playbook.updatedAt)}
             </p>
           ) : null}
           <ol className="timeline">
