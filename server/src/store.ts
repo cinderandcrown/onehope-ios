@@ -281,7 +281,7 @@ const GUEST_LIMIT_PER_CLIENT = 5;
 const GUEST_LIMIT_TOTAL = 120;
 const MEMBER_LIMIT = 10;
 
-type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret: string | null };
+type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret?: string | null };
 
 export type StoreDocument = {
   version: 1;
@@ -3203,19 +3203,21 @@ export class ChurchStore {
     if (isStaff(person.role) && !session.mfaVerified) {
       throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
     }
+    const now = this.now();
+    const refreshAfter = 60_000;
     if (
       this.config.env === "demo" &&
-      (session.userAgent === "member-demo" || session.userAgent === "staff-demo")
+      session.userAgent === "staff-demo" &&
+      session.stepUpUntil < now + this.config.stepUpMs / 2
     ) {
-      session.lastActivity = this.now();
-      if (session.userAgent === "staff-demo") session.stepUpUntil = this.now() + this.config.stepUpMs;
+      session.stepUpUntil = now + this.config.stepUpMs;
     }
     const idle = isStaff(person.role) ? this.config.sessionIdleStaffMs : this.config.sessionIdleMemberMs;
-    if (this.now() - session.lastActivity > idle) {
+    if (now - session.lastActivity > idle) {
       this.sessions.delete(token);
       throw new AccessError("session_expired", "Your session timed out.");
     }
-    session.lastActivity = this.now();
+    if (now - session.lastActivity >= refreshAfter) session.lastActivity = now;
     return {
       personId: person.id,
       householdId: person.householdId,
@@ -4055,10 +4057,10 @@ export class ChurchStore {
   toDocument(): StoreDocument {
     return {
       version: 1,
-      people: [...this.people.values()].map((person) => ({
-        ...person,
-        totpSecret: person.totpSecret ? person.totpSecret.toString("base64") : null,
-      })),
+      people: [...this.people.values()].map((person) => {
+        const { totpSecret, ...rest } = person;
+        return totpSecret ? { ...rest, totpSecret: totpSecret.toString("base64") } : rest;
+      }),
       gifts: [...this.gifts.values()],
       children: [...this.children.values()],
       sessions: [...this.sessions.values()],
@@ -4119,9 +4121,10 @@ export class ChurchStore {
     if (document.version !== 1) throw new Error("This snapshot version is not supported.");
     this.people.clear();
     for (const person of document.people) {
+      const { totpSecret, ...rest } = person;
       this.people.set(person.id, {
-        ...person,
-        totpSecret: person.totpSecret ? Buffer.from(person.totpSecret, "base64") : null,
+        ...rest,
+        totpSecret: totpSecret ? Buffer.from(totpSecret, "base64") : null,
       });
     }
     replaceMap(this.gifts, document.gifts);

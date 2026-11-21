@@ -192,4 +192,13 @@ test("a staff session on Postgres is invisible until the request passes its toke
     sessionToken: token,
   });
   assert.ok(home.cards.length > 0);
+  const versions = await sql.query<{ version: number }>("SELECT max(row_version) AS version FROM people");
+  const before = Number(versions.rows[0]?.version ?? 0);
+  await Promise.all([
+    runRequest(sql, (store) => store.me(token), "localhost", process.env, { sessionToken: token }),
+    runRequest(sql, (store) => store.staffHome(token), "localhost", process.env, { sessionToken: token }),
+    runRequest(sql, (store) => store.publicHome().church.name, "localhost", process.env, { sessionToken: token }),
+  ]);
+  const after = await sql.query<{ version: number }>("SELECT max(row_version) AS version FROM people");
+  assert.equal(Number(after.rows[0]?.version ?? 0), before);
 });
