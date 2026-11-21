@@ -5,6 +5,7 @@ import {
   FOLLOW_UP_STATUSES,
   parseChicagoLocal,
   publicBaseUrl,
+  pushTemplate,
   type FollowUpStatus,
   withStore,
 } from "@onehope/server";
@@ -89,13 +90,25 @@ export async function savePush(formData: FormData) {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;
   if (!token) redirect("/login");
-  const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const template = pushTemplate(String(formData.get("template") ?? ""));
+  const title = (template?.title ?? String(formData.get("title") ?? "")).trim();
+  const body = (template?.body ?? String(formData.get("body") ?? "")).trim();
   const segment = formData.get("segment");
   if (segment !== "members" && segment !== "volunteers" && segment !== "parents") redirect("/push?error=1");
   if (!title || !body) redirect("/push?error=1");
-  await withStore((store) => store.sendPush(token, { title, body, segment }));
-  redirect("/push?saved=1");
+  const confirm = formData.get("confirm") === "yes";
+  const result = await withStore((store) => store.sendPush(token, { title, body, segment, confirm }));
+  if (result.needsConfirm) {
+    const params = new URLSearchParams({
+      confirm: "1",
+      title,
+      body,
+      segment,
+      count: String(result.count),
+    });
+    redirect(`/push?${params.toString()}`);
+  }
+  redirect(`/push?saved=1&sent=${result.sent ? "1" : "0"}`);
 }
 
 function isFollowUpStatus(value: unknown): value is FollowUpStatus {

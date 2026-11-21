@@ -60,14 +60,24 @@ export default async function MemberPage({
           url: group.url,
           joined: group.joined,
         })),
-        videos: videos.map((video) => ({
-          id: video.id,
-          title: video.title,
-          thumbnail: video.thumbnail,
-          published: video.published,
-          link: video.link,
-          kind: video.kind,
-        })),
+        videos: videos
+          .map((video) => ({
+            id: video.id,
+            title: video.title,
+            thumbnail: video.thumbnail,
+            published: video.published,
+            link: video.link,
+            kind: video.kind,
+          }))
+          .sort((left, right) => Number(right.id === home.sampleSermon.videoId) - Number(left.id === home.sampleSermon.videoId)),
+        featured: home.sampleSermon.title
+          ? {
+              title: home.sampleSermon.title,
+              speaker: home.sampleSermon.speaker,
+              passage: home.sampleSermon.passage,
+              videoId: home.sampleSermon.videoId,
+            }
+          : null,
         visit: home.visit,
         giving: home.giving,
         invite: home.invite,

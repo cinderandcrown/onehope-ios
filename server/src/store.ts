@@ -329,6 +329,15 @@ export type StoreDocument = {
   outreachRsvps?: { id: string; outreachId: string; personId: string }[];
   coffeeOrders?: CoffeeOrderRow[];
   social?: SocialLink[];
+  /** The message staff chose for Home and Watch. Older snapshots omit it. */
+  featuredMessage?: {
+    videoId: string;
+    title: string;
+    speaker: string;
+    passage: string;
+    link: string;
+    thumbnail: string;
+  } | null;
 };
 
 export type StoreOptions = {
@@ -338,6 +347,11 @@ export type StoreOptions = {
   totpOverrides?: Record<string, string>;
   /** Explicit opt-in so tests can assert production guards against a memory store. */
   memoryForTests?: boolean;
+  /**
+   * Present only when a test is pretending Apple push is connected.
+   * Production has no sender, so the desk saves a draft and says nothing was sent.
+   */
+  pushSender?: (input: { title: string; body: string; segment: string; count: number }) => number;
   /** Fictional households for tests. The app boots with public church facts when this is false. */
   fixture?: boolean;
 };
@@ -365,6 +379,7 @@ export class ChurchStore {
   readonly config: AppConfig;
   private readonly now: () => number;
   private readonly fetchImpl: typeof fetch | undefined;
+  private readonly pushSender: StoreOptions["pushSender"];
   private readonly key: Buffer;
   private readonly fixture: boolean;
   private readonly dummyHash: string;
@@ -451,6 +466,14 @@ export class ChurchStore {
   private readonly outreachRsvps: { id: string; outreachId: string; personId: string }[] = [];
   private readonly coffeeOrders: CoffeeOrderRow[] = [];
   private social: SocialLink[] = SITE_SOCIAL.map((link) => ({ ...link }));
+  private featured: {
+    videoId: string;
+    title: string;
+    speaker: string;
+    passage: string;
+    link: string;
+    thumbnail: string;
+  } | null = null;
   private boundTenant: { id: string; name: string; timezone: string; pickupOnly: boolean } | null = null;
 
   static demo(env: NodeJS.ProcessEnv = process.env): ChurchStore {
@@ -471,6 +494,7 @@ export class ChurchStore {
     this.config = config;
     this.now = options.now ?? Date.now;
     this.fetchImpl = options.fetchImpl;
+    this.pushSender = options.pushSender;
     this.key = config.fieldEncryptionKey;
     this.fixture = options.fixture ?? true;
     this.dummyHash = localAuthProvider.hashPassword("not-a-real-password");
@@ -804,12 +828,25 @@ export class ChurchStore {
         .filter((item) => announcementIsLive(item, this.now()))
         .map((item) => ({ ...item })),
       events: this.upcomingEvents().map((event) => this.eventView(event)),
-      sampleSermon: {
-        sample: false as const,
-        title: "",
-        speaker: "One Hope",
-        passage: "",
-      },
+      sampleSermon: this.featured
+        ? {
+            sample: false as const,
+            title: this.featured.title,
+            speaker: this.featured.speaker,
+            passage: this.featured.passage,
+            videoId: this.featured.videoId,
+            link: this.featured.link,
+            thumbnail: this.featured.thumbnail,
+          }
+        : {
+            sample: false as const,
+            title: "",
+            speaker: "One Hope",
+            passage: "",
+            videoId: "",
+            link: "",
+            thumbnail: "",
+          },
       images: this.churchImages(),
       media: this.churchMedia(),
     };
@@ -1379,6 +1416,47 @@ export class ChurchStore {
 
   socialLinks() {
     return this.social.map((link) => ({ ...link }));
+  }
+
+  featuredMessage() {
+    return this.featured ? { ...this.featured } : null;
+  }
+
+  featureMessage(
+    token: string,
+    input: { videoId: string; title: string; speaker?: string; passage?: string; link: string; thumbnail?: string },
+  ) {
+    const actor = this.requireEditor(token);
+    const videoId = input.videoId.trim();
+    const title = input.title.trim();
+    const link = input.link.trim();
+    const speaker = (input.speaker ?? "").trim() || "One Hope";
+    const passage = (input.passage ?? "").trim();
+    if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) {
+      throw new AccessError("invalid", "That video could not be featured.");
+    }
+    if (!title || title.length > 140) throw new AccessError("invalid", "Add a title for the message.");
+    if (speaker.length > 80 || passage.length > 80) throw new AccessError("invalid", "Please shorten that.");
+    if (!youtubeMessageLink(videoId, link)) {
+      throw new AccessError("invalid", "Use the YouTube link for that message.");
+    }
+    this.featured = {
+      videoId,
+      title,
+      speaker,
+      passage,
+      link,
+      thumbnail: (input.thumbnail ?? "").startsWith("https://") ? input.thumbnail!.trim() : "",
+    };
+    this.record(actor, "write", "sermon", videoId, 0);
+    return { ...this.featured };
+  }
+
+  clearFeaturedMessage(token: string) {
+    const actor = this.requireEditor(token);
+    this.featured = null;
+    this.record(actor, "write", "sermon", "cleared", 0);
+    return { cleared: true as const };
   }
 
   setSocialLinks(token: string, links: SocialLink[]) {
@@ -2405,18 +2483,93 @@ export class ChurchStore {
     return this.pathwayView(input.personId);
   }
 
-  sendPush(token: string, input: PushBody) {
+  pushDesk(token: string) {
     const actor = this.actor(token);
     authorize(actor, "compose_communications", this.now());
-    const draft = { id: newId("draft"), title: input.title, segment: input.segment, sample: true };
-    this.drafts.push(draft);
-    this.record(actor, "write", "push_draft", draft.id, 2);
     return {
-      sent: false as const,
-      reason: "Sends are disabled in this build.",
+      live: this.apnsLive(),
+      counts: {
+        members: this.segmentCount("members"),
+        volunteers: this.segmentCount("volunteers"),
+        parents: this.segmentCount("parents"),
+      },
+    };
+  }
+
+  sendPush(token: string, input: PushBody & { confirm?: boolean }) {
+    const actor = this.actor(token);
+    authorize(actor, "compose_communications", this.now());
+    const count = this.segmentCount(input.segment);
+    const live = this.apnsLive();
+    if (live && !input.confirm) {
+      return {
+        sent: false as const,
+        drafted: false as const,
+        live: true as const,
+        needsConfirm: true as const,
+        count,
+        title: input.title,
+        segment: input.segment,
+        reason: `This would notify ${count} ${count === 1 ? "person" : "people"} in ${input.segment}. Nothing has been sent yet.`,
+      };
+    }
+    if (!live || !this.pushSender) {
+      const draft = { id: newId("draft"), title: input.title, segment: input.segment, sample: true };
+      this.drafts.push(draft);
+      this.record(actor, "write", "push_draft", draft.id, 2);
+      return {
+        sent: false as const,
+        drafted: true as const,
+        live,
+        needsConfirm: false as const,
+        count,
+        title: input.title,
+        segment: input.segment,
+        reason: live
+          ? "Nothing was sent. Apple push is marked on, but this build has no device list, so it was saved as a draft."
+          : "Nothing was sent. Apple push is not turned on, so this was saved as a draft.",
+      };
+    }
+    const delivered = this.pushSender({
+      title: input.title,
+      body: input.body,
+      segment: input.segment,
+      count,
+    });
+    const draft = { id: newId("draft"), title: input.title, segment: input.segment, sample: false };
+    this.drafts.push(draft);
+    this.record(actor, "write", "push_send", draft.id, 2);
+    return {
+      sent: true as const,
+      drafted: false as const,
+      live: true as const,
+      needsConfirm: false as const,
+      count: delivered,
       title: input.title,
       segment: input.segment,
+      reason: `Sent to ${delivered} ${delivered === 1 ? "person" : "people"}.`,
     };
+  }
+
+  private apnsLive() {
+    if (this.pushSender) return true;
+    return false;
+  }
+
+  private segmentCount(segment: "members" | "volunteers" | "parents") {
+    if (segment === "parents") {
+      const ids = new Set<string>();
+      for (const child of this.children.values()) for (const id of child.guardianIds) ids.add(id);
+      return [...ids].filter((id) => {
+        const person = this.people.get(id);
+        return person && !person.deleted;
+      }).length;
+    }
+    return [...this.people.values()].filter((person) => {
+      if (person.deleted) return false;
+      if (segment === "volunteers") return person.role === "volunteer" || person.role === "team_leader";
+      return person.role === "member";
+    }).length;
   }
 
   knowJesus() {
@@ -3706,6 +3859,7 @@ export class ChurchStore {
       outreachRsvps: this.outreachRsvps.map((row) => ({ ...row })),
       coffeeOrders: this.coffeeOrders.map((row) => ({ ...row })),
       social: this.social.map((link) => ({ ...link })),
+      featuredMessage: this.featured ? { ...this.featured } : null,
     };
   }
 
@@ -3776,6 +3930,7 @@ export class ChurchStore {
     this.social = document.social
       ? document.social.map((link) => ({ ...link }))
       : SITE_SOCIAL.map((link) => ({ ...link }));
+    this.featured = document.featuredMessage ? { ...document.featuredMessage } : null;
   }
 
   installDocument(document: StoreDocument): void {
@@ -3974,6 +4129,22 @@ function supportNeeds(value: unknown): SupportNeedId[] {
   const needs = (value as { needs: unknown }).needs;
   if (!Array.isArray(needs)) return [];
   return needs.filter((need): need is SupportNeedId => SUPPORT_NEEDS.some((item) => item.id === need));
+}
+
+function youtubeMessageLink(videoId: string, link: string): boolean {
+  try {
+    const url = new URL(link);
+    if (url.protocol !== "https:") return false;
+    if (url.hostname === "youtu.be") return url.pathname.replace(/^\//, "") === videoId;
+    if (url.hostname !== "www.youtube.com" && url.hostname !== "youtube.com") return false;
+    return (
+      url.searchParams.get("v") === videoId ||
+      url.pathname === `/shorts/${videoId}` ||
+      url.pathname === `/embed/${videoId}`
+    );
+  } catch {
+    return false;
+  }
 }
 
 function textField(value: unknown, key: string): string {

@@ -530,6 +530,92 @@ test("serving can be assigned and undone only while it is still waiting", async 
   );
 });
 
+test("a pastor can feature a YouTube message and a member cannot", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const guest = member(store);
+  assert.equal(store.publicHome().sampleSermon.title, "");
+  assert.throws(
+    () =>
+      store.featureMessage(guest, {
+        videoId: "abcdefghijk",
+        title: "Hope",
+        link: "https://www.youtube.com/watch?v=abcdefghijk",
+      }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.throws(
+    () =>
+      store.featureMessage(lead, {
+        videoId: "abcdefghijk",
+        title: "Hope",
+        link: "https://evil.example/watch?v=abcdefghijk",
+      }),
+    (error: AccessError) => error.code === "invalid",
+  );
+  const handle = createApi({ store });
+  const featured = await handle(
+    new Request("http://localhost/api/media/feature", {
+      method: "POST",
+      headers: { authorization: `Bearer ${lead}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        videoId: "abcdefghijk",
+        title: "Sunday hope",
+        speaker: "Pastor Sample",
+        passage: "John 3:16",
+        link: "https://www.youtube.com/watch?v=abcdefghijk",
+      }),
+    }),
+  );
+  assert.equal(featured.status, 200);
+  assert.equal(store.publicHome().sampleSermon.title, "Sunday hope");
+  assert.equal(store.publicHome().sampleSermon.speaker, "Pastor Sample");
+  const cleared = await handle(
+    new Request("http://localhost/api/media/feature/clear", {
+      method: "POST",
+      headers: { authorization: `Bearer ${lead}` },
+    }),
+  );
+  assert.equal(cleared.status, 200);
+  assert.equal(store.publicHome().sampleSermon.title, "");
+});
+
+test("push saves a draft until Apple push is live, then asks before it sends", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const guest = member(store);
+  const draft = store.sendPush(lead, { title: "Sunday at 10:30", body: "Come early.", segment: "members" });
+  assert.equal(draft.sent, false);
+  assert.equal(draft.drafted, true);
+  assert.match(draft.reason, /Nothing was sent/);
+  assert.ok(draft.count >= 1);
+  assert.throws(
+    () => store.sendPush(guest, { title: "Nope", body: "Nope", segment: "members" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  let sent = 0;
+  const live = new ChurchStore(loadConfig({}), {
+    pushSender: () => {
+      sent += 1;
+      return 4;
+    },
+  });
+  const pastorLive = pastor(live);
+  const held = live.sendPush(pastorLive, { title: "Prayer night", body: "Come as you are.", segment: "members" });
+  assert.equal(held.needsConfirm, true);
+  assert.equal(held.sent, false);
+  assert.equal(sent, 0);
+  const gone = live.sendPush(pastorLive, {
+    title: "Prayer night",
+    body: "Come as you are.",
+    segment: "members",
+    confirm: true,
+  });
+  assert.equal(gone.sent, true);
+  assert.equal(gone.count, 4);
+  assert.equal(sent, 1);
+});
+
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {
   const config = loadConfig({});
   const store = new ChurchStore(config, {

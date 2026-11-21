@@ -42,6 +42,7 @@ import {
   prayerBodySchema,
   proposalBodySchema,
   pushBodySchema,
+  featureBodySchema,
   roleChangeBodySchema,
   stepUpBodySchema,
 } from "./contracts";
@@ -113,6 +114,9 @@ export const API_ROUTES = [
   ["GET", "/api/kids/{id}/label"],
   ["POST", "/api/kids/pickup"],
   ["POST", "/api/communications/push"],
+  ["GET", "/api/media/featured"],
+  ["POST", "/api/media/feature"],
+  ["POST", "/api/media/feature/clear"],
   ["GET", "/api/modules"],
   ["GET", "/api/security/seats"],
   ["POST", "/api/security/roles"],
@@ -460,6 +464,10 @@ async function route(
     return store.pickup(need(), parse(pickupBodySchema, body));
   if (method === "POST" && path === "/api/communications/push")
     return store.sendPush(need(), parse(pushBodySchema, body));
+  if (method === "GET" && path === "/api/media/featured") return { message: store.featuredMessage() };
+  if (method === "POST" && path === "/api/media/feature")
+    return { message: store.featureMessage(need(), parse(featureBodySchema, body)) };
+  if (method === "POST" && path === "/api/media/feature/clear") return store.clearFeaturedMessage(need());
   if (method === "GET" && path === "/api/modules") return { modules: store.modules() };
   if (method === "GET" && path === "/api/security/seats") return { seats: store.seatsFor(need()) };
   if (method === "POST" && path === "/api/security/invites") {

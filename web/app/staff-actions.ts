@@ -223,6 +223,35 @@ export async function confirmTotpAction(formData: FormData) {
   redirect("/overview");
 }
 
+export async function featureMessageAction(formData: FormData) {
+  const token = await staffToken();
+  try {
+    await withStore((store) =>
+      store.featureMessage(token, {
+        videoId: String(formData.get("videoId") ?? ""),
+        title: String(formData.get("title") ?? ""),
+        speaker: String(formData.get("speaker") ?? ""),
+        passage: String(formData.get("passage") ?? ""),
+        link: String(formData.get("link") ?? ""),
+        thumbnail: String(formData.get("thumbnail") ?? ""),
+      }),
+    );
+  } catch (error) {
+    fail("/media", error);
+  }
+  redirect("/media?saved=1");
+}
+
+export async function clearFeatureAction() {
+  const token = await staffToken();
+  try {
+    await withStore((store) => store.clearFeaturedMessage(token));
+  } catch (error) {
+    fail("/media", error);
+  }
+  redirect("/media?saved=1");
+}
+
 export async function assignServingAction(formData: FormData) {
   const token = await staffToken();
   const personId = String(formData.get("personId") ?? "");

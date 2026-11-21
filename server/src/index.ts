@@ -52,6 +52,8 @@ export {
   EVENT_TEMPLATES,
   eventTemplate,
   nextChurchMoment,
+  PUSH_TEMPLATES,
+  pushTemplate,
   SERVE_TEMPLATES,
   serveTemplate,
   chicagoInputValue,

@@ -3,12 +3,13 @@ import { AnnouncementsDesk } from "@/components/staff/announcements";
 import { CareDesk } from "@/components/staff/care";
 import { CheckInDesk } from "@/components/staff/checkin";
 import { EventsDesk } from "@/components/staff/events";
+import { MessageDesk } from "@/components/staff/message";
+import { PushDesk } from "@/components/staff/push";
 import { PeopleDesk } from "@/components/staff/people";
 import { ServingDesk } from "@/components/staff/serving";
 
 import {
   createGroupAction,
-  savePush,
   saveSocialAction,
 } from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
@@ -17,8 +18,11 @@ import {
   CAPABILITIES,
   labelRole,
   permissionMatrix,
+  loadConfig,
+  loadSermons,
   withStore,
   type ChurchStore,
+  type YoutubeVideo,
 } from "@onehope/server";
 
 function money(cents: number) {
@@ -82,7 +86,9 @@ export async function SectionView({
   token: string;
   query: Record<string, string | string[] | undefined>;
 }) {
-  return withStore((store) => renderSection(store, section, token, query));
+  const sermons =
+    section === "media" ? await loadSermons(fetch, loadConfig(process.env).youtubeChannelId) : [];
+  return withStore((store) => renderSection(store, section, token, query, sermons));
 }
 
 function renderSection(
@@ -90,6 +96,7 @@ function renderSection(
   section: SectionId,
   token: string,
   query: Record<string, string | string[] | undefined>,
+  sermons: YoutubeVideo[],
 ) {
   switch (section) {
     case "overview": {
@@ -126,12 +133,20 @@ function renderSection(
               <h2>Modules</h2>
               <p>{store.modules().filter((item) => item.enabled).length} on for this church.</p>
             </article>
-            {home.sampleSermon.title ? (
-              <article className="card">
-                <h2>Latest message</h2>
-                <p>{home.sampleSermon.title}</p>
-              </article>
-            ) : null}
+            <article className="card">
+              <h2>Latest message</h2>
+              {home.sampleSermon.title ? (
+                <>
+                  <p>{home.sampleSermon.title}</p>
+                  <p className="muted">
+                    {home.sampleSermon.speaker}
+                    {home.sampleSermon.passage ? ` · ${home.sampleSermon.passage}` : ""}
+                  </p>
+                </>
+              ) : (
+                <p>No message is featured yet. Open Media and tap Feature on Home.</p>
+              )}
+            </article>
           </div>
           <article className="panel">
             <h2>Follow along</h2>
@@ -272,33 +287,7 @@ function renderSection(
         </>
       );
     case "push":
-      return (
-        <section>
-          <h1>Push</h1>
-          <p>Preview only. The send endpoint refuses, even for a Master Admin.</p>
-          <form className="form" action={savePush}>
-            <label>
-              Title
-              <input name="title" required maxLength={80} defaultValue="Sunday at 10:30" />
-            </label>
-            <label>
-              Body
-              <textarea name="body" required maxLength={240} defaultValue="Sunday at 10:30 a.m." />
-            </label>
-            <label>
-              Segment
-              <select name="segment" defaultValue="members">
-                <option value="members">Members</option>
-                <option value="volunteers">Volunteers</option>
-                <option value="parents">Parents</option>
-              </select>
-            </label>
-            <button className="button" type="submit">
-              Save draft
-            </button>
-          </form>
-        </section>
-      );
+      return <PushDesk store={store} token={token} query={query} />;
     case "facilities": {
       const facilities = store.ministry(token).facilities;
       return (
@@ -432,26 +421,8 @@ function renderSection(
         </section>
       );
     }
-    case "media": {
-      const media = store.ministry(token).media;
-      return (
-        <section className="hero">
-          <ChurchImage src={store.churchImages().video} alt="" />
-          <div>
-            <h1>Media</h1>
-            {media.series.map((series) => (
-              <p key={series.id}>{series.title}</p>
-            ))}
-            {media.chat.map((line) => (
-              <p key={line.id}>{line.body}</p>
-            ))}
-            <p>
-              YouTube uses the public RSS feed. Facebook Live stays a placeholder until a Page token is set.
-            </p>
-          </div>
-        </section>
-      );
-    }
+    case "media":
+      return <MessageDesk store={store} token={token} videos={sermons} query={query} />;
     case "integrations": {
       const rows = store.integrations(token);
       return (

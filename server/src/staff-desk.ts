@@ -63,6 +63,28 @@ export const EVENT_TEMPLATES = [
   },
 ] as const;
 
+export const PUSH_TEMPLATES = [
+  {
+    id: "sunday",
+    title: "Sunday at 10:30",
+    body: "We're gathering Sunday at 10:30 a.m. Come early for coffee.",
+  },
+  {
+    id: "kids",
+    title: "Kids check-in is open",
+    body: "Kids check-in is open. Stop by the kids desk when you arrive.",
+  },
+  {
+    id: "prayer",
+    title: "Prayer night",
+    body: "Prayer night is tonight. Come as you are.",
+  },
+] as const;
+
+export function pushTemplate(id: string): (typeof PUSH_TEMPLATES)[number] | null {
+  return PUSH_TEMPLATES.find((item) => item.id === id) ?? null;
+}
+
 export const SERVE_TEMPLATES = [
   {
     id: "neighborhood",

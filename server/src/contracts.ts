@@ -195,11 +195,23 @@ export const integrationBodySchema = z
   })
   .strict();
 
+export const featureBodySchema = z
+  .object({
+    videoId: z.string().trim().regex(/^[A-Za-z0-9_-]{6,20}$/),
+    title: z.string().trim().min(1).max(140),
+    speaker: z.string().trim().max(80).optional(),
+    passage: z.string().trim().max(80).optional(),
+    link: z.string().trim().url().max(300),
+    thumbnail: z.string().trim().max(300).optional(),
+  })
+  .strict();
+
 export const pushBodySchema = z
   .object({
     title: z.string().trim().min(1).max(80),
     body: z.string().trim().min(1).max(240),
     segment: z.enum(["members", "volunteers", "parents"]),
+    confirm: z.boolean().optional(),
   })
   .strict();
 

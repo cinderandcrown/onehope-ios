@@ -28,9 +28,10 @@ test("sample pastor can walk the command center without sending or charging", as
   await page.screenshot({ path: `${shots}/command-capabilities.png`, fullPage: true });
 
   await page.goto("/push");
-  await expect(page.getByText("The send endpoint refuses")).toBeVisible();
+  await expect(page.getByText("Nothing was sent")).toBeVisible();
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(/saved=1/);
+  await expect(page.getByText("Nothing was sent")).toBeVisible();
 
   await page.goto("/care");
   await expect(page.getByRole("heading", { name: "Next steps from the app" })).toBeVisible();
