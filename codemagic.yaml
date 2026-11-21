@@ -123,7 +123,7 @@ workflows:
         # finishes processing. This does not submit it for Beta App Review.
         submit_to_testflight: false
 
-  # Build 10 for the pastors' TestFlight group, on the demo database preview.
+  # Demo builds (10 for the pastors' group, 11 for internal testers), on the demo database preview.
   # Same steps; only the API host, export options and build number differ.
   # Start it from the Codemagic UI on the build 10 branch.
   ios-testflight-demo:
@@ -140,5 +140,5 @@ workflows:
         APP_STORE_APPLE_ID: "6836197983"
         ONEHOPE_API_BASE_URL: "https://onehope-preview-crowncampaignconsulting.vercel.app"
         TESTFLIGHT_INTERNAL_ONLY: "false"
-        BUILD_NUMBER_OVERRIDE: "10"
+        BUILD_NUMBER_OVERRIDE: "11"
       xcode: latest
