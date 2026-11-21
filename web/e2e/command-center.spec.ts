@@ -97,3 +97,11 @@ test("a member who signs in on the staff form is told the desk is for staff", as
   await page.goto("/overview");
   await expect(page).toHaveURL(/\/login/);
 });
+
+test("sign-in and member pages render when a church photo is configured", async ({ page }) => {
+  const login = await page.goto("/login");
+  expect(login?.status()).toBe(200);
+  await expect(page.locator("img.login-photo")).toHaveAttribute("src", "https://images.onehope.test/hero.jpg");
+  const member = await page.goto("/member");
+  expect(member?.status()).toBe(200);
+});
