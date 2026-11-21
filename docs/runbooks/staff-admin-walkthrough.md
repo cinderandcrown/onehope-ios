@@ -46,6 +46,7 @@ Open **Care**. If it asks, enter the 6-digit authenticator code and tap **Confir
 Open **Check-in**. This screen does not text families.
 
 - Tap **Clock in** if you are on the kids team (kids director, kids team leader, or kids volunteer). Pickup stays closed until a second adult from the kids team clocks in. A pastor, finance teammate, or care teammate cannot be that second adult.
+- **Volunteers clock in from the One Hope app, not this web desk.** Kids volunteers and team leaders do not have a staff sign-in, so they sign in to the app, open **More → Children's Church** (or the kids section on **Connect**), and tap **Clock in** (and **Clock out** when they leave). Staff on the kids team can use either place. Taking someone off the kids team also clocks them out.
 - Filter by room. Tap **Check in** on a child. Read the 4-digit code to the adult, or **Copy code** / **Print label**.
 - Pickup: choose an allowed adult and type the code. A person marked “Cannot pick up” is not in the list.
 - Allergies stay off this screen.

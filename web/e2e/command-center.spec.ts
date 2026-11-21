@@ -84,3 +84,16 @@ test("sample pastor can walk the command center without sending or charging", as
   await expect(page.getByRole("heading", { name: "Sunday at 10:30", level: 1 })).toBeVisible();
   await page.screenshot({ path: `${shots}/command-overview-mobile.png`, fullPage: true });
 });
+
+test("a member who signs in on the staff form is told the desk is for staff", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("avery@sample.onehope");
+  await page.getByLabel("Password").fill("hope-sample");
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(page).toHaveURL(/\/login\?error=member/);
+  await expect(page.locator("p.error")).toContainText("This sign-in is for church staff");
+  await expect(page.locator("p.error").getByRole("link")).toHaveAttribute("href", "/member");
+  // The member session was ended, so the desk still sends them back to sign in.
+  await page.goto("/overview");
+  await expect(page).toHaveURL(/\/login/);
+});

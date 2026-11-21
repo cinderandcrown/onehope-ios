@@ -46,14 +46,30 @@ export function demoFieldKey(): Buffer {
   return scryptSync("onehope-demo-not-for-production", "onehope-demo-salt", 32);
 }
 
+/**
+ * ONEHOPE_ENV must be "production" or "demo". Unset means demo, except on Vercel
+ * production, where it means production. Any other value is refused: a typo must
+ * never fall back to demo mode with sample data and published sample logins.
+ */
+export function resolveEnvMode(env: NodeJS.ProcessEnv = process.env): "demo" | "production" {
+  const raw = env.ONEHOPE_ENV;
+  const requested = (raw ?? "").trim().toLowerCase();
+  if (requested === "production" || requested === "demo") return requested;
+  if (requested === "") return env.VERCEL_ENV === "production" ? "production" : "demo";
+  if (env.VERCEL_ENV === "production") {
+    // Vercel production already resolves to production, the safe side. Log loudly and keep serving.
+    console.error(
+      `[onehope] ONEHOPE_ENV="${raw}" is not recognized. Treating this Vercel production deployment as production. Set ONEHOPE_ENV=production.`,
+    );
+    return "production";
+  }
+  const message = `ONEHOPE_ENV="${raw}" is not recognized. Use "production" or "demo". Refusing to start rather than fall back to demo mode with sample data.`;
+  console.error(`[onehope] ${message}`);
+  throw new Error(message);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const requested = env.ONEHOPE_ENV;
-  const mode =
-    requested === "production" || requested === "demo"
-      ? requested
-      : env.VERCEL_ENV === "production"
-        ? "production"
-        : "demo";
+  const mode = resolveEnvMode(env);
   const rawKey = env.FIELD_ENCRYPTION_KEY ?? "";
   if (mode === "production" && rawKey.length === 0) {
     throw new Error("FIELD_ENCRYPTION_KEY is required when ONEHOPE_ENV=production.");
