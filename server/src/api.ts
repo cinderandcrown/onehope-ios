@@ -87,6 +87,11 @@ export const API_ROUTES = [
   ["GET", "/api/serving/mine"],
   ["GET", "/api/pathways/mine"],
   ["POST", "/api/kids/check-in"],
+  ["POST", "/api/kids/clock-in"],
+  ["POST", "/api/kids/clock-out"],
+  ["GET", "/api/kids/roster"],
+  ["GET", "/api/kids/station"],
+  ["POST", "/api/kids/staff-check-in"],
   ["POST", "/api/kids/household-pickup"],
   ["POST", "/api/household/children"],
   ["POST", "/api/announcements"],
@@ -369,6 +374,17 @@ async function route(
   if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());
   if (method === "POST" && path === "/api/kids/check-in")
     return store.checkIn(need(), parse(checkInBodySchema, body).childId);
+  if (method === "POST" && path === "/api/kids/clock-in") return store.clockIn(need());
+  if (method === "POST" && path === "/api/kids/clock-out") return store.clockOut(need());
+  if (method === "GET" && path === "/api/kids/roster") {
+    return { children: store.roster(need(), query.get("classroom")) };
+  }
+  if (method === "GET" && path === "/api/kids/station") {
+    return { station: store.stationBoard(need(), query.get("classroom")) };
+  }
+  if (method === "POST" && path === "/api/kids/staff-check-in") {
+    return store.staffCheckIn(need(), parse(checkInBodySchema, body).childId);
+  }
   if (method === "POST" && path === "/api/kids/household-pickup")
     return store.householdPickup(need(), parse(householdPickupBodySchema, body));
   if (method === "POST" && path === "/api/household/children")

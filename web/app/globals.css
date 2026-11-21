@@ -749,6 +749,35 @@ pre {
 .phone-preview .card {
   margin-bottom: 0.6rem;
 }
+.duty-wait {
+  background: #f3d7c8;
+}
+.nametag {
+  background: var(--paper);
+  border-radius: 16px;
+  padding: 0.8rem 1rem;
+  max-width: 16rem;
+}
+.nametag .code {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0.2rem 0;
+}
+@media print {
+  .rail,
+  .topbar,
+  .no-print,
+  form,
+  .help,
+  .notice,
+  .template-row {
+    display: none !important;
+  }
+  .nametag {
+    border: 1px solid #000;
+  }
+}
 .care-card {
   border-top: 1px solid var(--line);
   padding-top: 0.8rem;

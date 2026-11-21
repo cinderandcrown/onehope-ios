@@ -182,6 +182,52 @@ export async function cancelServeAction(formData: FormData) {
   redirect("/events?saved=1");
 }
 
+export async function clockInAction() {
+  const token = await staffToken();
+  try {
+    await withStore((store) => store.clockIn(token));
+  } catch (error) {
+    fail("/checkin", error);
+  }
+  redirect("/checkin");
+}
+
+export async function clockOutAction() {
+  const token = await staffToken();
+  try {
+    await withStore((store) => store.clockOut(token));
+  } catch (error) {
+    fail("/checkin", error);
+  }
+  redirect("/checkin");
+}
+
+export async function staffCheckInAction(formData: FormData) {
+  const token = await staffToken();
+  const childId = String(formData.get("childId") ?? "");
+  try {
+    await withStore((store) => store.staffCheckIn(token, childId));
+  } catch (error) {
+    fail("/checkin", error);
+  }
+  redirect(`/checkin?label=${encodeURIComponent(childId)}`);
+}
+
+export async function stationPickupAction(formData: FormData) {
+  const token = await staffToken();
+  const childId = String(formData.get("childId") ?? "");
+  const guardianPersonId = String(formData.get("guardianPersonId") ?? "");
+  const code = String(formData.get("code") ?? "");
+  let result: { allowed: boolean; reason: string };
+  try {
+    result = await withStore((store) => store.pickup(token, { childId, guardianPersonId, code }));
+  } catch (error) {
+    fail("/checkin", error);
+  }
+  if (!result.allowed) redirect(`/checkin?pickup=${encodeURIComponent(result.reason)}`);
+  redirect("/checkin?saved=1");
+}
+
 export async function moderateTestimonyAction(formData: FormData) {
   const token = await staffToken();
   const id = String(formData.get("id") ?? "");

@@ -327,6 +327,98 @@ test("care can assign, note, and date a follow-up, and reported prayers and test
   assert.equal(denied.status, 403);
 });
 
+test("the kids desk clocks adults in, filters rooms, shows a code, and honors pickup rules", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const frankie = store.login({
+    email: "frankie@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(frankie.token, code());
+  const guest = member(store);
+  const handle = createApi({ store });
+  const memberClock = await handle(
+    new Request("http://localhost/api/kids/clock-in", {
+      method: "POST",
+      headers: { authorization: `Bearer ${guest}` },
+    }),
+  );
+  assert.equal(memberClock.status, 403);
+  const roster = await handle(
+    new Request("http://localhost/api/kids/roster?classroom=Preschool", {
+      headers: { authorization: `Bearer ${frankie.token}` },
+    }),
+  );
+  const rosterBody = (await roster.json()) as { children: { displayName: string }[] };
+  assert.deepEqual(
+    rosterBody.children.map((child) => child.displayName),
+    ["Remy Sample"],
+  );
+  assert.equal(JSON.stringify(rosterBody).includes("4821"), false);
+  assert.equal(JSON.stringify(rosterBody).includes("peanut"), false);
+  const board = store.stationBoard(frankie.token, "Preschool");
+  assert.equal(board.children[0]?.code, "4821");
+  assert.equal(JSON.stringify(board).includes("peanut"), false);
+  assert.equal(board.children[0]?.guardians.find((adult) => adult.displayName === "Blake Sample")?.blocked, true);
+  const checked = await handle(
+    new Request("http://localhost/api/kids/staff-check-in", {
+      method: "POST",
+      headers: { authorization: `Bearer ${frankie.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ childId: "child-remy" }),
+    }),
+  );
+  assert.equal(checked.status, 200);
+  const visit = (await checked.json()) as { code: string };
+  assert.match(visit.code, /^\d{4}$/);
+  store.stepUp(frankie.token, { code: code() });
+  assert.equal(
+    store.pickup(frankie.token, { childId: "child-remy", guardianPersonId: "person-avery", code: visit.code })
+      .allowed,
+    false,
+  );
+  const dana = store.login({
+    email: "dana@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(dana.token, code());
+  await handle(
+    new Request("http://localhost/api/kids/clock-in", {
+      method: "POST",
+      headers: { authorization: `Bearer ${frankie.token}` },
+    }),
+  );
+  const second = await handle(
+    new Request("http://localhost/api/kids/clock-in", {
+      method: "POST",
+      headers: { authorization: `Bearer ${dana.token}` },
+    }),
+  );
+  assert.equal(second.status, 200);
+  assert.equal(
+    store.pickup(frankie.token, { childId: "child-remy", guardianPersonId: "person-blake", code: visit.code })
+      .allowed,
+    false,
+  );
+  assert.equal(
+    store.pickup(frankie.token, { childId: "child-remy", guardianPersonId: "person-avery", code: visit.code })
+      .allowed,
+    true,
+  );
+  const out = await handle(
+    new Request("http://localhost/api/kids/clock-out", {
+      method: "POST",
+      headers: { authorization: `Bearer ${frankie.token}` },
+    }),
+  );
+  assert.equal(out.status, 200);
+  const label = store.stationLabel(frankie.token, "child-quinn");
+  assert.match(label.zpl, /Quinn Sample/);
+  assert.equal(label.socketOpened, false);
+});
+
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {
   const config = loadConfig({});
   const store = new ChurchStore(config, {

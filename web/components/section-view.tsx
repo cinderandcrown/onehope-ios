@@ -1,6 +1,7 @@
 import { ChurchImage } from "@/components/church-image";
 import { AnnouncementsDesk } from "@/components/staff/announcements";
 import { CareDesk } from "@/components/staff/care";
+import { CheckInDesk } from "@/components/staff/checkin";
 import { EventsDesk } from "@/components/staff/events";
 
 import {
@@ -269,40 +270,8 @@ function renderSection(
     }
     case "events":
       return <EventsDesk store={store} token={token} query={query} />;
-    case "checkin": {
-      const roster = store.roster(token);
-      const label = roster[0] ? store.label(token, roster[0].id) : null;
-      return (
-        <section>
-          <h1>Check-in</h1>
-          <p>
-            Two adults on duty. Pickup matches the guardian and the security code, and stops for a custody
-            flag.
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Child</th>
-                <th>Classroom</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map((child) => (
-                <tr key={child.id}>
-                  <td>{child.displayName}</td>
-                  <td>{child.classroom}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <h2>Label handoff</h2>
-          <p>
-            Zebra receives ZPL. Brother receives the same fields. This screen does not open a printer socket.
-          </p>
-          <pre>{label ? label.zpl : "No child record to print."}</pre>
-        </section>
-      );
-    }
+    case "checkin":
+      return <CheckInDesk store={store} token={token} query={query} />;
     case "serving": {
       const rows = store.serving(token);
       return (

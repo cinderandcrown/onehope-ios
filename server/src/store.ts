@@ -1952,15 +1952,81 @@ export class ChurchStore {
     };
   }
 
-  roster(token: string) {
+  roster(token: string, classroom?: string | null) {
     const actor = this.actor(token);
     authorize(actor, "manage_checkin", this.now());
-    return [...this.children.values()].map((child) => ({
-      id: child.id,
+    const room = classroom?.trim() ?? "";
+    return [...this.children.values()]
+      .filter((child) => !room || child.classroom === room)
+      .map((child) => ({
+        id: child.id,
+        displayName: child.displayName,
+        classroom: child.classroom,
+        sample: child.sample,
+        checkedIn: textField(this.readJson(child.ciphertext), "code") !== "",
+      }));
+  }
+
+  /**
+   * The operator board. The security code is here so the desk can read it to the
+   * family. It is not texted. Medical notes stay off this board.
+   */
+  stationBoard(token: string, classroom?: string | null) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const room = classroom?.trim() ?? "";
+    const children = [...this.children.values()].filter((child) => !room || child.classroom === room);
+    return {
+      adultsOnDuty: this.station.size,
+      onDuty: this.station.has(actor.personId),
+      namesOnDuty: [...this.station].map((id) => this.people.get(id)?.displayName ?? "Staff"),
+      classrooms: [...new Set([...this.children.values()].map((child) => child.classroom))].sort(),
+      children: children.map((child) => {
+        const code = textField(this.readJson(child.ciphertext), "code");
+        return {
+          id: child.id,
+          displayName: child.displayName,
+          classroom: child.classroom,
+          checkedIn: code !== "",
+          code,
+          guardians: child.guardianIds.map((id) => ({
+            id,
+            displayName: this.people.get(id)?.displayName ?? "Adult",
+            blocked: child.restrictedPersonIds.includes(id),
+          })),
+        };
+      }),
+    };
+  }
+
+  /** Checks a child in at the desk. The code is shown once on this screen and is never texted. */
+  staffCheckIn(token: string, childId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const child = this.children.get(childId);
+    if (!child) throw new AccessError("not_found", "That child isn't here.");
+    const code = String(randomInt(1000, 10_000));
+    this.writeKidFields(child, { code, checkedInAt: this.now() });
+    this.record(actor, "write", "kid_checkin", child.id, 3);
+    return { childId: child.id, displayName: child.displayName, classroom: child.classroom, code };
+  }
+
+  stationLabel(token: string, childId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const child = this.children.get(childId);
+    if (!child) throw new AccessError("not_found", "That child isn't here.");
+    const code = textField(this.readJson(child.ciphertext), "code");
+    if (!code) throw new AccessError("invalid", "Check the child in before printing a label.");
+    this.record(actor, "read", "kid_label", child.id, 1);
+    return {
       displayName: child.displayName,
       classroom: child.classroom,
-      sample: child.sample,
-    }));
+      code,
+      zpl: zebraLabel(child.displayName, code),
+      brother: `BROTHER LABEL\nOne Hope Kids\n${child.displayName}\nCode ${code}\n`,
+      socketOpened: false as const,
+    };
   }
 
   clockIn(token: string) {
@@ -1970,7 +2036,15 @@ export class ChurchStore {
     if (!actor.mfaVerified)
       throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
     this.station.add(actor.personId);
-    return { adultsOnDuty: this.station.size };
+    return { adultsOnDuty: this.station.size, onDuty: true as const };
+  }
+
+  clockOut(token: string) {
+    const actor = this.actor(token);
+    if (!isStaff(actor.role))
+      throw new AccessError("forbidden", "Only staff can clock into a check-in station.");
+    this.station.delete(actor.personId);
+    return { adultsOnDuty: this.station.size, onDuty: false as const };
   }
 
   pickup(token: string, input: PickupBody) {
