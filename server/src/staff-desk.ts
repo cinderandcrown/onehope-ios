@@ -141,7 +141,7 @@ export function announcementIsLive(card: AnnouncementCard, now: number): boolean
 
 export function windowError(startsAt: number | null, endsAt: number | null): string | null {
   if (startsAt != null && endsAt != null && endsAt <= startsAt) {
-    return "The end is before the start. Put the end after the start.";
+    return "This card ends before it starts. Put the end after the start.";
   }
   return null;
 }

@@ -919,6 +919,17 @@ test("a team leader can add, code a peer, and edit Home cards, but not a pastor 
     () => store.issueInvite(leader, "reese@sample.onehope"),
     (error: AccessError) => error.code === "forbidden" && /pastor/.test(error.message),
   );
+  store.changeRole(leader, { personId: added.id, role: "volunteer" });
+  assert.equal(store.me(leader).role, "team_leader");
+  assert.throws(
+    () => store.changeRole(leader, { personId: peer.id, role: "volunteer" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.throws(
+    () => store.changeRole(leader, { personId: "person-gray", role: "team_leader" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.equal(store.me(leader).role, "team_leader");
   assert.throws(
     () => store.changeRole(leader, { personId: added.id, role: "pastor" }),
     (error: AccessError) => error.code === "forbidden",
@@ -943,4 +954,23 @@ test("a team leader can add, code a peer, and edit Home cards, but not a pastor 
   );
   const fromMaster = store.issueInvite(master.token, "future.pastor@example.com");
   assert.equal(fromMaster.email, "future.pastor@example.com");
+});
+
+test("the shared sample sessions do not idle out", () => {
+  let now = Date.parse("2026-11-17T18:00:00.000Z");
+  const store = new ChurchStore(loadConfig({}), { now: () => now });
+  const staff = store.toDocument().sessions.find((session) => session.token === "session-staff-demo");
+  assert.ok(staff);
+  now += 16 * 60 * 1000;
+  assert.equal(store.me("session-staff-demo").role, "pastor");
+  const refreshed = store.toDocument().sessions.find((session) => session.token === "session-staff-demo");
+  assert.equal(refreshed?.lastActivity, now);
+  now += 30_000;
+  store.me("session-staff-demo");
+  assert.equal(
+    store.toDocument().sessions.find((session) => session.token === "session-staff-demo")?.lastActivity,
+    now - 30_000,
+  );
+  now += 13 * 60 * 60 * 1000;
+  assert.equal(store.me("session-member-demo").role, "member");
 });

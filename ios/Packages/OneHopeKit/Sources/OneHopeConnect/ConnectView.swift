@@ -167,7 +167,15 @@ private struct MemberSections: View {
             ForEach(snapshot.serving) { item in
                 VStack(alignment: .leading) {
                     Text(item.position)
-                    Text(item.status).font(.footnote)
+                    Text(item.status == "pending" ? "Waiting for your answer" : item.status).font(.footnote)
+                    if item.status == "pending" {
+                        Button("Yes, I'll serve") {
+                            Task { notice = await perform(.answerServing(item.id, true)) }
+                        }
+                        Button("I can't this time") {
+                            Task { notice = await perform(.answerServing(item.id, false)) }
+                        }
+                    }
                 }
             }
         }

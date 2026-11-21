@@ -105,7 +105,7 @@ struct FeatureMenu<Account: View>: View {
                 EventsScreen(snapshot: snapshot)
             }
             row("more-serve", MenuLabel(title: "Serve", symbol: "hands.sparkles", detail: "Use your gifts", tint: BrandColor.olive)) {
-                ServeScreen(snapshot: snapshot)
+                ServeScreen(snapshot: snapshot, perform: perform)
             }
         }
     }

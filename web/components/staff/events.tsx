@@ -22,7 +22,7 @@ function one(query: Record<string, string | string[] | undefined>, key: string) 
 
 function noticeFor(query: Record<string, string | string[] | undefined>) {
   if (one(query, "saved")) return "Saved. People see the change the next time they open the app.";
-  if (one(query, "error") === "time") return "Add a start and an end. The end has to be later than the start.";
+  if (one(query, "error") === "time") return "This event ends before it starts. Put the end after the start.";
   if (one(query, "error") === "capacity") return "Capacity is a whole number, or leave it blank for no limit.";
   if (one(query, "error")) return "That could not be saved. Check the name, place, and times.";
   return "";

@@ -375,6 +375,8 @@ export const servingAssignBodySchema = z
   })
   .strict();
 
+export const servingRespondBodySchema = z.object({ accept: z.boolean() }).strict();
+
 export const neighborhoodPrayerBodySchema = z.object({ body: z.string().trim().min(1).max(1000) }).strict();
 
 export const coffeeOrderBodySchema = z

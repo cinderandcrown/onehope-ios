@@ -52,6 +52,7 @@ import {
   KIDS_POSITION_ID,
   SERVING_SPOTS,
   isStaff,
+  mayChangeRole,
   mayIssueInvite,
   nextSundayService,
   projectDirectory,
@@ -2349,7 +2350,7 @@ export class ChurchStore {
     ] as const;
     if (actor.role === "team_leader") {
       return roles
-        .filter((role) => mayIssueInvite(actor.role, role))
+        .filter((role) => mayChangeRole(actor.role, "member", role))
         .map((role) => ({ id: role, label: labelRole(role) }));
     }
     return roles
@@ -2382,7 +2383,7 @@ export class ChurchStore {
     if (!(churchRoles as readonly string[]).includes(input.role)) {
       throw new AccessError("forbidden", "That role is not assigned from the church Command Center.");
     }
-    if (!mayIssueInvite(actor.role, person.role) || !mayIssueInvite(actor.role, input.role)) {
+    if (!mayChangeRole(actor.role, person.role, input.role)) {
       throw new AccessError(
         "forbidden",
         "You can only give a role at or below your own, never a pastor or Master Admin seat.",
@@ -2746,7 +2747,7 @@ export class ChurchStore {
   }
 
   private segmentLabel(segment: "members" | "volunteers" | "parents") {
-    if (segment === "members") return "everyone with the app, guests included";
+    if (segment === "members") return "everyone with the app (every account with a password)";
     if (segment === "volunteers") return "volunteers";
     return "parents";
   }
@@ -3205,15 +3206,16 @@ export class ChurchStore {
     }
     const now = this.now();
     const refreshAfter = 60_000;
+    const sampleSession = session.userAgent === "staff-demo" || session.userAgent === "member-demo";
     if (
-      this.config.env === "demo" &&
+      sampleSession &&
       session.userAgent === "staff-demo" &&
       session.stepUpUntil < now + this.config.stepUpMs / 2
     ) {
       session.stepUpUntil = now + this.config.stepUpMs;
     }
     const idle = isStaff(person.role) ? this.config.sessionIdleStaffMs : this.config.sessionIdleMemberMs;
-    if (now - session.lastActivity > idle) {
+    if (!sampleSession && now - session.lastActivity > idle) {
       this.sessions.delete(token);
       throw new AccessError("session_expired", "Your session timed out.");
     }

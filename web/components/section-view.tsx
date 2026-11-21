@@ -99,7 +99,17 @@ export async function SectionView({
   try {
     return await withChurch((store) => renderSection(store, section, token, query, sermons), { token });
   } catch (error) {
-    if (isAccessError(error)) redirect("/login");
+    if (isAccessError(error) && (error.code === "unauthenticated" || error.code === "session_expired")) {
+      redirect("/login");
+    }
+    if (isAccessError(error) && error.code === "forbidden") {
+      return (
+        <section>
+          <h1>This desk is closed</h1>
+          <p>Your role does not open this page. Ask a pastor if you need it.</p>
+        </section>
+      );
+    }
     throw error;
   }
 }

@@ -76,8 +76,8 @@ export async function PushDesk({
           </p>
           <p>{pending?.body}</p>
           <p>
-            {segmentLabel(pending?.segment ?? "")} · {pending?.count} people. This is everyone with the app,
-            guests included. This is the last step before it goes out. Nothing is sent until you confirm.
+            {segmentLabel(pending?.segment ?? "")} · {pending?.count} people. The count is every account
+            with a password. This is the last step before it goes out. Nothing is sent until you confirm.
           </p>
           <form action={savePush}>
             <input type="hidden" name="title" value={pending?.title ?? ""} />

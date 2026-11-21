@@ -30,6 +30,7 @@ import {
   personCreateBodySchema,
   personEditBodySchema,
   servingAssignBodySchema,
+  servingRespondBodySchema,
   neighborhoodPrayerBodySchema,
   coffeeOrderBodySchema,
   groupBodySchema,
@@ -89,6 +90,7 @@ export const API_ROUTES = [
   ["POST", "/api/prayers/{id}/report"],
   ["GET", "/api/kids/mine"],
   ["GET", "/api/serving/mine"],
+  ["POST", "/api/serving/{id}/respond"],
   ["GET", "/api/pathways/mine"],
   ["POST", "/api/kids/check-in"],
   ["POST", "/api/kids/clock-in"],
@@ -398,6 +400,10 @@ async function route(
     return { kids: store.myKids(token), duty: store.kidsDuty(token) };
   }
   if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
+  const respondServing = path.match(/^\/api\/serving\/([^/]+)\/respond$/);
+  if (method === "POST" && respondServing?.[1]) {
+    return store.respond(need(), decodeURIComponent(respondServing[1]), parse(servingRespondBodySchema, body).accept);
+  }
   if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());
   if (method === "POST" && path === "/api/kids/check-in")
     return store.checkIn(need(), parse(checkInBodySchema, body).childId);

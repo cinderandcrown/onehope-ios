@@ -51,9 +51,9 @@ export async function CheckInDesk({
       <p className="help">
         How do I check a child in? Clock in, find the child, and tap Check in. Read the 4-digit code to the
         adult at the desk, or print the label. We never text the family. Pickup needs the code, an allowed adult, and two adults from the kids
-        team. A pastor or finance teammate cannot be the second adult.
+        team. A pastor or finance teammate counts only when they are on the kids-team list.
       </p>
-      {saved ? <p className="notice">Saved. The child is with their adult.</p> : null}
+      {saved ? <p className="notice">{saved}</p> : null}
       {failure ? (
         <p className="notice" role="alert">
           {failure}

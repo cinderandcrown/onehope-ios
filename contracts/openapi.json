@@ -457,6 +457,16 @@
         }
       }
     },
+    "/api/serving/{id}/respond": {
+      "post": {
+        "operationId": "post__api_serving_id_respond",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
     "/api/pathways/mine": {
       "get": {
         "operationId": "get__api_pathways_mine",

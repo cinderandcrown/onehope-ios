@@ -229,6 +229,7 @@ public enum MemberAction: Sendable {
     case pickup(String, String)
     case clockIn
     case clockOut
+    case answerServing(String, Bool)
     /// Works for guests too.
     case followUp(FollowUpRequest)
     /// Works for guests too.

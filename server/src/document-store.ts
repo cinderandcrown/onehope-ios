@@ -110,6 +110,20 @@ export function emptyDocument(): StoreDocument {
   };
 }
 
+/** Postgres 42P01. The Neon driver and node-postgres both set `code` on the error. */
+export function isMissingRelation(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === "42P01");
+}
+
+const OPTIONAL_TABLES = new Set(["featured_messages", "kids_team"]);
+
+/** A missing new table must not abort the request transaction. */
+async function relationReady(sql: SqlClient, table: string): Promise<boolean> {
+  if (!OPTIONAL_TABLES.has(table)) return true;
+  const found = await sql.query<{ ok: string | null }>("SELECT to_regclass($1) AS ok", [table]);
+  return Boolean(found.rows[0]?.ok);
+}
+
 export function stable(value: unknown): string {
   return JSON.stringify(canonicalize(value));
 }
@@ -571,6 +585,7 @@ async function loadRecords(
 ): Promise<Row[]> {
   const versionColumn = spec.table === "audit_log" ? "" : ", row_version";
   const totpColumn = spec.table === "people" ? ", totp_secret" : "";
+  if (!(await relationReady(sql, spec.table))) return [];
   const found = await sql.query<{ record: string; row_version?: number; totp_secret?: string | null }>(
     `SELECT record${versionColumn}${totpColumn} FROM ${assertIdent(spec.table)}
      WHERE tenant_id = $1 AND record IS NOT NULL${extraWhere}`,
@@ -618,7 +633,7 @@ export async function loadDocument(
     ]);
     doc.station = duty.rows.map((row) => row.person_id);
   }
-  if (want("kids_team")) {
+  if (want("kids_team") && (await relationReady(sql, "kids_team"))) {
     const team = await sql.query<{ person_id: string }>(`SELECT person_id FROM kids_team WHERE tenant_id = $1`, [
       tenantId,
     ]);

@@ -13,7 +13,9 @@ export function tablesFor(method: string, path: string): readonly string[] | nul
   if (method === "GET" && path === "/api/daily-word") return ["streaks", "people", "sessions"];
   if (method === "GET" && path === "/api/me") return ["people", "sessions"];
   if (method === "GET" && path === "/api/directory") return ["people", "sessions"];
-  if (method === "GET" && path === "/api/kids/mine") return ["kids", "people", "sessions"];
+  if (method === "GET" && path === "/api/kids/mine") {
+    return ["kids", "people", "sessions", "kids_team", "schedule_assignments", "station_duty"];
+  }
   if (method === "GET" && path === "/api/serving/mine") return ["schedule_assignments", "people", "sessions"];
   if (method === "GET" && path === "/api/pathways/mine") return ["pathways", "people", "sessions"];
   if (method === "GET" && path === "/api/events/mine") return ["events", "registrations", "people", "sessions"];

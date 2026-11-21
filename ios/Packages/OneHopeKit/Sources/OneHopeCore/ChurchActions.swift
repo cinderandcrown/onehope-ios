@@ -124,6 +124,16 @@ public extension ChurchClient {
         let _: EmptyReply = try await send("/api/kids/clock-out", method: "POST", token: token, json: Data("{}".utf8))
     }
 
+    func answerServing(token: String, id: String, accept: Bool) async throws {
+        struct Body: Encodable { let accept: Bool }
+        let _: EmptyReply = try await send(
+            "/api/serving/\(id)/respond",
+            method: "POST",
+            token: token,
+            json: JSONEncoder().encode(Body(accept: accept))
+        )
+    }
+
     func householdPickup(token: String, childId: String, code: String) async throws -> String {
         let reply: ReasonReply = try await send(
             "/api/kids/household-pickup",
@@ -180,7 +190,7 @@ public extension ChurchClient {
         case let .gift(request, password):
             try await give(token: token, request: request, password: password)
             return "Thank you. Your gift is set up (\(request.recurring.label.lowercased()))."
-        case .followUp, .support, .addChild, .checkIn, .pickup, .clockIn, .clockOut:
+        case .followUp, .support, .addChild, .checkIn, .pickup, .clockIn, .clockOut, .answerServing:
             return ""
         }
     }
@@ -201,6 +211,9 @@ public extension ChurchClient {
         case .clockOut:
             try await clockOut(token: token)
             return "You are clocked out."
+        case let .answerServing(id, accept):
+            try await answerServing(token: token, id: id, accept: accept)
+            return accept ? "You're on the schedule." : "You declined that spot."
         default:
             return nil
         }

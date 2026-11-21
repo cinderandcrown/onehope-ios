@@ -72,6 +72,21 @@ export async function deleteMember(formData: FormData) {
   redirect("/member?deleted=1");
 }
 
+export async function respondServingAction(formData: FormData) {
+  const jar = await cookies();
+  const token = jar.get("onehope_member")?.value;
+  if (!token) redirect("/member");
+  const id = String(formData.get("id") ?? "");
+  const accept = formData.get("accept") === "yes";
+  try {
+    await withChurch((store) => store.respond(token, id, accept), { token });
+  } catch (error) {
+    if (accessMessage(error)) redirect("/member?error=serving");
+    throw error;
+  }
+  redirect("/member");
+}
+
 export async function signOutMember() {
   const jar = await cookies();
   const token = jar.get("onehope_member")?.value;

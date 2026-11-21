@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { ChurchImage } from "@/components/church-image";
+import { respondServingAction } from "@/app/member/actions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -1126,7 +1127,25 @@ function Connect({ church, member, onNotice }: { church: ChurchView; member: Mem
         {member.serving.map((item) => (
           <article className="card" key={item.id}>
             <h3>{item.position}</h3>
-            <p>{item.status}</p>
+            <p>{item.status === "pending" ? "Waiting for your answer" : item.status}</p>
+            {item.status === "pending" ? (
+              <div className="template-row">
+                <form action={respondServingAction}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="accept" value="yes" />
+                  <button className="button" type="submit">
+                    Yes, I will serve
+                  </button>
+                </form>
+                <form action={respondServingAction}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="accept" value="no" />
+                  <button className="button secondary" type="submit">
+                    I cannot this time
+                  </button>
+                </form>
+              </div>
+            ) : null}
           </article>
         ))}
       </section>

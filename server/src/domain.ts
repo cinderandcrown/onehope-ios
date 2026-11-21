@@ -161,6 +161,17 @@ export function mayIssueInvite(issuerRole: Role, targetRole: Role): boolean {
   return ROLE_PRIVILEGE[targetRole] <= ROLE_PRIVILEGE[issuerRole];
 }
 
+/** A team leader may change only roles strictly below team leader, never another team leader. */
+export function mayChangeRole(actorRole: Role, currentRole: Role, targetRole: Role): boolean {
+  if (actorRole === "team_leader") {
+    return (
+      ROLE_PRIVILEGE[currentRole] < ROLE_PRIVILEGE.team_leader &&
+      ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader
+    );
+  }
+  return mayIssueInvite(actorRole, currentRole) && mayIssueInvite(actorRole, targetRole);
+}
+
 export const TIER3_ACTIONS: ReadonlySet<Action> = new Set<Action>([
   "view_household_tier3",
   "view_all_giving",

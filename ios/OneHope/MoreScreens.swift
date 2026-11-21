@@ -121,16 +121,29 @@ struct EventsScreen: View {
 
 struct ServeScreen: View {
     let snapshot: ChurchSnapshot
+    var perform: (MemberAction) async -> String = { _ in "" }
+    @State private var notice = ""
 
     var body: some View {
         HopeList {
+            if !notice.isEmpty {
+                Text(notice)
+            }
             if snapshot.serving.isEmpty {
                 Text(snapshot.signedIn ? "No serving assignment yet." : "Sign in to see where you serve.")
             }
             ForEach(snapshot.serving) { item in
                 VStack(alignment: .leading) {
                     Text(item.position).font(.headline)
-                    Text(item.status).font(.footnote)
+                    Text(item.status == "pending" ? "Waiting for your answer" : item.status).font(.footnote)
+                    if item.status == "pending", snapshot.signedIn {
+                        Button("Yes, I'll serve") {
+                            Task { notice = await perform(.answerServing(item.id, true)) }
+                        }
+                        Button("I can't this time") {
+                            Task { notice = await perform(.answerServing(item.id, false)) }
+                        }
+                    }
                 }
             }
         }
