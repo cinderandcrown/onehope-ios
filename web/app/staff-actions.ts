@@ -223,6 +223,29 @@ export async function confirmTotpAction(formData: FormData) {
   redirect("/overview");
 }
 
+export async function assignServingAction(formData: FormData) {
+  const token = await staffToken();
+  const personId = String(formData.get("personId") ?? "");
+  const position = String(formData.get("position") ?? "");
+  try {
+    await withStore((store) => store.assignServing(token, { personId, position }));
+  } catch (error) {
+    fail("/serving", error);
+  }
+  redirect("/serving?saved=1");
+}
+
+export async function undoServingAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  try {
+    await withStore((store) => store.undoServing(token, id));
+  } catch (error) {
+    fail("/serving", error);
+  }
+  redirect("/serving?saved=1");
+}
+
 export async function clockInAction() {
   const token = await staffToken();
   try {

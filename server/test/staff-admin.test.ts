@@ -491,6 +491,45 @@ test("an invite can be claimed, undone while unclaimed, and a new staff member e
   assert.equal(JSON.stringify(store.audit(lead)).includes(setup.setupKey), false);
 });
 
+test("serving can be assigned and undone only while it is still waiting", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const guest = member(store);
+  assert.throws(
+    () => store.assignServing(guest, { personId: "person-harper", position: "Door" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  const handle = createApi({ store });
+  const assigned = await handle(
+    new Request("http://localhost/api/staff/serving", {
+      method: "POST",
+      headers: { authorization: `Bearer ${lead}`, "content-type": "application/json" },
+      body: JSON.stringify({ personId: "person-harper", position: "Door" }),
+    }),
+  );
+  assert.equal(assigned.status, 200);
+  const body = (await assigned.json()) as { assignment: { id: string } };
+  const undone = await handle(
+    new Request(`http://localhost/api/staff/serving/${body.assignment.id}/undo`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${lead}` },
+    }),
+  );
+  assert.equal(undone.status, 200);
+  const kept = store.assignServing(lead, { personId: "person-harper", position: "Kids" });
+  const harper = store.login({
+    email: "harper@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  }).token;
+  store.respond(harper, kept.id, true);
+  assert.throws(
+    () => store.undoServing(lead, kept.id),
+    (error: AccessError) => error.code === "invalid",
+  );
+});
+
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {
   const config = loadConfig({});
   const store = new ChurchStore(config, {

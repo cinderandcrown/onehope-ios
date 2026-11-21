@@ -4,6 +4,7 @@ import { CareDesk } from "@/components/staff/care";
 import { CheckInDesk } from "@/components/staff/checkin";
 import { EventsDesk } from "@/components/staff/events";
 import { PeopleDesk } from "@/components/staff/people";
+import { ServingDesk } from "@/components/staff/serving";
 
 import {
   createGroupAction,
@@ -217,33 +218,8 @@ function renderSection(
       return <EventsDesk store={store} token={token} query={query} />;
     case "checkin":
       return <CheckInDesk store={store} token={token} query={query} />;
-    case "serving": {
-      const rows = store.serving(token);
-      return (
-        <section>
-          <h1>Serving</h1>
-          {rows.length === 0 ? (
-            <p>No assignments on your list.</p>
-          ) : (
-            rows.map((row) => (
-              <article className="card" key={row.id}>
-                <h2>{row.position}</h2>
-                <p>
-                  {row.displayName} · {row.status}
-                </p>
-              </article>
-            ))
-          )}
-          <p>
-            Suggested greeter:{" "}
-            {store
-              .suggestSchedule()
-              .assignments.map((item) => item.personId)
-              .join(", ") || "none"}{" "}
-          </p>
-        </section>
-      );
-    }
+    case "serving":
+      return <ServingDesk store={store} token={token} query={query} />;
     case "worship": {
       const plan = store.ministry(token).worship.plans[0];
       return (
