@@ -1,0 +1,144 @@
+# TestFlight for the One Hope member app.
+# Start this from the Codemagic UI after the Apple setup in the comments below.
+# The GitHub Actions workflows do not read this file.
+workflows:
+  ios-testflight: &ios_testflight
+    name: iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      # Name of the App Store Connect integration in the Codemagic team settings.
+      app_store_connect: "CC App Store Connect"
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.cinderandcrown.onehope
+      vars:
+        BUNDLE_ID: com.cinderandcrown.onehope
+        XCODE_PROJECT: ios/OneHope.xcodeproj
+        XCODE_SCHEME: OneHope
+        # Numeric App Store Connect Apple ID for "One Hope Church Richardson".
+        # The home-screen name stays "One Hope".
+        APP_STORE_APPLE_ID: "6836197983"
+        # Defaults keep the production build: prod API, internal testing only,
+        # next build number. The demo workflow below overrides them. Codemagic
+        # rejects empty values, so BUILD_NUMBER_OVERRIDE is left unset here and
+        # the script reads it with ${BUILD_NUMBER_OVERRIDE:-}.
+        ONEHOPE_API_BASE_URL: "https://onehope-beryl.vercel.app"
+        TESTFLIGHT_INTERNAL_ONLY: "true"
+      xcode: latest
+    # Start this from the Codemagic UI. Pushes do not spend a Mac build
+    # until the App Store Connect integration and the app record exist.
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "*"
+          include: false
+    scripts:
+      - name: Generate the Xcode project
+        script: |
+          set -euo pipefail
+          brew install xcodegen
+          cd ios
+          case "$ONEHOPE_API_BASE_URL" in
+            https://*.vercel.app | https://weareonehope.com | https://www.weareonehope.com) ;;
+            *) echo "ONEHOPE_API_BASE_URL must be an https Vercel or church host. Got: $ONEHOPE_API_BASE_URL"; exit 1 ;;
+          esac
+          if [ "$ONEHOPE_API_BASE_URL" != "https://onehope-beryl.vercel.app" ]; then
+            host="${ONEHOPE_API_BASE_URL#https://}"
+            sed -i '' "s|^API_BASE_URL = .*|API_BASE_URL = https:/\$()/${host}|" Config/Release.xcconfig
+            grep -n "^API_BASE_URL" Config/Release.xcconfig
+          fi
+          xcodegen generate
+          SOURCE_URL="$(plutil -extract API_BASE_URL raw -o - OneHope/Info.plist)"
+          if [ "$SOURCE_URL" != '$(API_BASE_URL)' ] && [ "$SOURCE_URL" != "https://onehope-beryl.vercel.app" ]; then
+            echo "xcodegen dropped or rewrote API_BASE_URL. Got: ${SOURCE_URL:-<missing>}"
+            exit 1
+          fi
+      - name: Verify signing files and apply profiles
+        script: |
+          set -euo pipefail
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          CERTS_DIR="$HOME/Library/MobileDevice/Certificates"
+          if ! ls "$PROFILES_DIR"/*.mobileprovision >/dev/null 2>&1; then
+            echo "Missing App Store provisioning profile for $BUNDLE_ID."
+            exit 1
+          fi
+          if ! ls "$CERTS_DIR"/* >/dev/null 2>&1; then
+            echo "Missing App Store distribution certificate."
+            exit 1
+          fi
+          security find-identity -v -p codesigning
+          xcode-project use-profiles \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --custom-export-options="{\"testFlightInternalTestingOnly\": ${TESTFLIGHT_INTERNAL_ONLY}}"
+      - name: Increment the build number
+        script: |
+          set -euo pipefail
+          cd ios
+          LATEST_BUILD_NUMBER="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || true)"
+          if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            LATEST_BUILD_NUMBER=0
+          fi
+          NEXT=$((LATEST_BUILD_NUMBER + 1))
+          BUILD_NUMBER_OVERRIDE="${BUILD_NUMBER_OVERRIDE:-}"
+          if [ -n "$BUILD_NUMBER_OVERRIDE" ]; then
+            if ! [[ "$BUILD_NUMBER_OVERRIDE" =~ ^[0-9]+$ ]] || [ "$BUILD_NUMBER_OVERRIDE" -le "$LATEST_BUILD_NUMBER" ]; then
+              echo "BUILD_NUMBER_OVERRIDE=$BUILD_NUMBER_OVERRIDE must be a number above the latest TestFlight build $LATEST_BUILD_NUMBER."
+              exit 1
+            fi
+            NEXT="$BUILD_NUMBER_OVERRIDE"
+          fi
+          echo "Build number $NEXT"
+          agvtool new-version -all "$NEXT"
+      - name: Build the ipa
+        script: |
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
+          shopt -s nullglob
+          ipas=("$CM_BUILD_DIR"/build/ios/ipa/*.ipa)
+          if [ ${#ipas[@]} -eq 0 ]; then
+            echo "No ipa was produced."
+            exit 1
+          fi
+          unpacked="$(mktemp -d)"
+          unzip -q "${ipas[0]}" -d "$unpacked"
+          app="$(find "$unpacked/Payload" -maxdepth 1 -name "*.app" -print -quit)"
+          built="$(plutil -extract API_BASE_URL raw -o - "$app/Info.plist" || true)"
+          if [ "$built" != "$ONEHOPE_API_BASE_URL" ]; then
+            echo "Built app API_BASE_URL is '${built:-<missing>}', expected $ONEHOPE_API_BASE_URL"
+            exit 1
+          fi
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload only. Internal testers receive the build after Apple
+        # finishes processing. This does not submit it for Beta App Review.
+        submit_to_testflight: false
+
+  # Demo builds (10 for the pastors' group, 11 for internal testers), on the demo database preview.
+  # Same steps; only the API host, export options and build number differ.
+  # Start it from the Codemagic UI on the build 10 branch.
+  ios-testflight-demo:
+    <<: *ios_testflight
+    name: iOS TestFlight (demo preview API)
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.cinderandcrown.onehope
+      vars:
+        BUNDLE_ID: com.cinderandcrown.onehope
+        XCODE_PROJECT: ios/OneHope.xcodeproj
+        XCODE_SCHEME: OneHope
+        APP_STORE_APPLE_ID: "6836197983"
+        ONEHOPE_API_BASE_URL: "https://onehope-preview-crowncampaignconsulting.vercel.app"
+        TESTFLIGHT_INTERNAL_ONLY: "false"
+        BUILD_NUMBER_OVERRIDE: "11"
+      xcode: latest

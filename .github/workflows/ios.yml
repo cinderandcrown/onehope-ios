@@ -1,0 +1,109 @@
+name: iOS
+
+on:
+  push:
+  schedule:
+    - cron: "15 7 * * *"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if ls /Applications/Xcode_*.app >/dev/null 2>&1; then
+            XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1 || true)
+            if [ -n "${XCODE}" ]; then sudo xcode-select -s "$XCODE"; fi
+          fi
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and start the API
+        env:
+          # The church's own public photo URLs. Held as a repository secret, never in git.
+          # Forks and Dependabot get no secret, so the app shows its brand-colored fallback.
+          ONEHOPE_MEDIA_JSON: ${{ secrets.ONEHOPE_MEDIA_JSON }}
+          ONEHOPE_MEDIA_TENANT: ${{ secrets.ONEHOPE_MEDIA_TENANT }}
+        run: |
+          npm ci
+          nohup node --import tsx server/src/main.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8787/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/api.log"
+          exit 1
+
+      - name: SwiftLint and SwiftFormat
+        run: |
+          brew install swiftlint swiftformat
+          cd ios
+          swiftlint lint --strict
+          swiftformat --lint .
+
+      - name: Generate the Xcode project
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          cd ios && xcodegen generate
+          SOURCE_URL="$(plutil -extract API_BASE_URL raw -o - OneHope/Info.plist)"
+          if [ "$SOURCE_URL" != '$(API_BASE_URL)' ] && [ "$SOURCE_URL" != "https://onehope-beryl.vercel.app" ]; then
+            echo "xcodegen dropped or rewrote API_BASE_URL. Got: ${SOURCE_URL:-<missing>}"
+            exit 1
+          fi
+
+      - name: Choose a simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          LINE=$(xcrun simctl list devices available | grep -E "iPhone" | grep -v unavailable | head -1)
+          UDID=$(echo "$LINE" | sed -E 's/.*\(([A-F0-9-]+)\).*/\1/')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Using $LINE"
+
+      - name: Build and test
+        run: |
+          set -euo pipefail
+          cd ios
+          if [ "${{ github.event_name }}" != "push" ]; then
+            export ONEHOPE_A11Y_STRICT=1
+          fi
+          xcodebuild test \
+            -project OneHope.xcodeproj \
+            -scheme OneHope \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath "$RUNNER_TEMP/OneHope.xcresult" \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Export UI screenshots
+        if: always()
+        run: |
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/OneHope.xcresult" \
+            --output-path screenshots || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-screenshots
+          path: screenshots
+          if-no-files-found: ignore
