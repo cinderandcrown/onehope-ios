@@ -44,7 +44,10 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.serviceISO = home.countdown.service
     snapshot.announcements = home.announcements.map { SampleChurch.Announcement(id: $0.id, title: $0.title, body: $0.body, sample: $0.sample) }
     snapshot.events = home.events.map { eventItem($0, registered: false) }
-    let ordered = SermonOrder.featuring(parts.sermons.videos.map(sermonLine), featuredLine(home.sampleSermon))
+    let ordered = SermonOrder.featuring(
+        parts.sermons.videos.map(sermonLine),
+        featured: featuredLine(home.sampleSermon)
+    )
     let lead = ordered.first { !$0.isShort }
     snapshot.sermonTitle = lead?.title ?? ""
     snapshot.sermonSample = lead == nil
