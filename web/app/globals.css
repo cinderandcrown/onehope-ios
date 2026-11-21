@@ -735,6 +735,9 @@ pre {
 .template-row .button {
   width: auto;
 }
+.table-wrap {
+  overflow-x: auto;
+}
 .form input,
 .form select,
 .form textarea {

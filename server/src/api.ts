@@ -48,6 +48,7 @@ import {
 } from "./contracts";
 import { createLogger, noopReporter, type ErrorReporter, type Logger } from "./logger";
 import type { ChurchStore } from "./store";
+import { parseChicagoLocal } from "./staff-desk";
 import { VERSION } from "./version";
 import type { ZodType } from "zod";
 
@@ -207,6 +208,20 @@ export function createApi(deps: Deps) {
       const token = bearerOrCookie(request);
       const body = request.method === "GET" || request.method === "HEAD" ? {} : await readBody(request);
       if (request.method !== "GET" && request.method !== "HEAD") assertNoCardData(body);
+      if (request.method === "GET" && url.pathname === "/api/audit" && url.searchParams.get("format") === "csv") {
+        if (!token) throw new AccessError("unauthenticated", "Sign in again.");
+        const csv = deps.store.auditCsv(token, dayRange(url.searchParams));
+        return finish(
+          deps,
+          request,
+          new Response(csv, {
+            headers: {
+              "content-type": "text/csv; charset=utf-8",
+              "content-disposition": 'attachment; filename="onehope-audit.csv"',
+            },
+          }),
+        );
+      }
       const icsPath = url.pathname.match(/^\/api\/events\/([^/]+)\/ics$/);
       if (request.method === "GET" && icsPath?.[1]) {
         const calendar = deps.store.ics(decodeURIComponent(icsPath[1]));
@@ -638,6 +653,14 @@ function assertMutation(request: Request) {
     throw new AccessError("forbidden", "The request origin wasn't valid.");
   }
   if (originHost !== host) throw new AccessError("forbidden", "Cross-site changes are refused.");
+}
+
+function dayRange(query: URLSearchParams): { from: number | null; to: number | null } {
+  const fromRaw = query.get("from") ?? "";
+  const toRaw = query.get("to") ?? "";
+  const from = fromRaw ? parseChicagoLocal(fromRaw) : null;
+  const toStart = toRaw ? parseChicagoLocal(toRaw) : null;
+  return { from, to: toStart === null ? null : toStart + 24 * 60 * 60 * 1000 - 1 };
 }
 
 function statusFor(code: AccessError["code"]): number {

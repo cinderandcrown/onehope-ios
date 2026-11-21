@@ -672,12 +672,10 @@ export class ChurchStore {
     const person = this.byEmail(cleaned);
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
+    const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
-    this.invites.set(hashInvite(inviteToken), {
-      email: cleaned,
-      expires: this.now() + 7 * 24 * 60 * 60 * 1000,
-    });
-    return { email: cleaned, inviteToken };
+    this.invites.set(hashInvite(inviteToken), { email: cleaned, expires });
+    return { email: cleaned, inviteToken, expires };
   }
 
   claimInvite(input: {
@@ -1825,11 +1823,11 @@ export class ChurchStore {
         title: "Kids here today",
         count: here,
         detail: here === 0 ? "No children are checked in yet." : "Two adults stay at the door for pickup.",
-        help: "How do I check a child in? Open Check-in, find the child, and keep the pickup code for the family. The app does not text them.",
+        help: "How do I check a child in? Open Check-in, clock in, and read the code to the family. The app does not text them. Pickup needs two adults.",
         href: "/checkin",
       });
     }
-    if (this.unlocked(actor, "view_care_notes")) {
+    if (allows(actor.role, "view_care_notes")) {
       const waiting = this.followUps.filter((row) => row.status === "new");
       const yes = waiting.filter((row) => row.kind === "salvation").length;
       cards.push({
@@ -1840,7 +1838,7 @@ export class ChurchStore {
           yes > 0
             ? `${yes} said yes to Jesus. Reach out yourself. Nothing is sent from here.`
             : "New next steps. Nothing is emailed from here.",
-        help: "How do I follow up? Open Care, read the name, and mark Contacted after you talk. The app never texts or emails them for you.",
+        help: "How do I follow up? Open Care, assign someone, add a note and a due date, then mark Contacted after you talk. Nothing is texted.",
         href: "/care",
       });
       const pending = this.prayers.filter((prayer) => prayer.visibility === "public" && !prayer.approved);
@@ -1863,7 +1861,7 @@ export class ChurchStore {
         title: "Help needed Sunday",
         count: needed.length,
         detail: needed.length === 0 ? "No open spots." : "These people have not answered yet.",
-        help: "How do I fill a spot? Open Serving, pick someone who already helps, and add them. They can say yes in the app. You can undo it while it is still waiting.",
+        help: "How do I fill a spot? Open Serving, pick a person and a spot, and tap Ask them. Undo it while it still says waiting.",
         href: "/serving",
       });
     }
@@ -1874,8 +1872,25 @@ export class ChurchStore {
         title: "What's coming up",
         count: upcoming.length,
         detail: upcoming[0] ? `Next: ${upcoming[0].title}` : "Add a gathering so people can see it.",
-        help: "How do I post an event? Open Events, type a name and a place, and tap Add. People see it in the app.",
+        help: "How do I post an event? Open Events, pick the real date and time, and tap Add. Cancel takes it off the app.",
         href: "/events",
+      });
+      const liveCards = this.announcements.filter((item) => announcementIsLive(item, this.now()) && !item.sample);
+      cards.push({
+        id: "home-cards",
+        title: "On the app Home",
+        count: liveCards.length,
+        detail: liveCards[0] ? liveCards[0].title : "Nothing is on Home yet.",
+        help: "How do I post a card? Open Communications, tap a ready-made card or write your own. Times are Central.",
+        href: "/communications",
+      });
+      cards.push({
+        id: "message",
+        title: "This Sunday's message",
+        count: null,
+        detail: this.featured?.title || "No message is featured yet.",
+        help: "How do I feature a message? Open Media, pick the YouTube video, and tap Feature on Home.",
+        href: "/media",
       });
     }
     if (actor.role === "finance" || actor.role === "pastor" || actor.role === "master_admin") {
@@ -1904,7 +1919,7 @@ export class ChurchStore {
     return {
       greeting: greeting(this.now(), this.requirePerson(actor.personId).displayName),
       role: actor.role,
-      cards: cards.slice(0, 6),
+      cards: cards.slice(0, 8),
     };
   }
 
@@ -2302,10 +2317,39 @@ export class ChurchStore {
     return this.finishProposal(proposal, actor);
   }
 
-  audit(token: string) {
+  audit(token: string, range?: { from?: number | null; to?: number | null }) {
     const actor = this.actor(token);
     authorize(actor, "view_audit_log", this.now());
-    return this.auditLog.map((entry) => ({ ...entry }));
+    return this.auditLog
+      .filter((entry) => {
+        if (range?.from != null && entry.at < range.from) return false;
+        if (range?.to != null && entry.at > range.to) return false;
+        return true;
+      })
+      .map((entry) => ({
+        ...entry,
+        actorName: this.people.get(entry.actorId)?.displayName ?? "Staff",
+      }));
+  }
+
+  auditCsv(token: string, range?: { from?: number | null; to?: number | null }) {
+    const rows = this.audit(token, range);
+    const lines = ["When,Who,Action,Record,Record id,Tier"];
+    for (const row of rows) {
+      lines.push(
+        [
+          new Date(row.at).toISOString(),
+          row.actorName,
+          row.action,
+          row.resource,
+          row.resourceId,
+          String(row.tier),
+        ]
+          .map(csvCell)
+          .join(","),
+      );
+    }
+    return lines.join("\n");
   }
 
   integrations(token: string) {
@@ -4129,6 +4173,11 @@ function supportNeeds(value: unknown): SupportNeedId[] {
   const needs = (value as { needs: unknown }).needs;
   if (!Array.isArray(needs)) return [];
   return needs.filter((need): need is SupportNeedId => SUPPORT_NEEDS.some((item) => item.id === need));
+}
+
+function csvCell(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
+  return value;
 }
 
 function youtubeMessageLink(videoId: string, link: string): boolean {

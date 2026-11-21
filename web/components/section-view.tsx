@@ -3,10 +3,13 @@ import { AnnouncementsDesk } from "@/components/staff/announcements";
 import { CareDesk } from "@/components/staff/care";
 import { CheckInDesk } from "@/components/staff/checkin";
 import { EventsDesk } from "@/components/staff/events";
+import { AdminDesk } from "@/components/staff/admin";
 import { MessageDesk } from "@/components/staff/message";
 import { PushDesk } from "@/components/staff/push";
 import { PeopleDesk } from "@/components/staff/people";
+import { SecurityDesk } from "@/components/staff/security";
 import { ServingDesk } from "@/components/staff/serving";
+import { WeekPreview } from "@/components/staff/week-preview";
 
 import {
   createGroupAction,
@@ -16,8 +19,6 @@ import type { SectionId } from "@/lib/i18n";
 import {
   AccessError,
   CAPABILITIES,
-  labelRole,
-  permissionMatrix,
   loadConfig,
   loadSermons,
   withStore,
@@ -105,6 +106,7 @@ function renderSection(
       return (
         <>
           <Desk store={store} token={token} />
+          <WeekPreview store={store} />
           <section className="hero">
             <div>
               <p className="muted">{home.church.address}</p>
@@ -478,110 +480,10 @@ function renderSection(
           </table>
         </section>
       );
-    case "security": {
-      const seats = store.seats();
-      const matrix = permissionMatrix();
-      const columns = [
-        "view_all_giving",
-        "view_care_notes",
-        "view_kids_medical",
-        "manage_integrations",
-        "propose_master_admin",
-      ] as const;
-      return (
-        <section>
-          <h1>Roles</h1>
-          <article className="panel">
-            <h2>Master Admin</h2>
-            <p>
-              {seats.primary.name} · {seats.primary.email || "email not set"} ·{" "}
-              {seats.primary.filled ? "seated" : "open"}
-            </p>
-            <p>
-              {seats.secondary.name} · {seats.secondary.email || "email not set"} ·{" "}
-              {seats.secondary.filled ? "seated" : "open"}
-            </p>
-            <p>
-              Changing this role takes both current Master Admins. Every Tier 3 read is logged, including
-              theirs, and still needs MFA plus step-up.
-            </p>
-          </article>
-          <table>
-            <thead>
-              <tr>
-                <th>Role</th>
-                {columns.map((column) => (
-                  <th key={column}>{column.replaceAll("_", " ")}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {matrix.map((row) => (
-                <tr key={row.role}>
-                  <td>{labelRole(row.role)}</td>
-                  {columns.map((column) => (
-                    <td key={column} className={row.grants[column] ? "yes" : "no"}>
-                      {row.grants[column] ? "Yes" : "No"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      );
-    }
-    case "admin": {
-      const status = store.status("1.0.0");
-      const audit = store.audit(token).slice(-8);
-      return (
-        <section>
-          <h1>Admin</h1>
-          <p>
-            Encryption key mode: {status.fieldEncryption}. Giving live: {status.givingLive ? "yes" : "no"}.
-            Sends: off.
-          </p>
-          <h2>Recent audit</h2>
-          {audit.length === 0 ? (
-            <p>No audit rows yet.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Who</th>
-                  <th>Action</th>
-                  <th>Record</th>
-                  <th>Tier</th>
-                </tr>
-              </thead>
-              <tbody>
-                {audit.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{entry.actorId}</td>
-                    <td>{entry.action}</td>
-                    <td>{entry.resource}</td>
-                    <td>{entry.tier}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <h2>Attendance</h2>
-          {(() => {
-            const attendance = store.ministry(token).attendance;
-            return attendance.locked ? (
-              <Locked title="Attendance" />
-            ) : (
-              attendance.headcounts.map((row) => (
-                <p key={row.id}>
-                  {row.label}: {row.count}
-                </p>
-              ))
-            );
-          })()}
-        </section>
-      );
-    }
+    case "security":
+      return <SecurityDesk store={store} token={token} query={query} />;
+    case "admin":
+      return <AdminDesk store={store} token={token} query={query} />;
     default: {
       const unreachable: never = section;
       return unreachable;

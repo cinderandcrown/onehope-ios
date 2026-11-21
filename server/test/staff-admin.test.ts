@@ -616,6 +616,54 @@ test("push saves a draft until Apple push is live, then asks before it sends", a
   assert.equal(sent, 1);
 });
 
+test("the audit log filters by date and downloads as a spreadsheet", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const guest = member(store);
+  store.addPerson(lead, { displayName: "Audit Neighbor", email: "audit.neighbor@example.com" });
+  const rows = store.audit(lead, { from: Date.now() - 60_000, to: Date.now() + 60_000 });
+  assert.ok(rows.some((row) => row.resource === "person" && row.actorName.includes("Reese")));
+  assert.equal(store.audit(lead, { from: Date.now() + 60_000, to: Date.now() + 120_000 }).length, 0);
+  assert.throws(
+    () => store.audit(guest),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  const csv = store.auditCsv(lead, { from: Date.now() - 60_000, to: Date.now() + 60_000 });
+  assert.match(csv, /^When,Who,Action,Record,Record id,Tier/);
+  assert.equal(csv.includes("hope-sample"), false);
+  const handle = createApi({ store });
+  const file = await handle(
+    new Request("http://localhost/api/audit?format=csv", {
+      headers: { authorization: `Bearer ${lead}` },
+    }),
+  );
+  assert.equal(file.status, 200);
+  assert.match(file.headers.get("content-type") ?? "", /text\/csv/);
+  const finance = store.login({
+    email: "dana@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(finance.token, code());
+  const denied = await handle(
+    new Request("http://localhost/api/audit?format=csv", {
+      headers: { authorization: `Bearer ${finance.token}` },
+    }),
+  );
+  assert.equal(denied.status, 403);
+});
+
+test("the Sunday desk links each card to a screen that finishes the job", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const hrefs = store.staffHome(lead).cards.map((card) => card.href);
+  for (const href of ["/checkin", "/care", "/serving", "/events", "/communications", "/media", "/giving"]) {
+    assert.ok(hrefs.includes(href), href);
+  }
+  assert.equal(store.publicHome().sampleSermon.title, "");
+});
+
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {
   const config = loadConfig({});
   const store = new ChurchStore(config, {

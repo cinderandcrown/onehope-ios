@@ -203,13 +203,14 @@ export async function changeRoleAction(formData: FormData) {
   const token = await staffToken();
   const personId = String(formData.get("personId") ?? "");
   const role = String(formData.get("role") ?? "");
-  if (!isRole(role)) redirect("/people?error=1");
+  const next = formData.get("next") === "/security" ? "/security" : "/people";
+  if (!isRole(role)) redirect(`${next}?error=1`);
   try {
     await withStore((store) => store.changeRole(token, { personId, role }));
   } catch (error) {
-    fail("/people", error);
+    fail(next, error);
   }
-  redirect("/people?saved=1");
+  redirect(`${next}?saved=1`);
 }
 
 export async function confirmTotpAction(formData: FormData) {
@@ -221,6 +222,23 @@ export async function confirmTotpAction(formData: FormData) {
     fail("/enroll", error);
   }
   redirect("/overview");
+}
+
+export async function issueInviteAction(formData: FormData) {
+  const token = await staffToken();
+  const email = String(formData.get("email") ?? "");
+  let invite: { inviteToken: string; expires: number };
+  try {
+    invite = await withStore((store) => store.issueInvite(token, email));
+  } catch (error) {
+    fail("/security", error);
+  }
+  const params = new URLSearchParams({
+    added: invite.inviteToken,
+    name: email,
+    expires: String(invite.expires),
+  });
+  redirect(`/security?${params.toString()}`);
 }
 
 export async function featureMessageAction(formData: FormData) {
