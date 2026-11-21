@@ -3070,8 +3070,10 @@ export class ChurchStore {
     const person = this.carePerson(actor, personId, "view_people");
     const profile = this.careProfile(person);
     this.record(actor, "read", "person_care", person.id, 2);
+    // Newest first. Reversing before the stable sort keeps same-millisecond touches newest-first too.
     const touches = this.touches
       .filter((row) => row.personId === person.id)
+      .reverse()
       .sort((left, right) => right.at - left.at)
       .slice(0, 100)
       .map((row) => ({

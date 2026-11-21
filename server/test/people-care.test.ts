@@ -122,8 +122,10 @@ test("search, stage, tag and quiet filters, with paging", () => {
 });
 
 test("logging touches: timeline, encrypted note, last contact, do-not-contact", () => {
-  const store = new ChurchStore(loadConfig({}));
-  const eden = signIn(store, "eden@sample.onehope");
+  let clock = Date.now();
+  // Each read of the clock moves a second so touches never share a timestamp.
+  const store = new ChurchStore(loadConfig({}), { now: () => (clock += 1000) });
+  const eden = signIn(store, "eden@sample.onehope", clock);
   const before = store.personCare(eden, "person-casey");
   assert.equal(before.lastContactAt, null);
   assert.equal(before.stage, defaultStage("member", true));
@@ -171,7 +173,7 @@ test("logging touches: timeline, encrypted note, last contact, do-not-contact", 
   store.logTouch(eden, "person-casey", { kind: "note", outcome: "reached", note: "Respecting their ask." });
 
   // A team leader cannot lift it; care team can.
-  const gray = signIn(store, "gray@sample.onehope");
+  const gray = signIn(store, "gray@sample.onehope", clock);
   assert.throws(() => store.allowContactAgain(gray, "person-blake"), isCode("forbidden"));
   store.allowContactAgain(eden, "person-casey");
   assert.equal(store.personCare(eden, "person-casey").doNotContact, false);
