@@ -105,3 +105,49 @@ test("sign-in and member pages render when a church photo is configured", async 
   const member = await page.goto("/member");
   expect(member?.status()).toBe(200);
 });
+
+test("People: find someone, log a touch, tag them and set their stage", async ({ page }) => {
+  mkdirSync(shots, { recursive: true });
+  await page.goto("/login");
+  await page.getByRole("button", { name: /sample pastor/i }).click();
+  await expect(page.getByRole("heading", { name: "Sunday at 10:30", level: 1 })).toBeVisible();
+
+  await page.goto("/people");
+  await expect(page.getByRole("heading", { name: "Everyone", level: 2 })).toBeVisible();
+  await page.getByRole("searchbox").or(page.getByLabel("Search")).first().fill("casey");
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(page).toHaveURL(/q=casey/);
+  const table = page.getByRole("table", { name: "People" });
+  await expect(table.getByRole("link", { name: "Casey Sample" })).toBeVisible();
+  await expect(table.getByRole("link", { name: "Avery Sample" })).toHaveCount(0);
+  await page.screenshot({ path: `${shots}/people-search.png`, fullPage: true });
+
+  await table.getByRole("link", { name: "Casey Sample" }).click();
+  await expect(page.getByRole("heading", { name: "Casey Sample", level: 1 })).toBeVisible();
+  await expect(page.getByText("No touches yet.")).toBeVisible();
+
+  await page.getByLabel("Called").check();
+  await page.getByLabel("How did it go?").selectOption("prayed");
+  await page.getByLabel("Note (optional)").fill("Prayed for the new job.");
+  await page.getByRole("button", { name: "Log it" }).click();
+  await expect(page.getByText("Logged. It is on their timeline now.")).toBeVisible();
+  const timeline = page.getByRole("list", { name: "Timeline" });
+  await expect(timeline).toContainText("Called");
+  await expect(timeline).toContainText("Prayed together");
+  await expect(timeline).toContainText("Prayed for the new job.");
+
+  await page.getByLabel("Add a tag").selectOption({ label: "Greeters (sample)" });
+  await page.getByRole("button", { name: "Add tag" }).click();
+  await expect(page.getByRole("list", { name: "Tags for Casey Sample" })).toContainText("Greeters (sample)");
+
+  await page.getByLabel("Where are they on the path?").selectOption("returning");
+  await page.getByRole("button", { name: "Save stage" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await expect(page.getByText(/Coming back · Last contact/)).toBeVisible();
+  await page.screenshot({ path: `${shots}/person-page.png`, fullPage: true });
+
+  await page.getByRole("link", { name: "← All people" }).click();
+  await page.getByLabel("Stage").selectOption("returning");
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(page.getByRole("table", { name: "People" }).getByRole("link", { name: "Casey Sample" })).toBeVisible();
+});

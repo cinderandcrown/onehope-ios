@@ -5,6 +5,20 @@ export { loadSermons } from "./adapters";
 export { cachedSermons, clearSermonCache, pageOf } from "./http-cache";
 export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
 export { loadConfig, resolveEnvMode } from "./config";
+export {
+  OUTCOME_LABELS,
+  QUIET_AFTER_DAYS,
+  STAGE_LABELS,
+  STAGES,
+  TAG_KINDS,
+  TOUCH_KINDS,
+  TOUCH_LABELS,
+  TOUCH_OUTCOMES,
+  type Stage,
+  type TagKind,
+  type TouchKind,
+  type TouchOutcome,
+} from "./people-care";
 export { churchImages, churchMedia, loadMedia, httpsURL, type ChurchImages, type ChurchMedia } from "./media";
 export * from "./contracts";
 export * from "./domain";

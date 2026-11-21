@@ -37,6 +37,9 @@ export const ACTIONS = [
   "assign_team_roles",
   "propose_master_admin",
   "view_audit_log",
+  "view_people",
+  "edit_people",
+  "manage_tags",
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -57,13 +60,22 @@ export function actionsFor(role: Role): readonly Action[] {
     case "volunteer":
       return MEMBER_ACTIONS;
     case "team_leader":
-      return [...MEMBER_ACTIONS, "manage_serving"];
+      // People on teams they lead, plus people they added.
+      return [...MEMBER_ACTIONS, "manage_serving", "view_people", "edit_people"];
     case "kids_director":
-      return [...MEMBER_ACTIONS, "manage_checkin", "view_kids_medical", "view_background_checks"];
+      // Kids households and the kids team only.
+      return [
+        ...MEMBER_ACTIONS,
+        "manage_checkin",
+        "view_kids_medical",
+        "view_background_checks",
+        "view_people",
+        "edit_people",
+      ];
     case "finance":
       return [...MEMBER_ACTIONS, "view_all_giving", "approve_expenses"];
     case "care_team":
-      return [...MEMBER_ACTIONS, "view_care_notes", "share_care_note"];
+      return [...MEMBER_ACTIONS, "view_care_notes", "share_care_note", "view_people", "edit_people", "manage_tags"];
     case "pastor":
       return [
         ...MEMBER_ACTIONS,
@@ -79,6 +91,9 @@ export function actionsFor(role: Role): readonly Action[] {
         "approve_expenses",
         "assign_team_roles",
         "view_audit_log",
+        "view_people",
+        "edit_people",
+        "manage_tags",
       ];
     case "master_admin":
       return ACTIONS;

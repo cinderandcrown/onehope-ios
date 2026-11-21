@@ -38,6 +38,7 @@ test("migrations apply once and Postgres RLS isolates households", async () => {
     "0004_tenancy",
     "0005_tenant_passwords",
     "0006_staff_desk",
+    "0007_people_care",
   ]);
   assert.deepEqual(second, []);
 
