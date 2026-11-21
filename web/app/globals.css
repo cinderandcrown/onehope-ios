@@ -758,6 +758,17 @@ pre {
   padding: 0.8rem 1rem;
   max-width: 16rem;
 }
+.qr svg {
+  width: 220px;
+  height: 220px;
+  background: #fff;
+  border-radius: 12px;
+}
+.setup-key {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
 .nametag .code {
   font-size: 2rem;
   font-weight: 700;

@@ -59,6 +59,26 @@
         }
       }
     },
+    "/api/auth/totp/start": {
+      "post": {
+        "operationId": "post__api_auth_totp_start",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/auth/totp/confirm": {
+      "post": {
+        "operationId": "post__api_auth_totp_confirm",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
     "/api/auth/mfa": {
       "post": {
         "operationId": "post__api_auth_mfa",

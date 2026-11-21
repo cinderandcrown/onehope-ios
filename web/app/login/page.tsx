@@ -27,7 +27,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             </button>
           </form>
         ) : null}
-        <p className="muted">Staff sign in with email, password, and an authentication code.</p>
+        <p className="muted">
+          Staff sign in with email, password, and an authentication code. The first time, leave the code
+          blank and we'll show a setup key.
+        </p>
         <p className="muted">
           <Link href="/member">Open the member app</Link>. It can be added to a phone home screen.
         </p>

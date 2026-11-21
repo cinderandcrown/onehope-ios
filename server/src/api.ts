@@ -58,6 +58,8 @@ export const API_ROUTES = [
   ["POST", "/api/auth/claim"],
   ["POST", "/api/security/invites"],
   ["POST", "/api/auth/mfa"],
+  ["POST", "/api/auth/totp/start"],
+  ["POST", "/api/auth/totp/confirm"],
   ["POST", "/api/auth/step-up"],
   ["POST", "/api/auth/logout"],
   ["POST", "/api/auth/sample-staff"],
@@ -291,6 +293,9 @@ async function route(
   }
   if (method === "POST" && path === "/api/auth/mfa")
     return store.verifyMfa(need(), parse(codeBodySchema, body).code);
+  if (method === "POST" && path === "/api/auth/totp/start") return store.beginTotp(need());
+  if (method === "POST" && path === "/api/auth/totp/confirm")
+    return store.confirmTotp(need(), parse(codeBodySchema, body).code);
   if (method === "POST" && path === "/api/auth/step-up")
     return store.stepUp(need(), parse(stepUpBodySchema, body));
   if (method === "POST" && path === "/api/auth/logout") {

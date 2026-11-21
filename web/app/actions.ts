@@ -38,16 +38,20 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const code = String(formData.get("code") ?? "");
   try {
-    const token = await withStore((store) => {
+    const next = await withStore((store) => {
       const session = store.login({ email, password, ip: "command-center", userAgent: "staff-form" });
+      if (session.mfaRequired && store.totpStatus(session.token) === "enroll") {
+        return { token: session.token, enroll: true as const };
+      }
       if (session.mfaRequired) {
         if (!/^\d{6}$/.test(code)) throw new AccessError("mfa_required", "Enter the 6-digit code.");
         store.verifyMfa(session.token, code);
         store.stepUp(session.token, { code });
       }
-      return session.token;
+      return { token: session.token, enroll: false as const };
     });
-    await setSession(token);
+    await setSession(next.token);
+    if (next.enroll) redirect("/enroll");
   } catch (error) {
     if (error instanceof AccessError) redirect("/login?error=1");
     throw error;
@@ -123,12 +127,19 @@ export async function addPersonAction(formData: FormData) {
   const displayName = String(formData.get("displayName") ?? "");
   const email = String(formData.get("email") ?? "");
   const phone = String(formData.get("phone") ?? "");
+  let person: { id: string; displayName: string; inviteToken: string; expires: number };
   try {
-    const person = await withStore((store) => store.addPerson(token, { displayName, email, phone }));
-    redirect(`/people?added=${encodeURIComponent(person.inviteToken)}`);
+    person = await withStore((store) => store.addPerson(token, { displayName, email, phone }));
   } catch {
     redirect("/people?error=1");
   }
+  const params = new URLSearchParams({
+    added: person.inviteToken,
+    id: person.id,
+    expires: String(person.expires),
+    name: person.displayName,
+  });
+  redirect(`/people?${params.toString()}`);
 }
 
 export async function editPersonAction(formData: FormData) {

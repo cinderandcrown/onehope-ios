@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomInt } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
 
 import {
   CHURCH_EVENTS,
@@ -37,6 +37,8 @@ import {
   type Role,
   AccessError,
   CHURCH,
+  allows,
+  labelRole,
   MODULES,
   RETENTION_YEARS,
   SAMPLE_FUNNEL,
@@ -87,7 +89,7 @@ import {
   verifySquareSignature,
 } from "./square";
 import { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "./sample-accounts";
-import { decodeBase32, totpCode, totpMatches } from "./totp";
+import { decodeBase32, encodeBase32, totpCode, totpMatches } from "./totp";
 
 type GiftRow = {
   id: string;
@@ -131,6 +133,8 @@ type Session = {
   ip: string;
   userAgent: string;
   sample: boolean;
+  /** Base32 secret while a staff member is setting up an authenticator. Never logged. */
+  pendingTotp?: string | null;
 };
 
 type AuditEntry = {
@@ -680,6 +684,42 @@ export class ChurchStore {
       throw new AccessError("unauthenticated", "That authentication code is wrong.");
     }
     session.mfaVerified = true;
+    session.lastActivity = this.now();
+    return { mfaVerified: true as const };
+  }
+
+  /** Staff with no authenticator yet need the setup screen before a code will work. */
+  totpStatus(token: string): "enroll" | "code" {
+    const session = this.session(token);
+    const person = this.requirePerson(session.personId);
+    if (!isStaff(person.role) || person.totpSecret) return "code";
+    return "enroll";
+  }
+
+  beginTotp(token: string) {
+    const session = this.session(token);
+    const person = this.requirePerson(session.personId);
+    if (!isStaff(person.role)) throw new AccessError("forbidden", "Members sign in with a password.");
+    if (person.totpSecret) throw new AccessError("invalid", "An authenticator is already set up.");
+    if (!session.pendingTotp) session.pendingTotp = encodeBase32(randomBytes(20));
+    const setupKey = session.pendingTotp;
+    const otpauthUrl = `otpauth://totp/One%20Hope:${encodeURIComponent(person.email)}?secret=${setupKey}&issuer=One%20Hope&algorithm=SHA1&digits=6&period=30`;
+    return { setupKey, otpauthUrl };
+  }
+
+  confirmTotp(token: string, code: string) {
+    const session = this.session(token);
+    const person = this.requirePerson(session.personId);
+    if (!isStaff(person.role)) throw new AccessError("forbidden", "Members sign in with a password.");
+    if (!session.pendingTotp) throw new AccessError("invalid", "Start authenticator setup again.");
+    const secret = decodeBase32(session.pendingTotp);
+    if (!totpMatches(secret, code, this.now())) {
+      throw new AccessError("unauthenticated", "That code didn't match. Check the time and try again.");
+    }
+    person.totpSecret = secret;
+    session.pendingTotp = null;
+    session.mfaVerified = true;
+    session.stepUpUntil = this.now() + this.config.stepUpMs;
     session.lastActivity = this.now();
     return { mfaVerified: true as const };
   }
@@ -1801,6 +1841,8 @@ export class ChurchStore {
         email: person.email,
         phone: person.phone,
         role: person.role,
+        claimed: Boolean(person.passwordHash),
+        sample: person.sample,
       }));
   }
 
@@ -1825,14 +1867,16 @@ export class ChurchStore {
     if (input.phone?.trim()) person.phone = input.phone.trim();
     this.people.set(person.id, person);
     this.ensurePathway(person.id);
+    const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
-    this.invites.set(hashInvite(inviteToken), { email, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
+    this.invites.set(hashInvite(inviteToken), { email, expires });
     this.record(actor, "write", "person", person.id, 1);
     return {
       id: person.id,
       displayName,
       email,
       inviteToken,
+      expires,
       note: "Read this code to them in person. Nothing was emailed.",
     };
   }
@@ -2076,6 +2120,26 @@ export class ChurchStore {
     this.flags[moduleId] = enabled;
     this.record(actor, "write", "module", moduleId, 2);
     return { id: moduleId, enabled };
+  }
+
+  assignableRoles(token: string) {
+    const actor = this.actor(token);
+    const roles = [
+      "pastor",
+      "care_team",
+      "finance",
+      "kids_director",
+      "team_leader",
+      "volunteer",
+      "member",
+    ] as const;
+    return roles
+      .filter((role) => {
+        const staffMove =
+          role === "pastor" || role === "care_team" || role === "finance" || role === "kids_director";
+        return allows(actor.role, staffMove ? "grant_staff_roles" : "assign_team_roles");
+      })
+      .map((role) => ({ id: role, label: labelRole(role) }));
   }
 
   changeRole(token: string, input: RoleChangeBody) {

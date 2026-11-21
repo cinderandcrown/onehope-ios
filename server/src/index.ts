@@ -43,7 +43,8 @@ export { exportTenant, restoreTenant } from "./tenant-bundle";
 export { resolveTenant, tenantProfile } from "./tenancy";
 export { withServiceRole } from "./service-role";
 export { memorySyncStore, runSync } from "./sync";
-export { totpCode, decodeBase32 } from "./totp";
+export { totpCode, decodeBase32, encodeBase32 } from "./totp";
+export { qrSvg } from "./qr-svg";
 export {
   ANNOUNCEMENT_TEMPLATES,
   announcementIsLive,

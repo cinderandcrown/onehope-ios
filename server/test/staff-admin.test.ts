@@ -419,6 +419,78 @@ test("the kids desk clocks adults in, filters rooms, shows a code, and honors pi
   assert.equal(label.socketOpened, false);
 });
 
+test("an invite can be claimed, undone while unclaimed, and a new staff member enrolls TOTP", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const guest = member(store);
+  assert.throws(
+    () => store.changeRole(guest, { personId: "person-harper", role: "team_leader" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  const added = store.addPerson(lead, {
+    displayName: "Sam Neighbor",
+    email: "sam.neighbor@example.com",
+  });
+  assert.ok(added.inviteToken.length >= 8);
+  assert.ok(added.expires > Date.now());
+  assert.equal(store.staffPeople(lead).find((person) => person.id === added.id)?.claimed, false);
+  const handle = createApi({ store });
+  const claimed = await handle(
+    new Request("http://localhost/api/auth/claim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "sam.neighbor@example.com",
+        inviteToken: added.inviteToken,
+        password: "gathering-password",
+      }),
+    }),
+  );
+  assert.equal(claimed.status, 200);
+  assert.throws(
+    () => store.undoAddPerson(lead, added.id),
+    (error: AccessError) => error.code === "invalid",
+  );
+  store.changeRole(lead, { personId: added.id, role: "team_leader" });
+  assert.throws(
+    () => store.changeRole(lead, { personId: added.id, role: "finance" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+
+  const fresh = store.addPerson(lead, {
+    displayName: "Pat Leader",
+    email: "pat.leader@example.com",
+  });
+  assert.equal(store.undoAddPerson(lead, fresh.id).removed, true);
+  const leader = store.login({
+    email: "sam.neighbor@example.com",
+    password: "gathering-password",
+    ip: "203.0.113.20",
+    userAgent: "phone",
+  });
+  assert.equal(store.totpStatus(leader.token), "enroll");
+  const started = await handle(
+    new Request("http://localhost/api/auth/totp/start", {
+      method: "POST",
+      headers: { authorization: `Bearer ${leader.token}` },
+    }),
+  );
+  assert.equal(started.status, 200);
+  const setup = (await started.json()) as { setupKey: string; otpauthUrl: string };
+  assert.match(setup.otpauthUrl, /^otpauth:\/\/totp\//);
+  assert.equal(setup.setupKey.includes(" "), false);
+  const confirmed = await handle(
+    new Request("http://localhost/api/auth/totp/confirm", {
+      method: "POST",
+      headers: { authorization: `Bearer ${leader.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ code: totpCode(decodeBase32(setup.setupKey), Date.now()) }),
+    }),
+  );
+  assert.equal(confirmed.status, 200);
+  assert.equal(store.me(leader.token).displayName, "Sam Neighbor");
+  assert.equal(JSON.stringify(store.audit(lead)).includes(setup.setupKey), false);
+});
+
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {
   const config = loadConfig({});
   const store = new ChurchStore(config, {

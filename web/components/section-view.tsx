@@ -3,10 +3,9 @@ import { AnnouncementsDesk } from "@/components/staff/announcements";
 import { CareDesk } from "@/components/staff/care";
 import { CheckInDesk } from "@/components/staff/checkin";
 import { EventsDesk } from "@/components/staff/events";
+import { PeopleDesk } from "@/components/staff/people";
 
 import {
-  addPersonAction,
-  editPersonAction,
   createGroupAction,
   savePush,
   saveSocialAction,
@@ -162,62 +161,8 @@ function renderSection(
         </>
       );
     }
-    case "people": {
-      const people = store.directory(token);
-      return (
-        <section>
-          <h1>People</h1>
-          <p className="help">
-            How do I add someone? Type their name and email. You will get a code to read to them. Nothing is
-            emailed.
-          </p>
-          <form className="form" action={addPersonAction}>
-            <input name="displayName" placeholder="Name" required />
-            <input name="email" type="email" placeholder="Email" required />
-            <input name="phone" placeholder="Phone (optional)" />
-            <button className="button" type="submit">
-              Add someone
-            </button>
-          </form>
-          {store.staffPeople(token).map((person) => (
-            <form className="form" action={editPersonAction} key={person.id}>
-              <input type="hidden" name="id" value={person.id} />
-              <input
-                name="displayName"
-                defaultValue={person.displayName}
-                aria-label={`Name for ${person.displayName}`}
-              />
-              <input
-                name="phone"
-                defaultValue={person.phone}
-                aria-label={`Phone for ${person.displayName}`}
-              />
-              <button className="button" type="submit">
-                Save {person.displayName}
-              </button>
-            </form>
-          ))}
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-              </tr>
-            </thead>
-            <tbody>
-              {people.map((person) => (
-                <tr key={person.id}>
-                  <td>{person.displayName}</td>
-                  <td>{person.email || "Hidden"}</td>
-                  <td>{person.phone || "Hidden"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      );
-    }
+    case "people":
+      return <PeopleDesk store={store} token={token} query={query} />;
     case "discipleship": {
       const ministry = store.ministry(token);
       const rows = ministry.pathwayRoster.length > 0 ? ministry.pathwayRoster : [ministry.pathways];

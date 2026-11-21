@@ -2,7 +2,9 @@
 
 import {
   AccessError,
+  ROLES,
   announcementTemplate,
+  type Role,
   eventTemplate,
   nextChurchMoment,
   parseChicagoLocal,
@@ -180,6 +182,45 @@ export async function cancelServeAction(formData: FormData) {
     fail("/events", error);
   }
   redirect("/events?saved=1");
+}
+
+export async function undoPersonAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  try {
+    await withStore((store) => store.undoAddPerson(token, id));
+  } catch (error) {
+    fail("/people", error);
+  }
+  redirect("/people?saved=1");
+}
+
+function isRole(value: string): value is Role {
+  return (ROLES as readonly string[]).includes(value);
+}
+
+export async function changeRoleAction(formData: FormData) {
+  const token = await staffToken();
+  const personId = String(formData.get("personId") ?? "");
+  const role = String(formData.get("role") ?? "");
+  if (!isRole(role)) redirect("/people?error=1");
+  try {
+    await withStore((store) => store.changeRole(token, { personId, role }));
+  } catch (error) {
+    fail("/people", error);
+  }
+  redirect("/people?saved=1");
+}
+
+export async function confirmTotpAction(formData: FormData) {
+  const token = await staffToken();
+  const code = String(formData.get("code") ?? "");
+  try {
+    await withStore((store) => store.confirmTotp(token, code));
+  } catch (error) {
+    fail("/enroll", error);
+  }
+  redirect("/overview");
 }
 
 export async function clockInAction() {
