@@ -52,11 +52,34 @@ final class AccessibilityUITests: XCTestCase {
     }
 
     private func audit(_ app: XCUIApplication, screen: String, types: XCUIAccessibilityAuditType) throws {
+        do {
+            try runAudit(app, screen: screen, types: types)
+        } catch {
+            guard auditTimedOut(error) else { throw error }
+            findings.append("[\(screen)] audit timed out and was retried")
+            do {
+                try runAudit(app, screen: screen, types: types)
+            } catch {
+                guard auditTimedOut(error) else { throw error }
+                findings.append("[\(screen)] audit timed out")
+                if ProcessInfo.processInfo.environment["ONEHOPE_A11Y_STRICT"] == "1" {
+                    throw error
+                }
+            }
+        }
+    }
+
+    private func runAudit(_ app: XCUIApplication, screen: String, types: XCUIAccessibilityAuditType) throws {
         try app.performAccessibilityAudit(for: types) { [self] issue in
             let element = issue.element.map { "\($0.elementType.rawValue) \"\($0.label)\" id=\($0.identifier)" } ?? "no element"
             findings.append("[\(screen)] \(issue.compactDescription) | \(element)")
             return ProcessInfo.processInfo.environment["ONEHOPE_A11Y_STRICT"] == nil
         }
+    }
+
+    private func auditTimedOut(_ error: Error) -> Bool {
+        let message = String(describing: error)
+        return message.contains("failed to complete in time") || (error as NSError).code == -56
     }
 
     private func marked(_ identifier: String, app: XCUIApplication) -> XCUIElement {
