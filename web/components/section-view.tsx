@@ -1,4 +1,5 @@
 import { ChurchImage } from "@/components/church-image";
+import { AnnouncementsDesk } from "@/components/staff/announcements";
 
 import {
   addPersonAction,
@@ -73,11 +74,24 @@ function giftsOf(store: ChurchStore, token: string) {
   }
 }
 
-export async function SectionView({ section, token }: { section: SectionId; token: string }) {
-  return withStore((store) => renderSection(store, section, token));
+export async function SectionView({
+  section,
+  token,
+  query,
+}: {
+  section: SectionId;
+  token: string;
+  query: Record<string, string | string[] | undefined>;
+}) {
+  return withStore((store) => renderSection(store, section, token, query));
 }
 
-function renderSection(store: ChurchStore, section: SectionId, token: string) {
+function renderSection(
+  store: ChurchStore,
+  section: SectionId,
+  token: string,
+  query: Record<string, string | string[] | undefined>,
+) {
   switch (section) {
     case "overview": {
       const home = store.publicHome();
@@ -506,14 +520,16 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
     }
     case "communications":
       return (
-        <section>
-          <h1>Communications</h1>
-          <p>Email and SMS adapters exist. This build does not call them.</p>
+        <>
+          <AnnouncementsDesk store={store} token={token} query={query} />
           <article className="panel">
-            <h2>Sent</h2>
-            <p>No messages have been sent.</p>
+            <h2>Email and text</h2>
+            <p>
+              This screen does not email or text anyone. Home cards are the note people see when they open
+              the app.
+            </p>
           </article>
-        </section>
+        </>
       );
     case "push":
       return (

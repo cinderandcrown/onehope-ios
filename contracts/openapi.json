@@ -1517,6 +1517,36 @@
         }
       }
     },
+    "/api/announcements/{id}": {
+      "post": {
+        "operationId": "post__api_announcements_id",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/announcements/{id}/archive": {
+      "post": {
+        "operationId": "post__api_announcements_id_archive",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/staff/announcements": {
+      "get": {
+        "operationId": "get__api_staff_announcements",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
     "/api/staff/groups/{id}": {
       "get": {
         "operationId": "get__api_staff_groups_id",

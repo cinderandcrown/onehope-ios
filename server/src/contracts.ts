@@ -44,6 +44,14 @@ export const announcementBodySchema = z
   .object({
     title: z.string().trim().min(1).max(80),
     body: z.string().trim().min(1).max(500),
+    startsAt: z.number().int().nullable().optional(),
+    endsAt: z.number().int().nullable().optional(),
+  })
+  .strict();
+
+export const archiveBodySchema = z
+  .object({
+    archived: z.boolean(),
   })
   .strict();
 

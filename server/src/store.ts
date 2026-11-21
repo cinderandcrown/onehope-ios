@@ -56,6 +56,11 @@ import {
 } from "./domain";
 import { coffeeGuide } from "./coffee";
 import {
+  announcementIsLive,
+  type AnnouncementCard,
+  windowError,
+} from "./staff-desk";
+import {
   DEFAULT_PATHWAY,
   FOLLOW_UP_LABELS,
   FOLLOW_UP_PATHWAY,
@@ -263,7 +268,7 @@ export type StoreDocument = {
   messages: { id: string; groupId: string; authorId: string; body: string; sample: boolean }[];
   events: EventRow[];
   registrations: { id: string; eventId: string; personId: string; status: "registered" | "waitlist" }[];
-  announcements: { id: string; title: string; body: string; sample: boolean }[];
+  announcements: AnnouncementCard[];
   prayers: PrayerRow[];
   notes: {
     id: string;
@@ -375,7 +380,7 @@ export class ChurchStore {
     personId: string;
     status: "registered" | "waitlist";
   }[];
-  private readonly announcements: { id: string; title: string; body: string; sample: boolean }[];
+  private readonly announcements: AnnouncementCard[];
   private readonly prayers: PrayerRow[];
   private readonly notes: {
     id: string;
@@ -745,7 +750,9 @@ export class ChurchStore {
       invite: { ...INVITE, url: inviteUrl(this.config.publicBaseUrl) },
       social: this.socialLinks(),
       countdown: { preService: when.preService.toISOString(), service: when.service.toISOString() },
-      announcements: this.announcements.map((item) => ({ ...item })),
+      announcements: this.announcements
+        .filter((item) => announcementIsLive(item, this.now()))
+        .map((item) => ({ ...item })),
       events: this.upcomingEvents().map((event) => this.eventView(event)),
       sampleSermon: {
         sample: false as const,
@@ -851,12 +858,59 @@ export class ChurchStore {
     return this.releaseChild(actor, child, input.code, actor.personId);
   }
 
-  createAnnouncement(token: string, input: { title: string; body: string }) {
+  createAnnouncement(
+    token: string,
+    input: { title: string; body: string; startsAt?: number | null; endsAt?: number | null },
+  ) {
     const actor = this.requireEditor(token);
-    const item = { id: newId("ann"), title: input.title.trim(), body: input.body.trim(), sample: false };
+    const item = this.announcementFrom(input);
     this.announcements.push(item);
     this.record(actor, "write", "announcement", item.id, 0);
-    return item;
+    return { ...item };
+  }
+
+  updateAnnouncement(
+    token: string,
+    id: string,
+    input: { title: string; body: string; startsAt?: number | null; endsAt?: number | null },
+  ) {
+    const actor = this.requireEditor(token);
+    const current = this.announcements.find((item) => item.id === id);
+    if (!current) throw new AccessError("not_found", "That home card isn't here.");
+    const next = this.announcementFrom(input, id);
+    current.title = next.title;
+    current.body = next.body;
+    current.startsAt = next.startsAt;
+    current.endsAt = next.endsAt;
+    current.staffEdited = true;
+    this.record(actor, "write", "announcement", current.id, 0);
+    return { ...current };
+  }
+
+  archiveAnnouncement(token: string, id: string, archived: boolean) {
+    const actor = this.requireEditor(token);
+    const current = this.announcements.find((item) => item.id === id);
+    if (!current) throw new AccessError("not_found", "That home card isn't here.");
+    current.archived = archived;
+    current.staffEdited = true;
+    this.record(actor, "write", "announcement", current.id, 0);
+    return { id: current.id, archived: current.archived === true };
+  }
+
+  staffAnnouncements(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "announcement", "list", 0);
+    return this.announcements.map((item) => ({
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      sample: item.sample,
+      startsAt: item.startsAt ?? null,
+      endsAt: item.endsAt ?? null,
+      archived: item.archived === true,
+      staffEdited: item.staffEdited === true,
+      live: announcementIsLive(item, this.now()),
+    }));
   }
 
   createEvent(token: string, input: { title: string; location: string; start: number; end: number }) {
@@ -2675,6 +2729,36 @@ export class ChurchStore {
     return { allowed: verdict.allowed, reason: verdict.reason };
   }
 
+  private announcementFrom(
+    input: { title: string; body: string; startsAt?: number | null; endsAt?: number | null },
+    id = newId("ann"),
+  ): AnnouncementCard {
+    const title = input.title.trim();
+    const body = input.body.trim();
+    if (!title || !body) throw new AccessError("invalid", "Add a title and a short note.");
+    if (title.length > 80 || body.length > 500) throw new AccessError("invalid", "Please shorten that card.");
+    const startsAt = input.startsAt ?? null;
+    const endsAt = input.endsAt ?? null;
+    const problem = windowError(startsAt, endsAt);
+    if (problem) throw new AccessError("invalid", problem);
+    return {
+      id,
+      title,
+      body,
+      sample: false,
+      startsAt,
+      endsAt,
+      archived: false,
+      staffEdited: true,
+    };
+  }
+
+  /** Built-in Home cards are added once. An existing row, edited or not, is left alone. */
+  private placeDefaultAnnouncement(row: AnnouncementCard) {
+    if (this.announcements.some((item) => item.id === row.id)) return;
+    this.announcements.push(row);
+  }
+
   private requireEditor(token: string): Actor {
     const actor = this.actor(token);
     if (actor.role !== "master_admin" && actor.role !== "pastor" && actor.role !== "team_leader") {
@@ -2789,17 +2873,27 @@ export class ChurchStore {
       if (index === -1) rows.push(row);
       else rows[index] = row;
     };
-    upsert(this.announcements, {
+    // Insert the built-in cards only when the church does not already have them.
+    // A saved edit, archive, or schedule must survive the next boot.
+    this.placeDefaultAnnouncement({
       id: "ann-sunday",
       title: "Sunday gathering",
       body: "10:30 a.m. Come early for donuts and coffee.",
       sample: false,
+      startsAt: null,
+      endsAt: null,
+      archived: false,
+      staffEdited: false,
     });
-    upsert(this.announcements, {
+    this.placeDefaultAnnouncement({
       id: "ann-kids",
       title: "One Hope Kids",
       body: "Kids ministry is open during the Sunday gathering, from 3 months through 5th grade.",
       sample: false,
+      startsAt: null,
+      endsAt: null,
+      archived: false,
+      staffEdited: false,
     });
     const sunday = this.events.find((event) => event.id === "event-sunday");
     if (!sunday || sunday.end < this.now()) {

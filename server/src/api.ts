@@ -11,6 +11,7 @@ import {
   healthSchema,
   integrationBodySchema,
   announcementBodySchema,
+  archiveBodySchema,
   claimBodySchema,
   inviteBodySchema,
   checkInBodySchema,
@@ -88,6 +89,9 @@ export const API_ROUTES = [
   ["POST", "/api/kids/household-pickup"],
   ["POST", "/api/household/children"],
   ["POST", "/api/announcements"],
+  ["POST", "/api/announcements/{id}"],
+  ["POST", "/api/announcements/{id}/archive"],
+  ["GET", "/api/staff/announcements"],
   ["POST", "/api/events"],
   ["POST", "/api/groups"],
   ["GET", "/api/giving/quickbooks"],
@@ -362,6 +366,27 @@ async function route(
     return { child: store.addChild(need(), parse(childBodySchema, body)) };
   if (method === "POST" && path === "/api/announcements")
     return { announcement: store.createAnnouncement(need(), parse(announcementBodySchema, body)) };
+  const archiveAnnouncement = path.match(/^\/api\/announcements\/([^/]+)\/archive$/);
+  if (method === "POST" && archiveAnnouncement?.[1]) {
+    return store.archiveAnnouncement(
+      need(),
+      decodeURIComponent(archiveAnnouncement[1]),
+      parse(archiveBodySchema, body).archived,
+    );
+  }
+  const editAnnouncement = path.match(/^\/api\/announcements\/([^/]+)$/);
+  if (method === "POST" && editAnnouncement?.[1]) {
+    return {
+      announcement: store.updateAnnouncement(
+        need(),
+        decodeURIComponent(editAnnouncement[1]),
+        parse(announcementBodySchema, body),
+      ),
+    };
+  }
+  if (method === "GET" && path === "/api/staff/announcements") {
+    return { announcements: store.staffAnnouncements(need()) };
+  }
   if (method === "GET" && path === "/api/events/mine") return { events: store.listEvents(need()) };
   if (method === "POST" && path === "/api/events")
     return { event: store.createEvent(need(), parse(eventBodySchema, body)) };

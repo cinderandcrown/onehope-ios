@@ -44,6 +44,14 @@ export { resolveTenant, tenantProfile } from "./tenancy";
 export { withServiceRole } from "./service-role";
 export { memorySyncStore, runSync } from "./sync";
 export { totpCode, decodeBase32 } from "./totp";
+export {
+  ANNOUNCEMENT_TEMPLATES,
+  announcementIsLive,
+  announcementTemplate,
+  chicagoInputValue,
+  formatChicago,
+  parseChicagoLocal,
+} from "./staff-desk";
 export { VERSION } from "./version";
 
 const globalStore = globalThis as typeof globalThis & { __onehope?: ChurchStore };
