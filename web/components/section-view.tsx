@@ -15,6 +15,7 @@ import {
   createGroupAction,
   saveSocialAction,
 } from "@/app/actions";
+import { withChurch } from "@/lib/church";
 import type { SectionId } from "@/lib/i18n";
 import { redirect } from "next/navigation";
 import {
@@ -23,7 +24,6 @@ import {
   isAccessError,
   loadConfig,
   loadSermons,
-  withStore,
   type ChurchStore,
   type YoutubeVideo,
 } from "@onehope/server";
@@ -97,7 +97,7 @@ export async function SectionView({
         )
       : [];
   try {
-    return await withStore((store) => renderSection(store, section, token, query, sermons), { token });
+    return await withChurch((store) => renderSection(store, section, token, query, sermons), { token });
   } catch (error) {
     if (isAccessError(error)) redirect("/login");
     throw error;

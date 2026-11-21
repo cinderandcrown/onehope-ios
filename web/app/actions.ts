@@ -9,16 +9,16 @@ import {
   publicBaseUrl,
   pushTemplate,
   type FollowUpStatus,
-  withStore,
 } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { withChurch } from "@/lib/church";
 import { setFlash } from "@/lib/flash";
 import { rememberIssued } from "@/lib/issued-code";
 
 function desk<T>(token: string, fn: (store: ChurchStore) => Promise<T> | T) {
-  return withStore(fn, { token });
+  return withChurch(fn, { token });
 }
 
 import { isLanguage } from "@/lib/i18n";
@@ -48,7 +48,7 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const code = String(formData.get("code") ?? "");
   try {
-    const next = await withStore((store) => {
+    const next = await withChurch((store) => {
       const session = store.login({ email, password, ip: "command-center", userAgent: "staff-form" });
       if (session.mfaRequired && store.totpStatus(session.token) === "enroll") {
         return { token: session.token, enroll: true as const };
@@ -191,7 +191,7 @@ export async function moderatePrayerAction(formData: FormData) {
 export async function neighborhoodPrayerAction(formData: FormData) {
   const body = String(formData.get("body") ?? "");
   try {
-    await withStore((store) => store.submitNeighborhoodPrayer(body, "web-neighborhood"));
+    await withChurch((store) => store.submitNeighborhoodPrayer(body, "web-neighborhood"));
   } catch {
     redirect("/neighborhood?error=1");
   }

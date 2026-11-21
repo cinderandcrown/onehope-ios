@@ -1,11 +1,11 @@
 import { neighborhoodPrayerAction } from "@/app/actions";
-import { withStore } from "@onehope/server";
+import { withChurch } from "@/lib/church";
 import { ChurchImage } from "@/components/church-image";
 
 export const dynamic = "force-dynamic";
 
 export default async function NeighborhoodPage() {
-  const board = await withStore((store) => ({ posts: store.community(null), images: store.churchImages() }));
+  const board = await withChurch((store) => ({ posts: store.community(null), images: store.churchImages() }));
   return (
     <main className="public-page">
       <section className="public-hero">

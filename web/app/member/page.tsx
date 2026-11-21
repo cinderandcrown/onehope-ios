@@ -2,7 +2,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { MemberTabs, type ChurchView, type MemberView } from "@/components/member-tabs";
-import { GIVING_FREQUENCIES, greeting, loadConfig, loadSermons, withStore } from "@onehope/server";
+import { GIVING_FREQUENCIES, greeting, loadConfig, loadSermons } from "@onehope/server";
+import { withChurch } from "@/lib/church";
 
 /** Hide labeled sample rows when the church has real ones. A demo with only sample rows still works. */
 function preferReal<T extends { sample?: boolean }>(rows: T[]): T[] {
@@ -24,7 +25,7 @@ export default async function MemberPage({
   const videos = await loadSermons(fetch, config.youtubeChannelId);
   let loaded: { church: ChurchView; member: MemberView | null };
   try {
-    loaded = await withStore((store) => {
+    loaded = await withChurch((store) => {
       const home = store.publicHome();
       const knowJesus = store.knowJesus();
       const church: ChurchView = {

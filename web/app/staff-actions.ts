@@ -10,16 +10,16 @@ import {
   nextChurchMoment,
   parseChicagoLocal,
   serveTemplate,
-  withStore,
 } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { withChurch } from "@/lib/church";
 import { setFlash } from "@/lib/flash";
 import { clearIssued, rememberIssued } from "@/lib/issued-code";
 
 function desk<T>(token: string, fn: (store: ChurchStore) => Promise<T> | T) {
-  return withStore(fn, { token });
+  return withChurch(fn, { token });
 }
 
 async function staffToken() {

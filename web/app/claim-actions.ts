@@ -1,6 +1,7 @@
 "use server";
 
-import { isStaff, publicBaseUrl, withStore } from "@onehope/server";
+import { isStaff, publicBaseUrl } from "@onehope/server";
+import { withChurch } from "@/lib/church";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -22,7 +23,7 @@ export async function claimAccountAction(formData: FormData) {
   if (password !== confirm) redirect("/claim?error=match");
   let next: { token: string; staff: boolean; enroll: boolean };
   try {
-    next = await withStore((store) => {
+    next = await withChurch((store) => {
       const session = store.claimInvite({
         email,
         inviteToken,

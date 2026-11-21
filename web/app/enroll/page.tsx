@@ -1,4 +1,5 @@
-import { qrSvg, withStore } from "@onehope/server";
+import { qrSvg } from "@onehope/server";
+import { withChurch } from "@/lib/church";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -16,7 +17,7 @@ export default async function EnrollPage({
   const error = (await searchParams).error;
   let setup: { setupKey: string; otpauthUrl: string };
   try {
-    setup = await withStore((store) => store.beginTotp(token), { token });
+    setup = await withChurch((store) => store.beginTotp(token), { token });
   } catch {
     redirect("/overview");
   }

@@ -30,6 +30,7 @@ export {
   storeErrorResponse,
   withStore,
   UnknownTenantError,
+  type StoreScope,
 } from "./persist";
 export { ADAPTERS, assertTruthful, projectCapabilities } from "./adapter-registry";
 export { tablesFor } from "./request-tables";
