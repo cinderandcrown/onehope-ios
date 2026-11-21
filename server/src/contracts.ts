@@ -44,6 +44,14 @@ export const announcementBodySchema = z
   .object({
     title: z.string().trim().min(1).max(80),
     body: z.string().trim().min(1).max(500),
+    startsAt: z.number().int().nullable().optional(),
+    endsAt: z.number().int().nullable().optional(),
+  })
+  .strict();
+
+export const archiveBodySchema = z
+  .object({
+    archived: z.boolean(),
   })
   .strict();
 
@@ -53,6 +61,14 @@ export const eventBodySchema = z
     location: z.string().trim().min(1).max(160),
     start: z.number().int(),
     end: z.number().int(),
+    description: z.string().trim().max(1000).optional(),
+    capacity: z.number().int().positive().max(100_000).nullable().optional(),
+  })
+  .strict();
+
+export const cancelBodySchema = z
+  .object({
+    cancelled: z.boolean(),
   })
   .strict();
 
@@ -179,11 +195,23 @@ export const integrationBodySchema = z
   })
   .strict();
 
+export const featureBodySchema = z
+  .object({
+    videoId: z.string().trim().regex(/^[A-Za-z0-9_-]{6,20}$/),
+    title: z.string().trim().min(1).max(140),
+    speaker: z.string().trim().max(80).optional(),
+    passage: z.string().trim().max(80).optional(),
+    link: z.string().trim().url().max(300),
+    thumbnail: z.string().trim().max(300).optional(),
+  })
+  .strict();
+
 export const pushBodySchema = z
   .object({
     title: z.string().trim().min(1).max(80),
     body: z.string().trim().min(1).max(240),
     segment: z.enum(["members", "volunteers", "parents"]),
+    confirm: z.boolean().optional(),
   })
   .strict();
 
@@ -260,7 +288,22 @@ export const supportBodySchema = z
   })
   .strict();
 
-export const followUpStatusBodySchema = z.object({ status: z.enum(FOLLOW_UP_STATUSES) }).strict();
+export const followUpStatusBodySchema = z
+  .object({
+    status: z.enum(FOLLOW_UP_STATUSES).optional(),
+    assigneeId: z.string().trim().max(80).nullable().optional(),
+    dueAt: z.number().int().nullable().optional(),
+    staffNote: z.string().max(2000).optional(),
+  })
+  .strict()
+  .refine(
+    (body) =>
+      body.status !== undefined ||
+      body.assigneeId !== undefined ||
+      body.dueAt !== undefined ||
+      body.staffNote !== undefined,
+    { message: "Nothing to save." },
+  );
 
 export const socialBodySchema = z
   .object({
@@ -327,9 +370,12 @@ export const personEditBodySchema = z
 export const servingAssignBodySchema = z
   .object({
     personId: z.string().trim().min(1).max(80),
-    position: z.string().trim().min(1).max(80),
+    position: z.string().trim().max(80).optional(),
+    positionId: z.string().trim().max(40).optional(),
   })
   .strict();
+
+export const servingRespondBodySchema = z.object({ accept: z.boolean() }).strict();
 
 export const neighborhoodPrayerBodySchema = z.object({ body: z.string().trim().min(1).max(1000) }).strict();
 

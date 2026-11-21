@@ -1,11 +1,11 @@
 import { FollowAlong } from "@/components/follow-along";
-import { withStore } from "@onehope/server";
+import { withChurch } from "@/lib/church";
 import { ChurchImage } from "@/components/church-image";
 
 export const dynamic = "force-dynamic";
 
 export default async function VisitPage() {
-  const page = await withStore((store) => {
+  const page = await withChurch((store) => {
     const home = store.publicHome();
     return { visit: home.visit, social: store.socialLinks(), address: home.church.address, images: home.images };
   });

@@ -105,7 +105,23 @@ export function emptyDocument(): StoreDocument {
     outreachRsvps: [],
     coffeeOrders: [],
     social: [],
+    kidsTeam: [],
+    featuredMessage: null,
   };
+}
+
+/** Postgres 42P01. The Neon driver and node-postgres both set `code` on the error. */
+export function isMissingRelation(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === "42P01");
+}
+
+const OPTIONAL_TABLES = new Set(["featured_messages", "kids_team"]);
+
+/** A missing new table must not abort the request transaction. */
+async function relationReady(sql: SqlClient, table: string): Promise<boolean> {
+  if (!OPTIONAL_TABLES.has(table)) return true;
+  const found = await sql.query<{ ok: string | null }>("SELECT to_regclass($1) AS ok", [table]);
+  return Boolean(found.rows[0]?.ok);
 }
 
 export function stable(value: unknown): string {
@@ -449,6 +465,25 @@ const SPECS: readonly SyncSpec[] = [
     text(row, "personId"),
   ]),
   recordSpec("social_links", (doc) => doc.social, assignArray("social")),
+  recordSpec(
+    "featured_messages",
+    (doc) => (doc.featuredMessage ? [{ id: "current", ...doc.featuredMessage }] : []),
+    (doc, rows) => {
+      const row = rows[0];
+      if (!row) {
+        doc.featuredMessage = null;
+        return;
+      }
+      doc.featuredMessage = {
+        videoId: String(row.videoId ?? ""),
+        title: String(row.title ?? ""),
+        speaker: String(row.speaker ?? ""),
+        passage: String(row.passage ?? ""),
+        link: String(row.link ?? ""),
+        thumbnail: String(row.thumbnail ?? ""),
+      };
+    },
+  ),
 ];
 
 function keyOf(parts: { column: string; value: unknown }[]): string {
@@ -550,6 +585,7 @@ async function loadRecords(
 ): Promise<Row[]> {
   const versionColumn = spec.table === "audit_log" ? "" : ", row_version";
   const totpColumn = spec.table === "people" ? ", totp_secret" : "";
+  if (!(await relationReady(sql, spec.table))) return [];
   const found = await sql.query<{ record: string; row_version?: number; totp_secret?: string | null }>(
     `SELECT record${versionColumn}${totpColumn} FROM ${assertIdent(spec.table)}
      WHERE tenant_id = $1 AND record IS NOT NULL${extraWhere}`,
@@ -596,6 +632,12 @@ export async function loadDocument(
       tenantId,
     ]);
     doc.station = duty.rows.map((row) => row.person_id);
+  }
+  if (want("kids_team") && (await relationReady(sql, "kids_team"))) {
+    const team = await sql.query<{ person_id: string }>(`SELECT person_id FROM kids_team WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
+    doc.kidsTeam = team.rows.map((row) => row.person_id);
   }
   if (want("prayer_amens")) {
     const amens = await sql.query<{ prayer_id: string; person_id: string }>(
@@ -658,6 +700,7 @@ export async function saveDocumentDiff(
     writes += await syncSpec(sql, tenantId, spec, before, after, ctx, options.retainExtras === true);
   }
   if (want("station_duty")) writes += await syncStation(sql, tenantId, before.station, after.station);
+  if (want("kids_team")) writes += await syncIdSet(sql, tenantId, "kids_team", before.kidsTeam ?? [], after.kidsTeam ?? []);
   if (want("prayer_amens")) writes += await syncAmens(sql, tenantId, before.amens ?? [], after.amens ?? []);
   if (want("care_notes")) writes += await syncShares(sql, tenantId, before.notes, after.notes);
   if (want("tenant_integrations")) writes += await syncSecrets(sql, tenantId, before.secrets, after.secrets);
@@ -677,12 +720,17 @@ export async function saveDocumentDiff(
 }
 
 async function syncStation(sql: SqlClient, tenantId: string, before: string[], after: string[]) {
+  return syncIdSet(sql, tenantId, "station_duty", before, after);
+}
+
+async function syncIdSet(sql: SqlClient, tenantId: string, table: "station_duty" | "kids_team", before: string[], after: string[]) {
   let writes = 0;
   const previous = new Set(before);
   const next = new Set(after);
+  const name = assertIdent(table);
   for (const personId of next) {
     if (previous.has(personId)) continue;
-    await sql.query(`INSERT INTO station_duty (tenant_id, person_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [
+    await sql.query(`INSERT INTO ${name} (tenant_id, person_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [
       tenantId,
       personId,
     ]);
@@ -690,7 +738,7 @@ async function syncStation(sql: SqlClient, tenantId: string, before: string[], a
   }
   for (const personId of previous) {
     if (next.has(personId)) continue;
-    await sql.query(`DELETE FROM station_duty WHERE tenant_id = $1 AND person_id = $2`, [tenantId, personId]);
+    await sql.query(`DELETE FROM ${name} WHERE tenant_id = $1 AND person_id = $2`, [tenantId, personId]);
     writes += 1;
   }
   return writes;

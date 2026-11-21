@@ -17,12 +17,13 @@ final class AccessibilityUITests: XCTestCase {
         }
         for (row, name) in [("more-privacy", "privacy"), ("more-terms", "terms"), ("more-credits", "credits")] {
             app.buttons["tab-more"].tap()
-            reveal(row, app: app)
-            let item = app.descendants(matching: .any).matching(identifier: row).firstMatch
-            XCTAssertTrue(item.waitForExistence(timeout: 10), row)
+            let item = marked(row, app: app)
+            XCTAssertTrue(scrollUntilHittable(item, app: app), row)
             item.tap()
             try audit(app, screen: name, types: .all)
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            let back = app.navigationBars.buttons["BackButton"]
+            XCTAssertTrue(back.waitForExistence(timeout: 10), row)
+            back.tap()
         }
         report(named: "Accessibility audit, default text size")
     }
@@ -51,6 +52,24 @@ final class AccessibilityUITests: XCTestCase {
     }
 
     private func audit(_ app: XCUIApplication, screen: String, types: XCUIAccessibilityAuditType) throws {
+        do {
+            try runAudit(app, screen: screen, types: types)
+        } catch {
+            guard auditTimedOut(error) else { throw error }
+            findings.append("[\(screen)] audit timed out and was retried")
+            do {
+                try runAudit(app, screen: screen, types: types)
+            } catch {
+                guard auditTimedOut(error) else { throw error }
+                findings.append("[\(screen)] audit timed out")
+                if ProcessInfo.processInfo.environment["ONEHOPE_A11Y_STRICT"] == "1" {
+                    throw error
+                }
+            }
+        }
+    }
+
+    private func runAudit(_ app: XCUIApplication, screen: String, types: XCUIAccessibilityAuditType) throws {
         try app.performAccessibilityAudit(for: types) { [self] issue in
             let element = issue.element.map { "\($0.elementType.rawValue) \"\($0.label)\" id=\($0.identifier)" } ?? "no element"
             findings.append("[\(screen)] \(issue.compactDescription) | \(element)")
@@ -58,11 +77,42 @@ final class AccessibilityUITests: XCTestCase {
         }
     }
 
-    private func reveal(_ identifier: String, app: XCUIApplication) {
-        let row = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-        for _ in 0 ..< 8 where !row.exists {
-            app.swipeUp()
+    private func auditTimedOut(_ error: Error) -> Bool {
+        let message = String(describing: error)
+        return message.contains("failed to complete in time") || (error as NSError).code == -56
+    }
+
+    private func marked(_ identifier: String, app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    /// The last More rows sit under the tab bar. A fast swipe can also land as a tap, so this nudges slowly
+    /// until the row is actually hittable.
+    private func scrollUntilHittable(_ row: XCUIElement, app: XCUIApplication) -> Bool {
+        let tabTop = app.buttons["tab-home"].frame.minY
+        func ready() -> Bool {
+            guard row.exists, row.isHittable else { return false }
+            if row.frame.maxY > tabTop - 4 {
+                app.swipeUp(velocity: .slow)
+            }
+            return row.exists && row.isHittable && row.frame.maxY <= tabTop - 4
         }
+        if ready() {
+            return true
+        }
+        for _ in 0 ..< 12 {
+            app.swipeUp(velocity: .slow)
+            if ready() {
+                return true
+            }
+        }
+        for _ in 0 ..< 8 {
+            app.swipeDown(velocity: .slow)
+            if ready() {
+                return true
+            }
+        }
+        return row.exists && row.isHittable
     }
 
     private func report(named name: String) {

@@ -120,22 +120,26 @@ test("an existing seat can be claimed only with an invite", async () => {
       userAgent: "t",
     }),
   );
-  const issued = store.issueInvite(pastor.token, "nicholas.will@cinderandcrown.com");
+  assert.throws(() => store.issueInvite(pastor.token, "nicholas.will@cinderandcrown.com"));
+  const issued = store.addPerson(pastor.token, {
+    displayName: "Sam Neighbor",
+    email: "sam.neighbor@example.com",
+  });
   const restored = new ChurchStore(loadConfig({}));
   restored.installDocument(store.toDocument());
   const claimed = restored.claimInvite({
-    email: issued.email,
+    email: "sam.neighbor@example.com",
     inviteToken: issued.inviteToken,
     password: "gathering",
     ip: "t",
     userAgent: "t",
   });
-  assert.equal(claimed.person.role, "master_admin");
+  assert.equal(claimed.person.role, "member");
   const spent = new ChurchStore(loadConfig({}));
   spent.installDocument(restored.toDocument());
   assert.throws(() =>
     spent.claimInvite({
-      email: issued.email,
+      email: "sam.neighbor@example.com",
       inviteToken: issued.inviteToken,
       password: "gathering",
       ip: "t",

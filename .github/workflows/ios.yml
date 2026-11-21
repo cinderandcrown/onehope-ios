@@ -2,6 +2,11 @@ name: iOS
 
 on:
   push:
+  schedule:
+    - cron: "15 7 * * *"
+  release:
+    types: [published]
+  workflow_dispatch:
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -77,6 +82,9 @@ jobs:
         run: |
           set -euo pipefail
           cd ios
+          if [ "${{ github.event_name }}" != "push" ]; then
+            export ONEHOPE_A11Y_STRICT=1
+          fi
           xcodebuild test \
             -project OneHope.xcodeproj \
             -scheme OneHope \

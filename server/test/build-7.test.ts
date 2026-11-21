@@ -218,7 +218,7 @@ test("a family checks in, sees it, and only a verified guardian with the code pi
   const church = new ChurchStore(loadConfig({}));
   const avery = login(church, "avery@sample.onehope");
   church.clockIn(staff(church, "frankie@sample.onehope"));
-  church.clockIn(staff(church, "dana@sample.onehope"));
+  church.clockIn(staff(church, "gray@sample.onehope"));
   const { code: tag } = church.checkIn(avery, "child-remy");
   assert.match(tag, /^\d{4}$/);
   assert.equal(church.myKids(avery).find((child) => child.id === "child-remy")?.checkedIn, true);
@@ -242,16 +242,16 @@ test("a short-staffed station does not lock pickup, and the right code works onc
       church.householdPickup(avery, { childId: "child-remy", code: index % 2 === 0 ? wrong : tag }),
       {
         allowed: false,
-        reason: "Two adults must be on duty at the station.",
+        reason: "Two adults from the kids team must be on duty at the station.",
       },
     );
   }
   church.clockIn(staff(church, "frankie@sample.onehope"));
   assert.deepEqual(church.householdPickup(avery, { childId: "child-remy", code: tag }), {
     allowed: false,
-    reason: "Two adults must be on duty at the station.",
+    reason: "Two adults from the kids team must be on duty at the station.",
   });
-  church.clockIn(staff(church, "dana@sample.onehope"));
+  church.clockIn(staff(church, "gray@sample.onehope"));
   assert.deepEqual(church.householdPickup(avery, { childId: "child-remy", code: tag }), {
     allowed: true,
     reason: "Guardian verified and the security code matches.",
@@ -266,7 +266,7 @@ test("custody and unauthorized refusals do not count toward the pickup lockout",
   const church = new ChurchStore(loadConfig({}));
   const frankie = staff(church, "frankie@sample.onehope");
   church.clockIn(frankie);
-  church.clockIn(staff(church, "dana@sample.onehope"));
+  church.clockIn(staff(church, "gray@sample.onehope"));
   for (let index = 0; index < 5; index += 1) {
     assert.deepEqual(
       church.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-blake", code: "4821" }),
@@ -287,7 +287,7 @@ test("pickup locks after five wrong codes", () => {
   const church = new ChurchStore(loadConfig({}));
   const avery = login(church, "avery@sample.onehope");
   church.clockIn(staff(church, "frankie@sample.onehope"));
-  church.clockIn(staff(church, "dana@sample.onehope"));
+  church.clockIn(staff(church, "gray@sample.onehope"));
   const { code: tag } = church.checkIn(avery, "child-remy");
   const wrong = tag === "1000" ? "1001" : "1000";
   for (let index = 0; index < 5; index += 1) {

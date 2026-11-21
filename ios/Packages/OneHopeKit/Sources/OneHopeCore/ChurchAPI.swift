@@ -102,6 +102,9 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var gifts: [GiftLine]
     public var needsStepUp: Bool
     public var kids: [KidLine]
+    /// A kids-team member can clock in from the phone. Everyone else stays false.
+    public var kidsCanClockIn: Bool
+    public var kidsOnDuty: Bool
     public var serving: [ServingLine]
     public var pathway: [PathwayStep]
     public var sermons: [SermonLine]
@@ -145,6 +148,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
             gifts: [],
             needsStepUp: false,
             kids: [],
+            kidsCanClockIn: false,
+            kidsOnDuty: false,
             serving: [],
             pathway: [],
             sermons: [],
@@ -213,22 +218,6 @@ public struct PathwayStep: Equatable, Sendable, Identifiable {
     public let status: String
 }
 
-public struct SermonLine: Equatable, Sendable, Identifiable {
-    public let id: String
-    public let title: String
-    public let thumbnail: String?
-    /// 1280x720 poster. YouTube has none for some older videos, so views fall back to `thumbnail`.
-    public let thumbnailHD: String?
-    public let published: Date?
-    /// "message" for full Sunday messages, "short" for clips.
-    public let kind: String
-    public let link: URL?
-
-    public var isShort: Bool {
-        kind == "short"
-    }
-}
-
 public enum MemberAction: Sendable {
     case join(String)
     case message(String, String)
@@ -238,6 +227,9 @@ public enum MemberAction: Sendable {
     case addChild(String, String)
     case checkIn(String)
     case pickup(String, String)
+    case clockIn
+    case clockOut
+    case answerServing(String, Bool)
     /// Works for guests too.
     case followUp(FollowUpRequest)
     /// Works for guests too.

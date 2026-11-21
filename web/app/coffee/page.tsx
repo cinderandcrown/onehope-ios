@@ -1,4 +1,4 @@
-import { withStore } from "@onehope/server";
+import { withChurch } from "@/lib/church";
 import { ChurchImage } from "@/components/church-image";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ function money(cents: number | null) {
 }
 
 export default async function CoffeePage() {
-  const loaded = await withStore((store) => ({ guide: store.coffeePublic(), images: store.churchImages() }));
+  const loaded = await withChurch((store) => ({ guide: store.coffeePublic(), images: store.churchImages() }));
   const coffee = loaded.guide;
   return (
     <main className="public-page">

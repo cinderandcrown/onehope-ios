@@ -135,6 +135,44 @@ export function isStaff(role: Role): boolean {
   return STAFF_ROLES.has(role);
 }
 
+/**
+ * Higher numbers outrank lower ones.
+ * An invite or role change may target someone at or below the issuer.
+ * A pastor seat and a Master Admin seat are the exception: only a Master Admin may target those.
+ */
+const ROLE_PRIVILEGE: Record<Role, number> = {
+  master_admin: 70,
+  pastor: 60,
+  care_team: 50,
+  finance: 50,
+  kids_director: 50,
+  team_leader: 40,
+  volunteer: 30,
+  member: 20,
+  shop_owner: 15,
+  shop_manager: 14,
+  barista: 13,
+  customer: 10,
+  platform_operator: 5,
+};
+
+export function mayIssueInvite(issuerRole: Role, targetRole: Role): boolean {
+  if (targetRole === "master_admin" || targetRole === "pastor") return issuerRole === "master_admin";
+  if (issuerRole === "team_leader") return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader;
+  return ROLE_PRIVILEGE[targetRole] <= ROLE_PRIVILEGE[issuerRole];
+}
+
+/** A team leader may change only roles strictly below team leader, never another team leader. */
+export function mayChangeRole(actorRole: Role, currentRole: Role, targetRole: Role): boolean {
+  if (actorRole === "team_leader") {
+    return (
+      ROLE_PRIVILEGE[currentRole] < ROLE_PRIVILEGE.team_leader &&
+      ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader
+    );
+  }
+  return mayIssueInvite(actorRole, currentRole) && mayIssueInvite(actorRole, targetRole);
+}
+
 export const TIER3_ACTIONS: ReadonlySet<Action> = new Set<Action>([
   "view_household_tier3",
   "view_all_giving",
@@ -152,6 +190,17 @@ export const SENSITIVE_STAFF_ROLES: ReadonlySet<Role> = new Set<Role>([
 ]);
 
 export const TEAM_ASSIGNABLE_ROLES: ReadonlySet<Role> = new Set<Role>(["team_leader", "volunteer", "member"]);
+
+/** The only serving spot that counts as a kids-team assignment. Matched by id, not by the spot's name. */
+export const KIDS_POSITION_ID = "kids";
+
+export const SERVING_SPOTS = [
+  { id: "door", label: "Door" },
+  { id: KIDS_POSITION_ID, label: "Kids" },
+  { id: "coffee", label: "Coffee" },
+  { id: "parking", label: "Parking" },
+  { id: "welcome", label: "Welcome" },
+] as const;
 
 export class AccessError extends Error {
   readonly code:
@@ -304,7 +353,7 @@ type ZonedParts = {
   weekday: string;
 };
 
-function zonedParts(date: Date, timeZone: string): ZonedParts {
+export function zonedParts(date: Date, timeZone: string): ZonedParts {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "short",
@@ -411,7 +460,9 @@ function pickupRefusal(reason: string, countsTowardLockout = false): PickupVerdi
 }
 
 export function evaluatePickup(input: PickupInput): PickupVerdict {
-  if (input.adultsOnDuty < 2) return pickupRefusal("Two adults must be on duty at the station.");
+  if (input.adultsOnDuty < 2) {
+    return pickupRefusal("Two adults from the kids team must be on duty at the station.");
+  }
   if (!input.guardianAuthorized) return pickupRefusal("This adult is not an authorized guardian.");
   if (input.custodyRestricted) return pickupRefusal("A custody restriction blocks this pickup.");
   if (!input.expectedCode) return pickupRefusal("This child is not checked in.");

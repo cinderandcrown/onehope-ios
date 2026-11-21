@@ -1,24 +1,31 @@
 import { ChurchImage } from "@/components/church-image";
+import { AnnouncementsDesk } from "@/components/staff/announcements";
+import { CareDesk } from "@/components/staff/care";
+import { CheckInDesk } from "@/components/staff/checkin";
+import { EventsDesk } from "@/components/staff/events";
+import { AdminDesk } from "@/components/staff/admin";
+import { MessageDesk } from "@/components/staff/message";
+import { PushDesk } from "@/components/staff/push";
+import { PeopleDesk } from "@/components/staff/people";
+import { SecurityDesk } from "@/components/staff/security";
+import { ServingDesk } from "@/components/staff/serving";
+import { WeekPreview } from "@/components/staff/week-preview";
 
 import {
-  addPersonAction,
-  editPersonAction,
-  createEventAction,
   createGroupAction,
-  createOutreachAction,
-  moderatePrayerAction,
-  savePush,
   saveSocialAction,
-  updateFollowUpAction,
 } from "@/app/actions";
+import { withChurch } from "@/lib/church";
 import type { SectionId } from "@/lib/i18n";
+import { redirect } from "next/navigation";
 import {
   AccessError,
   CAPABILITIES,
-  labelRole,
-  permissionMatrix,
-  withStore,
+  isAccessError,
+  loadConfig,
+  loadSermons,
   type ChurchStore,
+  type YoutubeVideo,
 } from "@onehope/server";
 
 function money(cents: number) {
@@ -73,11 +80,47 @@ function giftsOf(store: ChurchStore, token: string) {
   }
 }
 
-export async function SectionView({ section, token }: { section: SectionId; token: string }) {
-  return withStore((store) => renderSection(store, section, token));
+export async function SectionView({
+  section,
+  token,
+  query,
+}: {
+  section: SectionId;
+  token: string;
+  query: Record<string, string | string[] | undefined>;
+}) {
+  const sermons =
+    section === "media"
+      ? await loadSermons(
+          (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(8000) }),
+          loadConfig(process.env).youtubeChannelId,
+        )
+      : [];
+  try {
+    return await withChurch((store) => renderSection(store, section, token, query, sermons), { token });
+  } catch (error) {
+    if (isAccessError(error) && (error.code === "unauthenticated" || error.code === "session_expired")) {
+      redirect("/login");
+    }
+    if (isAccessError(error) && error.code === "forbidden") {
+      return (
+        <section>
+          <h1>This desk is closed</h1>
+          <p>Your role does not open this page. Ask a pastor if you need it.</p>
+        </section>
+      );
+    }
+    throw error;
+  }
 }
 
-function renderSection(store: ChurchStore, section: SectionId, token: string) {
+function renderSection(
+  store: ChurchStore,
+  section: SectionId,
+  token: string,
+  query: Record<string, string | string[] | undefined>,
+  sermons: YoutubeVideo[],
+) {
   switch (section) {
     case "overview": {
       const home = store.publicHome();
@@ -85,6 +128,7 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
       return (
         <>
           <Desk store={store} token={token} />
+          <WeekPreview store={store} />
           <section className="hero">
             <div>
               <p className="muted">{home.church.address}</p>
@@ -113,12 +157,20 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
               <h2>Modules</h2>
               <p>{store.modules().filter((item) => item.enabled).length} on for this church.</p>
             </article>
-            {home.sampleSermon.title ? (
-              <article className="card">
-                <h2>Latest message</h2>
-                <p>{home.sampleSermon.title}</p>
-              </article>
-            ) : null}
+            <article className="card">
+              <h2>Latest message</h2>
+              {home.sampleSermon.title ? (
+                <>
+                  <p>{home.sampleSermon.title}</p>
+                  <p className="muted">
+                    {home.sampleSermon.speaker}
+                    {home.sampleSermon.passage ? ` · ${home.sampleSermon.passage}` : ""}
+                  </p>
+                </>
+              ) : (
+                <p>No message is featured yet. Open Media and tap Feature on Home.</p>
+              )}
+            </article>
           </div>
           <article className="panel">
             <h2>Follow along</h2>
@@ -149,62 +201,8 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
         </>
       );
     }
-    case "people": {
-      const people = store.directory(token);
-      return (
-        <section>
-          <h1>People</h1>
-          <p className="help">
-            How do I add someone? Type their name and email. You will get a code to read to them. Nothing is
-            emailed.
-          </p>
-          <form className="form" action={addPersonAction}>
-            <input name="displayName" placeholder="Name" required />
-            <input name="email" type="email" placeholder="Email" required />
-            <input name="phone" placeholder="Phone (optional)" />
-            <button className="button" type="submit">
-              Add someone
-            </button>
-          </form>
-          {store.staffPeople(token).map((person) => (
-            <form className="form" action={editPersonAction} key={person.id}>
-              <input type="hidden" name="id" value={person.id} />
-              <input
-                name="displayName"
-                defaultValue={person.displayName}
-                aria-label={`Name for ${person.displayName}`}
-              />
-              <input
-                name="phone"
-                defaultValue={person.phone}
-                aria-label={`Phone for ${person.displayName}`}
-              />
-              <button className="button" type="submit">
-                Save {person.displayName}
-              </button>
-            </form>
-          ))}
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-              </tr>
-            </thead>
-            <tbody>
-              {people.map((person) => (
-                <tr key={person.id}>
-                  <td>{person.displayName}</td>
-                  <td>{person.email || "Hidden"}</td>
-                  <td>{person.phone || "Hidden"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      );
-    }
+    case "people":
+      return <PeopleDesk store={store} token={token} query={query} />;
     case "discipleship": {
       const ministry = store.ministry(token);
       const rows = ministry.pathwayRoster.length > 0 ? ministry.pathwayRoster : [ministry.pathways];
@@ -220,123 +218,8 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
         </section>
       );
     }
-    case "care": {
-      const care = store.ministry(token).care;
-      return (
-        <section>
-          <h1>Care</h1>
-          {care.notes.length === 0 ? (
-            <p>No care notes are visible to you.</p>
-          ) : (
-            care.notes.map((note) => (
-              <article className="card" key={note.id}>
-                <p>{note.body}</p>
-              </article>
-            ))
-          )}
-          {care.queue.locked ? (
-            <Locked title="Staff care queue" />
-          ) : (
-            <>
-              <article className="panel">
-                <h2>Next steps from the app</h2>
-                {care.queue.followUps.length === 0 ? (
-                  <p>
-                    No one has asked for a next step yet. Know Jesus, baptism, Growth Track, Plan a Visit,
-                    prayer contact requests, and Support/Assistance requests land here.
-                  </p>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>When</th>
-                        <th>Next step</th>
-                        <th>Name</th>
-                        <th>Contact</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {care.queue.followUps.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            {new Date(row.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago" })}
-                          </td>
-                          <td>
-                            {row.label}
-                            {row.needs.length > 0 ? <p className="muted">{row.needs.join(" · ")}</p> : null}
-                          </td>
-                          <td>
-                            {row.name}
-                            {row.member ? " (member)" : " (guest)"}
-                          </td>
-                          <td>
-                            {[row.email, row.phone].filter(Boolean).join(" · ") ||
-                              (row.contactConsent ? "Account email" : "No contact shared")}
-                          </td>
-                          <td>
-                            <form action={updateFollowUpAction}>
-                              <input type="hidden" name="id" value={row.id} />
-                              <select
-                                name="status"
-                                defaultValue={row.status}
-                                aria-label={`Status for ${row.name}`}
-                              >
-                                <option value="new">New</option>
-                                <option value="contacted">Contacted</option>
-                                <option value="closed">Closed</option>
-                              </select>
-                              <button className="button" type="submit">
-                                Save
-                              </button>
-                            </form>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </article>
-              <article className="panel">
-                <h2>Follow-up</h2>
-                {care.queue.visitors.map((visitor) => (
-                  <p key={visitor.id}>
-                    {visitor.name} · {visitor.state}
-                  </p>
-                ))}
-                {care.queue.requests.map((request) => (
-                  <p key={request.id}>
-                    {request.kind}: {request.detail}
-                  </p>
-                ))}
-              </article>
-              <article className="panel">
-                <h2>Prayers to share</h2>
-                <p className="help">
-                  How do I share a prayer? Read it, then Share with the church or Keep private. Private stays
-                  off the wall.
-                </p>
-                {store
-                  .listPrayers(token)
-                  .filter((prayer) => !prayer.approved && prayer.body)
-                  .map((prayer) => (
-                    <form key={prayer.id} action={moderatePrayerAction}>
-                      <p>{prayer.body}</p>
-                      <input type="hidden" name="id" value={prayer.id} />
-                      <button className="button" name="approved" value="yes" type="submit">
-                        Share with the church
-                      </button>
-                      <button className="button secondary" name="approved" value="no" type="submit">
-                        Keep private
-                      </button>
-                    </form>
-                  ))}
-              </article>
-            </>
-          )}
-        </section>
-      );
-    }
+    case "care":
+      return <CareDesk store={store} token={token} query={query} />;
     case "groups": {
       return (
         <section>
@@ -370,102 +253,12 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
         </section>
       );
     }
-    case "events": {
-      return (
-        <section>
-          <h1>Events</h1>
-          <p className="help">How do I post an event? Type a name and a place. People see it in the app.</p>
-          <form className="form" action={createEventAction}>
-            <input name="title" placeholder="Event title" required />
-            <input name="location" placeholder="Location" required />
-            <button className="button" type="submit">
-              Add event
-            </button>
-          </form>
-          <h2>Serve the neighborhood</h2>
-          <p className="help">
-            How do I ask for help in the neighborhood? Add a serve day. People can sign up in the app. Leave
-            it blank until you have a real one.
-          </p>
-          <form className="form" action={createOutreachAction}>
-            <input name="title" placeholder="Serve day name" required />
-            <input name="location" placeholder="Where" required />
-            <input name="detail" placeholder="What people will do" />
-            <button className="button" type="submit">
-              Post serve day
-            </button>
-          </form>
-          {store.publicHome().events.map((event) => (
-            <article className="card" key={event.id}>
-              <h2>{event.title}</h2>
-              <p>{event.location}</p>
-              <p>{event.capacity === null ? "Open" : `Capacity ${event.capacity}`}</p>
-            </article>
-          ))}
-        </section>
-      );
-    }
-    case "checkin": {
-      const roster = store.roster(token);
-      const label = roster[0] ? store.label(token, roster[0].id) : null;
-      return (
-        <section>
-          <h1>Check-in</h1>
-          <p>
-            Two adults on duty. Pickup matches the guardian and the security code, and stops for a custody
-            flag.
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Child</th>
-                <th>Classroom</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map((child) => (
-                <tr key={child.id}>
-                  <td>{child.displayName}</td>
-                  <td>{child.classroom}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <h2>Label handoff</h2>
-          <p>
-            Zebra receives ZPL. Brother receives the same fields. This screen does not open a printer socket.
-          </p>
-          <pre>{label ? label.zpl : "No child record to print."}</pre>
-        </section>
-      );
-    }
-    case "serving": {
-      const rows = store.serving(token);
-      return (
-        <section>
-          <h1>Serving</h1>
-          {rows.length === 0 ? (
-            <p>No assignments on your list.</p>
-          ) : (
-            rows.map((row) => (
-              <article className="card" key={row.id}>
-                <h2>{row.position}</h2>
-                <p>
-                  {row.displayName} · {row.status}
-                </p>
-              </article>
-            ))
-          )}
-          <p>
-            Suggested greeter:{" "}
-            {store
-              .suggestSchedule()
-              .assignments.map((item) => item.personId)
-              .join(", ") || "none"}{" "}
-          </p>
-        </section>
-      );
-    }
+    case "events":
+      return <EventsDesk store={store} token={token} query={query} />;
+    case "checkin":
+      return <CheckInDesk store={store} token={token} query={query} />;
+    case "serving":
+      return <ServingDesk store={store} token={token} query={query} />;
     case "worship": {
       const plan = store.ministry(token).worship.plans[0];
       return (
@@ -506,43 +299,19 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
     }
     case "communications":
       return (
-        <section>
-          <h1>Communications</h1>
-          <p>Email and SMS adapters exist. This build does not call them.</p>
+        <>
+          <AnnouncementsDesk store={store} token={token} query={query} />
           <article className="panel">
-            <h2>Sent</h2>
-            <p>No messages have been sent.</p>
+            <h2>Email and text</h2>
+            <p>
+              This screen does not email or text anyone. Home cards are the note people see when they open
+              the app.
+            </p>
           </article>
-        </section>
+        </>
       );
     case "push":
-      return (
-        <section>
-          <h1>Push</h1>
-          <p>Preview only. The send endpoint refuses, even for a Master Admin.</p>
-          <form className="form" action={savePush}>
-            <label>
-              Title
-              <input name="title" required maxLength={80} defaultValue="Sunday at 10:30" />
-            </label>
-            <label>
-              Body
-              <textarea name="body" required maxLength={240} defaultValue="Sunday at 10:30 a.m." />
-            </label>
-            <label>
-              Segment
-              <select name="segment" defaultValue="members">
-                <option value="members">Members</option>
-                <option value="volunteers">Volunteers</option>
-                <option value="parents">Parents</option>
-              </select>
-            </label>
-            <button className="button" type="submit">
-              Save draft
-            </button>
-          </form>
-        </section>
-      );
+      return <PushDesk store={store} token={token} query={query} />;
     case "facilities": {
       const facilities = store.ministry(token).facilities;
       return (
@@ -676,26 +445,8 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
         </section>
       );
     }
-    case "media": {
-      const media = store.ministry(token).media;
-      return (
-        <section className="hero">
-          <ChurchImage src={store.churchImages().video} alt="" />
-          <div>
-            <h1>Media</h1>
-            {media.series.map((series) => (
-              <p key={series.id}>{series.title}</p>
-            ))}
-            {media.chat.map((line) => (
-              <p key={line.id}>{line.body}</p>
-            ))}
-            <p>
-              YouTube uses the public RSS feed. Facebook Live stays a placeholder until a Page token is set.
-            </p>
-          </div>
-        </section>
-      );
-    }
+    case "media":
+      return <MessageDesk store={store} token={token} videos={sermons} query={query} />;
     case "integrations": {
       const rows = store.integrations(token);
       return (
@@ -751,110 +502,10 @@ function renderSection(store: ChurchStore, section: SectionId, token: string) {
           </table>
         </section>
       );
-    case "security": {
-      const seats = store.seats();
-      const matrix = permissionMatrix();
-      const columns = [
-        "view_all_giving",
-        "view_care_notes",
-        "view_kids_medical",
-        "manage_integrations",
-        "propose_master_admin",
-      ] as const;
-      return (
-        <section>
-          <h1>Roles</h1>
-          <article className="panel">
-            <h2>Master Admin</h2>
-            <p>
-              {seats.primary.name} · {seats.primary.email || "email not set"} ·{" "}
-              {seats.primary.filled ? "seated" : "open"}
-            </p>
-            <p>
-              {seats.secondary.name} · {seats.secondary.email || "email not set"} ·{" "}
-              {seats.secondary.filled ? "seated" : "open"}
-            </p>
-            <p>
-              Changing this role takes both current Master Admins. Every Tier 3 read is logged, including
-              theirs, and still needs MFA plus step-up.
-            </p>
-          </article>
-          <table>
-            <thead>
-              <tr>
-                <th>Role</th>
-                {columns.map((column) => (
-                  <th key={column}>{column.replaceAll("_", " ")}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {matrix.map((row) => (
-                <tr key={row.role}>
-                  <td>{labelRole(row.role)}</td>
-                  {columns.map((column) => (
-                    <td key={column} className={row.grants[column] ? "yes" : "no"}>
-                      {row.grants[column] ? "Yes" : "No"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      );
-    }
-    case "admin": {
-      const status = store.status("1.0.0");
-      const audit = store.audit(token).slice(-8);
-      return (
-        <section>
-          <h1>Admin</h1>
-          <p>
-            Encryption key mode: {status.fieldEncryption}. Giving live: {status.givingLive ? "yes" : "no"}.
-            Sends: off.
-          </p>
-          <h2>Recent audit</h2>
-          {audit.length === 0 ? (
-            <p>No audit rows yet.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Who</th>
-                  <th>Action</th>
-                  <th>Record</th>
-                  <th>Tier</th>
-                </tr>
-              </thead>
-              <tbody>
-                {audit.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{entry.actorId}</td>
-                    <td>{entry.action}</td>
-                    <td>{entry.resource}</td>
-                    <td>{entry.tier}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <h2>Attendance</h2>
-          {(() => {
-            const attendance = store.ministry(token).attendance;
-            return attendance.locked ? (
-              <Locked title="Attendance" />
-            ) : (
-              attendance.headcounts.map((row) => (
-                <p key={row.id}>
-                  {row.label}: {row.count}
-                </p>
-              ))
-            );
-          })()}
-        </section>
-      );
-    }
+    case "security":
+      return <SecurityDesk store={store} token={token} query={query} />;
+    case "admin":
+      return <AdminDesk store={store} token={token} query={query} />;
     default: {
       const unreachable: never = section;
       return unreachable;
