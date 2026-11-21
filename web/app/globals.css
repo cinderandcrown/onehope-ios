@@ -889,3 +889,18 @@ form.inline .button {
   font-size: 0.85rem;
   color: var(--olive);
 }
+
+/* Phase 2b: Today and My tasks */
+.desk-card.late,
+.panel.task.late {
+  border-left: 6px solid #b0412b;
+}
+.today-card .button {
+  width: auto;
+}
+.script {
+  white-space: pre-wrap;
+  background: var(--paper);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+}
