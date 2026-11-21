@@ -63,6 +63,26 @@ The role menu only lists roles you are allowed to give. Master Admin is not in t
 
 The first time a staff person signs in, leave the authenticator code blank. The setup screen shows a QR code and a setup key. After they enter the 6-digit code, the desk opens.
 
+### Looking after people (Phase 2a)
+
+**People** opens with **Everyone**: search by name, email or phone, and filter by stage, tag, or **Only quiet** (nobody has called, texted, visited, emailed or prayed with them in 30 days). Tap a name to open their page.
+
+On a person's page:
+
+- **Log a touch**: pick what you did (Called, Texted, Visited, Emailed, Prayed with, Note), how it went, and an optional note. It goes on their **Timeline** with your name and the time. Notes are encrypted and only staff who can open People see them. A private Note does not count as contact.
+- If someone **asked us not to contact them**, pick that outcome. The page then shows a banner and blocks calls, texts, emails and visits. Praying and private notes still work. A pastor or care team member can tap **They said it is okay again**.
+- **Stage** is where they are on the path: Guest, Coming back, Connected, Member, Serving, Leading.
+- **Tags** group people. A **team** tag also names its leaders.
+
+Who sees whom:
+
+- Master Admin, pastors and the care team see everyone and manage tags.
+- Kids directors see kids households and the kids team.
+- Team leaders see people on teams they lead and people they added. They can only put people on their own teams.
+- Finance, volunteers and members do not open People.
+
+Nothing on People sends a message. Salvation and first-visit playbooks are not part of this slice; they will arrive switched off until a pastor turns them on.
+
 ## 7. Serving
 
 Open **Serving**. Choose a person and a spot such as Door or Kids. Tap **Ask them to serve**. **Undo** works while it still says they are waiting. Nothing is texted.

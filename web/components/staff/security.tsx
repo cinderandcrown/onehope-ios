@@ -12,6 +12,7 @@ function one(query: Record<string, string | string[] | undefined>, key: string) 
 const columns = [
   "view_all_giving",
   "view_care_notes",
+  "view_people",
   "view_kids_medical",
   "manage_integrations",
   "propose_master_admin",

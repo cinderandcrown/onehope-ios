@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 2a (People foundation) - unreleased
+
+### Added
+
+- People list with search (name, email, phone), stage, tag and "quiet 30+ days" filters, and paging.
+- A page for each person: contact, stage, tags, quick "log a touch" (call, text, visit, email, prayer, private note) with an outcome and optional note, a timeline, and their next-step requests for care staff.
+- "Asked us not to contact them" blocks outreach touches until a pastor or care team member lifts it. Praying and private notes still work.
+- Tags and team tags. A team tag names its leaders; team leaders see only people on teams they lead plus people they added, and can only tag people with their own teams.
+- New permissions `view_people`, `edit_people` (Master Admin, pastor, care team, plus kids director and team leader scoped to their people) and `manage_tags` (Master Admin, pastor, care team).
+- Migration `0007_people_care` adds `person_profiles`, `tags`, `person_tags` and `interactions` with forced row-level security per church. Touch notes are encrypted before they are stored. Rollback: `server/migrations/rollback/0007_people_care_down.sql`.
+- Leaving the church erases that person's profile, tags and touches.
+
 ## Build 12 - unreleased
 
 ### Fixed

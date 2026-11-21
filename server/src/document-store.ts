@@ -106,6 +106,10 @@ export function emptyDocument(): StoreDocument {
     coffeeOrders: [],
     social: [],
     kidsTeam: [],
+    profiles: [],
+    tags: [],
+    personTags: [],
+    touches: [],
     featuredMessage: null,
   };
 }
@@ -115,7 +119,19 @@ export function isMissingRelation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === "42P01");
 }
 
-const OPTIONAL_TABLES = new Set(["featured_messages", "kids_team"]);
+const OPTIONAL_TABLES = new Set([
+  "featured_messages",
+  "kids_team",
+  "person_profiles",
+  "tags",
+  "person_tags",
+  "interactions",
+]);
+
+function epoch(row: Row, key: string): string | null {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : null;
+}
 
 /** A missing new table must not abort the request transaction. */
 async function relationReady(sql: SqlClient, table: string): Promise<boolean> {
@@ -465,6 +481,31 @@ const SPECS: readonly SyncSpec[] = [
     text(row, "personId"),
   ]),
   recordSpec("social_links", (doc) => doc.social, assignArray("social")),
+  recordSpec(
+    "person_profiles",
+    (doc) => doc.profiles,
+    assignArray("profiles"),
+    ["person_id", "stage", "last_contact_at"],
+    (row) => [required(row, "personId"), required(row, "stage"), epoch(row, "lastContactAt")],
+  ),
+  recordSpec("tags", (doc) => doc.tags, assignArray("tags"), ["kind", "archived"], (row) => [
+    required(row, "kind"),
+    bool(row, "archived"),
+  ]),
+  recordSpec(
+    "person_tags",
+    (doc) => doc.personTags,
+    assignArray("personTags"),
+    ["person_id", "tag_id"],
+    (row) => [required(row, "personId"), required(row, "tagId")],
+  ),
+  recordSpec(
+    "interactions",
+    (doc) => doc.touches,
+    assignArray("touches"),
+    ["person_id", "kind", "outcome"],
+    (row) => [required(row, "personId"), required(row, "kind"), required(row, "outcome")],
+  ),
   recordSpec(
     "featured_messages",
     (doc) => (doc.featuredMessage ? [{ id: "current", ...doc.featuredMessage }] : []),

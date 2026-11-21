@@ -62,6 +62,36 @@ import {
 } from "./domain";
 import { coffeeGuide } from "./coffee";
 import {
+  NOTE_LIMIT,
+  OUTCOME_LABELS,
+  STAGE_LABELS,
+  STAGES,
+  TAG_KINDS,
+  TOUCH_KINDS,
+  TOUCH_LABELS,
+  TOUCH_OUTCOMES,
+  cleanTagName,
+  countsAsContact,
+  defaultStage,
+  isChurchRole,
+  isQuiet,
+  isStage,
+  isTagKind,
+  isTouchKind,
+  isTouchOutcome,
+  personTagId,
+  reachesOut,
+  seesEveryone,
+  type PersonProfileRow,
+  type PersonTagRow,
+  type Stage,
+  type TagKind,
+  type TagRow,
+  type TouchKind,
+  type TouchOutcome,
+  type TouchRow,
+} from "./people-care";
+import {
   announcementIsLive,
   type AnnouncementCard,
   formatChicago,
@@ -357,6 +387,11 @@ export type StoreDocument = {
   social?: SocialLink[];
   /** Person ids on the kids team, besides the kids director role. Older snapshots load as empty. */
   kidsTeam?: string[];
+  /** Phase 2a people and care rows. Older snapshots load as empty. */
+  profiles?: PersonProfileRow[];
+  tags?: TagRow[];
+  personTags?: PersonTagRow[];
+  touches?: TouchRow[];
   /** The message staff chose for Home and Watch. Older snapshots omit it. */
   featuredMessage?: {
     videoId: string;
@@ -496,6 +531,10 @@ export class ChurchStore {
   private readonly coffeeOrders: CoffeeOrderRow[] = [];
   private social: SocialLink[] = SITE_SOCIAL.map((link) => ({ ...link }));
   private readonly kidsTeam = new Set<string>();
+  private readonly profiles = new Map<string, PersonProfileRow>();
+  private readonly tags: TagRow[] = [];
+  private readonly personTags: PersonTagRow[] = [];
+  private readonly touches: TouchRow[] = [];
   private featured: {
     videoId: string;
     title: string;
@@ -2896,6 +2935,357 @@ export class ChurchStore {
     return this.followUpViews(actor);
   }
 
+  // ---- Phase 2a: People and care -------------------------------------------------------------
+
+  /** Who this actor may see on People. Throws for roles without `view_people`. */
+  private careScope(actor: Actor): (person: Person) => boolean {
+    authorize(actor, "view_people", this.now());
+    const church = (person: Person) => !person.deleted && isChurchRole(person.role);
+    if (seesEveryone(actor.role)) return church;
+    if (actor.role === "kids_director") {
+      const kidsHouseholds = new Set([...this.children.values()].map((child) => child.householdId));
+      return (person) =>
+        church(person) &&
+        (person.id === actor.personId ||
+          this.kidsTeam.has(person.id) ||
+          (person.householdId !== null && kidsHouseholds.has(person.householdId)));
+    }
+    // Team leaders: people on teams they lead, and people they added themselves.
+    const led = new Set(
+      this.tags
+        .filter((tag) => tag.kind === "team" && !tag.archived && tag.leaderIds.includes(actor.personId))
+        .map((tag) => tag.id),
+    );
+    const onLedTeam = new Set(this.personTags.filter((row) => led.has(row.tagId)).map((row) => row.personId));
+    return (person) =>
+      church(person) &&
+      (person.id === actor.personId || person.addedBy === actor.personId || onLedTeam.has(person.id));
+  }
+
+  private careProfile(person: Person): PersonProfileRow {
+    return (
+      this.profiles.get(person.id) ?? {
+        id: person.id,
+        personId: person.id,
+        stage: defaultStage(person.role, Boolean(person.passwordHash)),
+        lastContactAt: null,
+        doNotContact: false,
+        updatedAt: 0,
+        updatedBy: "",
+      }
+    );
+  }
+
+  private writableProfile(person: Person, actor: Actor): PersonProfileRow {
+    const row = { ...this.careProfile(person), updatedAt: this.now(), updatedBy: actor.personId };
+    this.profiles.set(person.id, row);
+    return row;
+  }
+
+  /** The person, if this actor may see them. Out-of-scope people look the same as missing ones. */
+  private carePerson(actor: Actor, personId: string, action: "view_people" | "edit_people"): Person {
+    const visible = this.careScope(actor);
+    if (action === "edit_people") authorize(actor, "edit_people", this.now());
+    const person = this.people.get(personId);
+    if (!person || !visible(person)) throw new AccessError("not_found", "That person isn't here.");
+    return person;
+  }
+
+  /** Tags this actor may put on someone. Tag managers: any live tag. Others: teams they lead. */
+  private tagsActorMayApply(actor: Actor): TagRow[] {
+    const live = this.tags.filter((tag) => !tag.archived);
+    if (allows(actor.role, "manage_tags")) return live;
+    return live.filter((tag) => tag.kind === "team" && tag.leaderIds.includes(actor.personId));
+  }
+
+  private tagChips(personId: string) {
+    const byId = new Map(this.tags.map((tag) => [tag.id, tag]));
+    return this.personTags
+      .filter((row) => row.personId === personId)
+      .map((row) => byId.get(row.tagId))
+      .filter((tag): tag is TagRow => Boolean(tag) && !tag?.archived)
+      .map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  /** People list with search and filters. Each page is at most `limit` rows. */
+  peopleDirectory(
+    token: string,
+    filter: { q?: string; stage?: string; tagId?: string; quiet?: boolean; limit?: number; offset?: number } = {},
+  ) {
+    const actor = this.actor(token);
+    const visible = this.careScope(actor);
+    const now = this.now();
+    const q = (filter.q ?? "").trim().toLowerCase();
+    const stage = isStage(filter.stage) ? filter.stage : null;
+    const tagged = filter.tagId
+      ? new Set(this.personTags.filter((row) => row.tagId === filter.tagId).map((row) => row.personId))
+      : null;
+    const rows = [...this.people.values()]
+      .filter(visible)
+      .map((person) => ({ person, profile: this.careProfile(person) }))
+      .filter(({ person, profile }) => {
+        if (stage && profile.stage !== stage) return false;
+        if (tagged && !tagged.has(person.id)) return false;
+        if (filter.quiet && !isQuiet(profile.lastContactAt, now)) return false;
+        if (q) {
+          const hay = `${person.displayName} ${person.email} ${person.phone}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((left, right) => left.person.displayName.localeCompare(right.person.displayName));
+    const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500);
+    const offset = Math.max(filter.offset ?? 0, 0);
+    this.record(actor, "read", "people", "directory", 1);
+    return {
+      total: rows.length,
+      offset,
+      limit,
+      rows: rows.slice(offset, offset + limit).map(({ person, profile }) => ({
+        id: person.id,
+        displayName: person.displayName,
+        role: person.role,
+        roleLabel: labelRole(person.role),
+        stage: profile.stage,
+        stageLabel: STAGE_LABELS[profile.stage],
+        lastContactAt: profile.lastContactAt,
+        quiet: isQuiet(profile.lastContactAt, now),
+        doNotContact: profile.doNotContact,
+        claimed: Boolean(person.passwordHash),
+        sample: person.sample,
+        tags: this.tagChips(person.id),
+      })),
+      stages: STAGES.map((id) => ({ id, label: STAGE_LABELS[id] })),
+      tags: this.tags
+        .filter((tag) => !tag.archived)
+        .map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind })),
+      seesEveryone: seesEveryone(actor.role),
+    };
+  }
+
+  /** One person's care page: stage, tags, touches and their follow-ups. */
+  personCare(token: string, personId: string) {
+    const actor = this.actor(token);
+    const person = this.carePerson(actor, personId, "view_people");
+    const profile = this.careProfile(person);
+    this.record(actor, "read", "person_care", person.id, 2);
+    // Newest first. Reversing before the stable sort keeps same-millisecond touches newest-first too.
+    const touches = this.touches
+      .filter((row) => row.personId === person.id)
+      .reverse()
+      .sort((left, right) => right.at - left.at)
+      .slice(0, 100)
+      .map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        kindLabel: TOUCH_LABELS[row.kind],
+        outcome: row.outcome,
+        outcomeLabel: OUTCOME_LABELS[row.outcome],
+        note: row.noteCiphertext ? textField(this.readJson(row.noteCiphertext), "note") : "",
+        byName: this.people.get(row.byId)?.displayName ?? "Former staff",
+        at: row.at,
+      }));
+    const careAllowed = allows(actor.role, "view_care_notes");
+    const followUps = careAllowed
+      ? this.followUps
+          .filter((row) => row.personId === person.id)
+          .sort((left, right) => right.createdAt - left.createdAt)
+          .map((row) => ({ id: row.id, label: FOLLOW_UP_LABELS[row.kind], status: row.status, createdAt: row.createdAt }))
+      : [];
+    const applied = new Set(this.personTags.filter((row) => row.personId === person.id).map((row) => row.tagId));
+    const mayEdit = allows(actor.role, "edit_people");
+    const appliable = this.tagsActorMayApply(actor);
+    return {
+      id: person.id,
+      displayName: person.displayName,
+      email: person.email,
+      phone: person.phone,
+      role: person.role,
+      roleLabel: labelRole(person.role),
+      claimed: Boolean(person.passwordHash),
+      sample: person.sample,
+      stage: profile.stage,
+      stageLabel: STAGE_LABELS[profile.stage],
+      lastContactAt: profile.lastContactAt,
+      doNotContact: profile.doNotContact,
+      tags: this.tagChips(person.id),
+      touches,
+      followUps,
+      mayEdit,
+      removableTagIds: mayEdit ? appliable.filter((tag) => applied.has(tag.id)).map((tag) => tag.id) : [],
+      addableTags: mayEdit
+        ? appliable.filter((tag) => !applied.has(tag.id)).map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind }))
+        : [],
+      stages: STAGES.map((id) => ({ id, label: STAGE_LABELS[id] })),
+      touchKinds: TOUCH_KINDS.map((id) => ({ id, label: TOUCH_LABELS[id] })),
+      outcomes: TOUCH_OUTCOMES.map((id) => ({ id, label: OUTCOME_LABELS[id] })),
+    };
+  }
+
+  setPersonStage(token: string, personId: string, stage: string) {
+    const actor = this.actor(token);
+    const person = this.carePerson(actor, personId, "edit_people");
+    if (!isStage(stage)) throw new AccessError("invalid", "Choose a stage from the list.");
+    const row = this.writableProfile(person, actor);
+    row.stage = stage satisfies Stage;
+    this.record(actor, "write", "person_care", person.id, 2);
+    return { id: person.id, stage: row.stage };
+  }
+
+  /** Logs a call, text, visit, email, prayer or private note. */
+  logTouch(token: string, personId: string, input: { kind: string; outcome: string; note?: string }) {
+    const actor = this.actor(token);
+    const person = this.carePerson(actor, personId, "edit_people");
+    if (!isTouchKind(input.kind)) throw new AccessError("invalid", "Choose what you did.");
+    if (!isTouchOutcome(input.outcome)) throw new AccessError("invalid", "Choose how it went.");
+    const kind: TouchKind = input.kind;
+    const outcome: TouchOutcome = input.outcome;
+    const note = (input.note ?? "").trim();
+    if (note.length > NOTE_LIMIT) throw new AccessError("invalid", `Keep the note under ${NOTE_LIMIT} characters.`);
+    const profile = this.writableProfile(person, actor);
+    if (profile.doNotContact && reachesOut(kind) && outcome !== "asked_not_to_contact") {
+      throw new AccessError("invalid", "They asked us not to contact them. You can still pray or add a note.");
+    }
+    const row: TouchRow = {
+      id: newId("touch"),
+      personId: person.id,
+      kind,
+      outcome,
+      noteCiphertext: note ? encryptString(JSON.stringify({ note }), this.key) : "",
+      byId: actor.personId,
+      at: this.now(),
+    };
+    this.touches.push(row);
+    if (countsAsContact(kind)) profile.lastContactAt = row.at;
+    if (outcome === "asked_not_to_contact") profile.doNotContact = true;
+    this.record(actor, "write", "touch", row.id, 2);
+    return { id: row.id, lastContactAt: profile.lastContactAt, doNotContact: profile.doNotContact };
+  }
+
+  /** Clears "asked not to contact" after they say it is okay again. Pastor, care team, Master Admin. */
+  allowContactAgain(token: string, personId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_tags", this.now());
+    const person = this.carePerson(actor, personId, "edit_people");
+    const row = this.writableProfile(person, actor);
+    row.doNotContact = false;
+    this.record(actor, "write", "person_care", person.id, 2);
+    return { id: person.id, doNotContact: false };
+  }
+
+  careTags(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_people", this.now());
+    const counts = new Map<string, number>();
+    for (const row of this.personTags) counts.set(row.tagId, (counts.get(row.tagId) ?? 0) + 1);
+    return {
+      mayManage: allows(actor.role, "manage_tags"),
+      kinds: TAG_KINDS,
+      leaders: allows(actor.role, "manage_tags")
+        ? [...this.people.values()]
+            .filter((person) => !person.deleted && allows(person.role, "edit_people"))
+            .map((person) => ({ id: person.id, displayName: person.displayName, roleLabel: labelRole(person.role) }))
+            .sort((left, right) => left.displayName.localeCompare(right.displayName))
+        : [],
+      tags: this.tags
+        .filter((tag) => !tag.archived)
+        .map((tag) => ({
+          id: tag.id,
+          name: tag.name,
+          kind: tag.kind,
+          people: counts.get(tag.id) ?? 0,
+          leaders: tag.leaderIds.map((id) => this.people.get(id)?.displayName ?? "").filter(Boolean),
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    };
+  }
+
+  createTag(token: string, input: { name: string; kind?: string; leaderIds?: string[] }) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_tags", this.now());
+    const name = cleanTagName(input.name ?? "");
+    if (!name) throw new AccessError("invalid", "Give the tag a name.");
+    if (isReservedName(name)) throw new AccessError("invalid", "Choose a different name.");
+    const kind: TagKind = isTagKind(input.kind) ? input.kind : "custom";
+    if (this.tags.some((tag) => !tag.archived && tag.name.toLowerCase() === name.toLowerCase())) {
+      throw new AccessError("invalid", "There is already a tag with that name.");
+    }
+    const leaderIds = kind === "team" ? this.validLeaders(input.leaderIds ?? []) : [];
+    const row: TagRow = {
+      id: newId("tag"),
+      name,
+      kind,
+      leaderIds,
+      archived: false,
+      createdAt: this.now(),
+      createdBy: actor.personId,
+    };
+    this.tags.push(row);
+    this.record(actor, "write", "tag", row.id, 1);
+    return { id: row.id, name: row.name, kind: row.kind, leaderIds: [...row.leaderIds] };
+  }
+
+  setTagLeaders(token: string, tagId: string, leaderIds: string[]) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_tags", this.now());
+    const tag = this.tags.find((row) => row.id === tagId && !row.archived);
+    if (!tag) throw new AccessError("not_found", "That tag isn't here.");
+    if (tag.kind !== "team") throw new AccessError("invalid", "Only team tags have leaders.");
+    tag.leaderIds = this.validLeaders(leaderIds);
+    this.record(actor, "write", "tag", tag.id, 1);
+    return { id: tag.id, leaderIds: [...tag.leaderIds] };
+  }
+
+  /** Archived tags drop off every list. The links stay so an undo can bring them back later. */
+  archiveTag(token: string, tagId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_tags", this.now());
+    const tag = this.tags.find((row) => row.id === tagId && !row.archived);
+    if (!tag) throw new AccessError("not_found", "That tag isn't here.");
+    tag.archived = true;
+    this.record(actor, "write", "tag", tag.id, 1);
+    return { id: tag.id, archived: true as const };
+  }
+
+  tagPerson(token: string, personId: string, tagId: string) {
+    const actor = this.actor(token);
+    const person = this.carePerson(actor, personId, "edit_people");
+    const tag = this.tagsActorMayApply(actor).find((row) => row.id === tagId);
+    if (!tag) throw new AccessError("forbidden", "That tag is not yours to use.");
+    const id = personTagId(person.id, tag.id);
+    if (!this.personTags.some((row) => row.id === id)) {
+      this.personTags.push({ id, personId: person.id, tagId: tag.id, addedBy: actor.personId, addedAt: this.now() });
+      this.record(actor, "write", "person_tag", id, 1);
+    }
+    return { personId: person.id, tagId: tag.id };
+  }
+
+  untagPerson(token: string, personId: string, tagId: string) {
+    const actor = this.actor(token);
+    const person = this.carePerson(actor, personId, "edit_people");
+    const tag = this.tagsActorMayApply(actor).find((row) => row.id === tagId);
+    if (!tag) throw new AccessError("forbidden", "That tag is not yours to use.");
+    const id = personTagId(person.id, tag.id);
+    const index = this.personTags.findIndex((row) => row.id === id);
+    if (index >= 0) {
+      this.personTags.splice(index, 1);
+      this.record(actor, "write", "person_tag", id, 1);
+    }
+    return { personId: person.id, tagId: tag.id, removed: index >= 0 };
+  }
+
+  private validLeaders(ids: readonly string[]): string[] {
+    const unique = [...new Set(ids.filter(Boolean))];
+    for (const id of unique) {
+      const person = this.people.get(id);
+      if (!person || person.deleted || !allows(person.role, "edit_people")) {
+        throw new AccessError("invalid", "Team leaders must be staff who can open People.");
+      }
+    }
+    return unique;
+  }
+
   updateFollowUp(
     token: string,
     id: string,
@@ -3892,6 +4282,34 @@ export class ChurchStore {
     gift("gift-avery", "hh-avery", "person-avery", 2500, "general");
     gift("gift-casey", "hh-casey", "person-casey", 4100, "outreach");
 
+    // Phase 2a sample care rows. Labelled samples like every other seeded row.
+    this.tags.push(
+      {
+        id: "tag-greeters",
+        name: "Greeters (sample)",
+        kind: "team",
+        leaderIds: ["person-gray"],
+        archived: false,
+        createdAt: SEED_AT,
+        createdBy: "person-reese",
+      },
+      {
+        id: "tag-new-here",
+        name: "New here (sample)",
+        kind: "custom",
+        leaderIds: [],
+        archived: false,
+        createdAt: SEED_AT,
+        createdBy: "person-reese",
+      },
+    );
+    for (const [personId, tagId] of [
+      ["person-blake", "tag-greeters"],
+      ["person-casey", "tag-new-here"],
+    ] as const) {
+      this.personTags.push({ id: personTagId(personId, tagId), personId, tagId, addedBy: "person-reese", addedAt: SEED_AT });
+    }
+
     const child = (
       row: Omit<ChildRow, "ciphertext"> & { allergy: string; medical: string; code: string },
     ) => {
@@ -4148,6 +4566,10 @@ export class ChurchStore {
       social: this.social.map((link) => ({ ...link })),
       featuredMessage: this.featured ? { ...this.featured } : null,
       kidsTeam: [...this.kidsTeam],
+      profiles: [...this.profiles.values()].map((row) => ({ ...row })),
+      tags: this.tags.map((row) => ({ ...row, leaderIds: [...row.leaderIds] })),
+      personTags: this.personTags.map((row) => ({ ...row })),
+      touches: this.touches.map((row) => ({ ...row })),
     };
   }
 
@@ -4227,6 +4649,11 @@ export class ChurchStore {
     this.featured = document.featuredMessage ? { ...document.featuredMessage } : null;
     this.kidsTeam.clear();
     for (const personId of document.kidsTeam ?? []) this.kidsTeam.add(personId);
+    this.profiles.clear();
+    for (const row of document.profiles ?? []) this.profiles.set(row.personId, { ...row });
+    this.tags.splice(0, this.tags.length, ...(document.tags ?? []).map((row) => ({ ...row, leaderIds: [...(row.leaderIds ?? [])] })));
+    this.personTags.splice(0, this.personTags.length, ...(document.personTags ?? []).map((row) => ({ ...row })));
+    this.touches.splice(0, this.touches.length, ...(document.touches ?? []).map((row) => ({ ...row })));
   }
 
   installDocument(document: StoreDocument): void {
@@ -4304,6 +4731,12 @@ export class ChurchStore {
     );
     this.streaks.delete(personId);
     this.myFive.delete(personId);
+    this.profiles.delete(personId);
+    for (let i = this.personTags.length - 1; i >= 0; i -= 1)
+      if (this.personTags[i]?.personId === personId) this.personTags.splice(i, 1);
+    for (let i = this.touches.length - 1; i >= 0; i -= 1)
+      if (this.touches[i]?.personId === personId) this.touches.splice(i, 1);
+    for (const tag of this.tags) tag.leaderIds = tag.leaderIds.filter((id) => id !== personId);
     for (let i = this.amens.length - 1; i >= 0; i -= 1)
       if (this.amens[i]?.personId === personId) this.amens.splice(i, 1);
     for (let i = this.testimonies.length - 1; i >= 0; i -= 1)
