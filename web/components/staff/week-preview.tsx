@@ -3,7 +3,7 @@ import { formatChicago, type ChurchStore } from "@onehope/server";
 /** What a member sees on Home this week, so staff can check it before Sunday. */
 export function WeekPreview({ store }: { store: ChurchStore }) {
   const home = store.publicHome();
-  const weekEnd = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  const weekEnd = Date.parse(home.countdown.service) + 7 * 24 * 60 * 60 * 1000;
   const events = home.events.filter((event) => event.start <= weekEnd);
   const cards = home.announcements.filter((item) => !item.sample && !item.title.startsWith("Sample"));
   return (
@@ -15,7 +15,7 @@ export function WeekPreview({ store }: { store: ChurchStore }) {
       </p>
       <div className="phone-preview">
         <article className="card">
-          <h3>Sunday at 10:30</h3>
+          <h3>This Sunday</h3>
           <p>{formatChicago(Date.parse(home.countdown.service))}</p>
           <p className="muted">{home.church.address}</p>
         </article>

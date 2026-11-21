@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ChurchStore } from "@onehope/server";
 
 import { confirmStepUpAction, clockInAction, clockOutAction, staffCheckInAction, stationPickupAction } from "@/app/staff-actions";
@@ -56,15 +57,16 @@ export function CheckInDesk({
             {board.onDuty ? "Clock out" : "Clock in"}
           </button>
         </form>
+        <ConfirmInline />
       </article>
       <div className="template-row">
-        <a className="button secondary" href="/checkin">
+        <Link className="button secondary" href="/checkin">
           All rooms
-        </a>
+        </Link>
         {board.classrooms.map((room) => (
-          <a className="button secondary" key={room} href={`/checkin?room=${encodeURIComponent(room)}`}>
+          <Link className="button secondary" key={room} href={`/checkin?room=${encodeURIComponent(room)}`}>
             {room}
-          </a>
+          </Link>
         ))}
       </div>
       {board.children.length === 0 ? (
@@ -95,16 +97,11 @@ export function CheckInDesk({
                 </button>
               </form>
             )}
-            {child.checkedIn ? (
-              <>
-                <PickupForm child={child} />
-                <ConfirmInline />
-              </>
-            ) : null}
+            {child.checkedIn ? <PickupForm child={child} /> : null}
           </article>
         ))
       )}
-      <p className="help">Allergies and medical notes stay off this screen. A leader can open them after confirming it's them.</p>
+        <p className="help">Allergies and medical notes stay off this screen. A leader can open them after confirming it is them.</p>
     </section>
   );
 }
@@ -132,7 +129,7 @@ function PickupForm({
         <p>No allowed adult is on file. See a kids leader before releasing this child.</p>
       ) : (
         <label>
-          Who is picking up?
+          Who is picking up
           <select name="guardianPersonId" required defaultValue={allowed[0]?.id}>
             {allowed.map((adult) => (
               <option key={adult.id} value={adult.id}>
@@ -150,7 +147,7 @@ function PickupForm({
         <input name="code" inputMode="numeric" pattern="\d{4}" required placeholder="4 digits" />
       </label>
       <p className="muted">
-        If this asks you to confirm it's you, enter your authenticator code below first.
+        If this asks you to confirm it is you, enter your authenticator code below first.
       </p>
       <button className="button" type="submit" disabled={allowed.length === 0}>
         Release child
@@ -164,11 +161,11 @@ function ConfirmInline() {
     <form className="form" action={confirmStepUpAction}>
       <input type="hidden" name="next" value="/checkin" />
       <label>
-        Confirm it's you (6-digit code)
+        Confirm it is you (6-digit code)
         <input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" />
       </label>
       <button className="button secondary" type="submit">
-        Confirm it's me
+        Confirm it is me
       </button>
     </form>
   );

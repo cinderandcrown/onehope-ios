@@ -29,10 +29,10 @@ export function MessageDesk({
   const allowed = role === "pastor" || role === "master_admin" || role === "team_leader";
   return (
     <section>
-      <h1>This Sunday's message</h1>
+      <h1>This Sunday message</h1>
       <p className="help">
-        How do I put this Sunday's message on Home? Tap Feature on the video, add a speaker or a Bible
-        passage if you want, then save. People see it on Home and at the top of Watch. Facebook Live is not
+        How do I put this Sunday message on Home? Tap Feature on the video, add a speaker or a Bible passage
+        if you want, then save. People see it on Home and at the top of Watch. Facebook Live is not
         connected.
       </p>
       {notice ? <p className="notice">{notice}</p> : null}
@@ -57,7 +57,7 @@ export function MessageDesk({
       )}
       {!allowed ? <p>Featuring a message is for pastors and team leaders.</p> : null}
       {messages.length === 0 ? (
-        <p>YouTube didn't load just now. Wait a minute and open this page again. Nothing was changed.</p>
+        <p>YouTube did not load just now. Wait a minute and open this page again. Nothing was changed.</p>
       ) : (
         messages.map((video) => (
           <article className="panel" key={video.id}>

@@ -88,7 +88,12 @@ export async function SectionView({
   query: Record<string, string | string[] | undefined>;
 }) {
   const sermons =
-    section === "media" ? await loadSermons(fetch, loadConfig(process.env).youtubeChannelId) : [];
+    section === "media"
+      ? await loadSermons(
+          (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(8000) }),
+          loadConfig(process.env).youtubeChannelId,
+        )
+      : [];
   return withStore((store) => renderSection(store, section, token, query, sermons));
 }
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatChicago, labelRole, type ChurchStore } from "@onehope/server";
 
 import { addPersonAction, editPersonAction } from "@/app/actions";
@@ -55,9 +56,9 @@ export function PeopleDesk({
           <p className="setup-key">{added}</p>
           <div className="template-row">
             <CopyButton value={added} label="Copy code" />
-            <a className="button secondary" href="/claim">
+            <Link className="button secondary" href="/claim">
               Open the claim page
-            </a>
+            </Link>
           </div>
           <p className="muted">
             {Number.isFinite(expires) && expires > 0

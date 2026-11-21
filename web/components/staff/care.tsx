@@ -45,7 +45,7 @@ export function CareDesk({
       {care.queue.locked ? (
         <article className="panel">
           <h2>Staff care queue</h2>
-          <p>Confirm it is you again before this opens. Enter the 6-digit code from your authenticator.</p>
+          <p>Confirm it is you again before this opens. Enter the 6-digit code from your authenticator app.</p>
           <form className="form" action={confirmStepUpAction}>
             <input type="hidden" name="next" value="/care" />
             <label>
@@ -53,7 +53,7 @@ export function CareDesk({
               <input name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="\d{6}" />
             </label>
             <button className="button" type="submit">
-              Confirm it's me
+              Confirm it is me
             </button>
           </form>
         </article>
@@ -207,7 +207,7 @@ function CareQueue({
                 Share testimony
               </button>
               <button className="button secondary" name="approved" value="no" type="submit">
-                Don't share
+                Do not share
               </button>
             </div>
           </form>
