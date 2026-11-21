@@ -26,6 +26,17 @@ struct HomeReply: Decodable {
     let social: [SocialLink]?
     let images: [String: String]?
     let media: MediaReply?
+    /// Staff-chosen Sunday message. Missing or blank means use the newest YouTube message.
+    let sampleSermon: FeaturedMessage?
+
+    struct FeaturedMessage: Decodable {
+        let title: String?
+        let speaker: String?
+        let passage: String?
+        let videoId: String?
+        let link: String?
+        let thumbnail: String?
+    }
 }
 
 struct MediaReply: Decodable {

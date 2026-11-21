@@ -56,7 +56,7 @@ public struct PickupDecision: Equatable, Sendable {
 public enum PickupRules {
     public static func evaluate(_ input: PickupInput) -> PickupDecision {
         if input.adultsOnDuty < 2 {
-            return PickupDecision(allowed: false, reason: "Two adults must be on duty at the station.")
+            return PickupDecision(allowed: false, reason: "Two adults from the kids team must be on duty at the station.")
         }
         if !input.guardianAuthorized {
             return PickupDecision(allowed: false, reason: "This adult is not an authorized guardian.")

@@ -329,6 +329,8 @@ export type StoreDocument = {
   outreachRsvps?: { id: string; outreachId: string; personId: string }[];
   coffeeOrders?: CoffeeOrderRow[];
   social?: SocialLink[];
+  /** Person ids on the kids team, besides the kids director role. Older snapshots load as empty. */
+  kidsTeam?: string[];
   /** The message staff chose for Home and Watch. Older snapshots omit it. */
   featuredMessage?: {
     videoId: string;
@@ -466,6 +468,7 @@ export class ChurchStore {
   private readonly outreachRsvps: { id: string; outreachId: string; personId: string }[] = [];
   private readonly coffeeOrders: CoffeeOrderRow[] = [];
   private social: SocialLink[] = SITE_SOCIAL.map((link) => ({ ...link }));
+  private readonly kidsTeam = new Set<string>();
   private featured: {
     videoId: string;
     title: string;
@@ -2114,9 +2117,15 @@ export class ChurchStore {
     const room = classroom?.trim() ?? "";
     const children = [...this.children.values()].filter((child) => !room || child.classroom === room);
     return {
-      adultsOnDuty: this.station.size,
+      adultsOnDuty: this.kidsOnDuty(),
       onDuty: this.station.has(actor.personId),
-      namesOnDuty: [...this.station].map((id) => this.people.get(id)?.displayName ?? "Staff"),
+      canClockIn: this.onKidsTeam(this.requirePerson(actor.personId)),
+      namesOnDuty: [...this.station]
+        .filter((id) => {
+          const person = this.people.get(id);
+          return person ? this.onKidsTeam(person) : false;
+        })
+        .map((id) => this.people.get(id)?.displayName ?? "Staff"),
       classrooms: [...new Set([...this.children.values()].map((child) => child.classroom))].sort(),
       children: children.map((child) => {
         const code = textField(this.readJson(child.ciphertext), "code");
@@ -2168,20 +2177,31 @@ export class ChurchStore {
 
   clockIn(token: string) {
     const actor = this.actor(token);
-    if (!isStaff(actor.role))
-      throw new AccessError("forbidden", "Only staff can clock into a check-in station.");
-    if (!actor.mfaVerified)
+    const person = this.requirePerson(actor.personId);
+    if (!this.onKidsTeam(person)) {
+      throw new AccessError(
+        "forbidden",
+        "Only the kids team can be the second adult at pickup. Ask a kids director, a kids team leader, or a kids volunteer to clock in.",
+      );
+    }
+    if (isStaff(actor.role) && !actor.mfaVerified) {
       throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
+    }
     this.station.add(actor.personId);
-    return { adultsOnDuty: this.station.size, onDuty: true as const };
+    return { adultsOnDuty: this.kidsOnDuty(), onDuty: true as const };
   }
 
   clockOut(token: string) {
     const actor = this.actor(token);
-    if (!isStaff(actor.role))
-      throw new AccessError("forbidden", "Only staff can clock into a check-in station.");
+    const person = this.requirePerson(actor.personId);
+    if (!this.onKidsTeam(person) && !this.station.has(actor.personId)) {
+      throw new AccessError(
+        "forbidden",
+        "Only the kids team can be the second adult at pickup. Ask a kids director, a kids team leader, or a kids volunteer to clock in.",
+      );
+    }
     this.station.delete(actor.personId);
-    return { adultsOnDuty: this.station.size, onDuty: false as const };
+    return { adultsOnDuty: this.kidsOnDuty(), onDuty: false as const };
   }
 
   pickup(token: string, input: PickupBody) {
@@ -2554,7 +2574,7 @@ export class ChurchStore {
         count,
         title: input.title,
         segment: input.segment,
-        reason: `This would notify ${count} ${count === 1 ? "person" : "people"} in ${input.segment}. Nothing has been sent yet.`,
+        reason: `This would notify ${count} ${count === 1 ? "person" : "people"} (${this.segmentLabel(input.segment)}). Nothing has been sent yet.`,
       };
     }
     if (!live || !this.pushSender) {
@@ -2595,6 +2615,12 @@ export class ChurchStore {
     };
   }
 
+  private segmentLabel(segment: "members" | "volunteers" | "parents") {
+    if (segment === "members") return "everyone with the app, including guests";
+    if (segment === "volunteers") return "volunteers";
+    return "parents";
+  }
+
   private apnsLive() {
     if (this.pushSender) return true;
     return false;
@@ -2612,8 +2638,31 @@ export class ChurchStore {
     return [...this.people.values()].filter((person) => {
       if (person.deleted) return false;
       if (segment === "volunteers") return person.role === "volunteer" || person.role === "team_leader";
-      return person.role === "member";
+      return Boolean(person.passwordHash);
     }).length;
+  }
+
+  /**
+   * Kids director, a kids team leader, a kids volunteer, or anyone on the kids-team list.
+   * A pastor, finance teammate, or care teammate does not count unless they are on that list.
+   */
+  private onKidsTeam(person: Person): boolean {
+    if (person.deleted) return false;
+    if (person.role === "kids_director") return true;
+    if (this.kidsTeam.has(person.id)) return true;
+    const servesKids =
+      this.schedule.some((row) => row.personId === person.id && /kid/i.test(row.position)) ||
+      this.volunteers.some((row) => row.personId === person.id && /kid/i.test(row.positionId));
+    return servesKids && (person.role === "volunteer" || person.role === "team_leader");
+  }
+
+  private kidsOnDuty(): number {
+    let count = 0;
+    for (const personId of this.station) {
+      const person = this.people.get(personId);
+      if (person && this.onKidsTeam(person)) count += 1;
+    }
+    return count;
   }
 
   knowJesus() {
@@ -3274,7 +3323,7 @@ export class ChurchStore {
       expectedCode: textField(this.readJson(child.ciphertext), "code"),
       guardianAuthorized: child.guardianIds.includes(guardianPersonId),
       custodyRestricted: child.restrictedPersonIds.includes(guardianPersonId),
-      adultsOnDuty: this.station.size,
+      adultsOnDuty: this.kidsOnDuty(),
     });
     if (verdict.allowed) {
       this.writeKidFields(child, { code: undefined, checkedInAt: undefined });
@@ -3573,6 +3622,8 @@ export class ChurchStore {
         listed: true,
       }),
     );
+    this.kidsTeam.add("person-frankie");
+    this.kidsTeam.add("person-gray");
     add(
       this.makePerson({
         id: "person-harper",
@@ -3904,6 +3955,7 @@ export class ChurchStore {
       coffeeOrders: this.coffeeOrders.map((row) => ({ ...row })),
       social: this.social.map((link) => ({ ...link })),
       featuredMessage: this.featured ? { ...this.featured } : null,
+      kidsTeam: [...this.kidsTeam],
     };
   }
 
@@ -3975,6 +4027,8 @@ export class ChurchStore {
       ? document.social.map((link) => ({ ...link }))
       : SITE_SOCIAL.map((link) => ({ ...link }));
     this.featured = document.featuredMessage ? { ...document.featuredMessage } : null;
+    this.kidsTeam.clear();
+    for (const personId of document.kidsTeam ?? []) this.kidsTeam.add(personId);
   }
 
   installDocument(document: StoreDocument): void {

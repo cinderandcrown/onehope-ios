@@ -8,10 +8,14 @@ function one(query: Record<string, string | string[] | undefined>, key: string) 
 }
 
 const SEGMENTS = [
-  ["members", "Members"],
+  ["members", "Everyone with the app"],
   ["volunteers", "Volunteers"],
   ["parents", "Parents"],
 ] as const;
+
+function segmentLabel(id: string) {
+  return SEGMENTS.find((item) => item[0] === id)?.[1] ?? id;
+}
 
 export function PushDesk({
   store,
@@ -69,7 +73,8 @@ export function PushDesk({
           </p>
           <p>{one(query, "body")}</p>
           <p>
-            {one(query, "segment")} · {one(query, "count")} people. This is the last step before it goes out.
+            {segmentLabel(one(query, "segment"))} · {one(query, "count")} people. This includes guests, not only
+            members. This is the last step before it goes out. Nothing is sent until you confirm.
           </p>
           <form action={savePush}>
             <input type="hidden" name="title" value={one(query, "title")} />

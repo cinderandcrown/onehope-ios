@@ -13,6 +13,17 @@ function code() {
   return totpCode(decodeBase32(SAMPLE_TOTP_BASE32), Date.now());
 }
 
+function staffOf(store: ChurchStore, email: string) {
+  const { token } = store.login({
+    email,
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(token, code());
+  return token;
+}
+
 function pastor(store: ChurchStore) {
   const { token } = store.login({
     email: "reese@sample.onehope",
@@ -377,23 +388,39 @@ test("the kids desk clocks adults in, filters rooms, shows a code, and honors pi
       .allowed,
     false,
   );
-  const dana = store.login({
+  const finance = store.login({
     email: "dana@sample.onehope",
     password: SAMPLE_PASSWORD,
     ip: "203.0.113.8",
     userAgent: "test",
   });
-  store.verifyMfa(dana.token, code());
+  store.verifyMfa(finance.token, code());
+  const refused = await handle(
+    new Request("http://localhost/api/kids/clock-in", {
+      method: "POST",
+      headers: { authorization: `Bearer ${finance.token}` },
+    }),
+  );
+  assert.equal(refused.status, 403);
+  const refusedBody = (await refused.json()) as { error: string };
+  assert.match(refusedBody.error, /kids team/);
   await handle(
     new Request("http://localhost/api/kids/clock-in", {
       method: "POST",
       headers: { authorization: `Bearer ${frankie.token}` },
     }),
   );
+  const gray = store.login({
+    email: "gray@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(gray.token, code());
   const second = await handle(
     new Request("http://localhost/api/kids/clock-in", {
       method: "POST",
-      headers: { authorization: `Bearer ${dana.token}` },
+      headers: { authorization: `Bearer ${gray.token}` },
     }),
   );
   assert.equal(second.status, 200);
@@ -417,6 +444,26 @@ test("the kids desk clocks adults in, filters rooms, shows a code, and honors pi
   const label = store.stationLabel(frankie.token, "child-quinn");
   assert.match(label.zpl, /Quinn Sample/);
   assert.equal(label.socketOpened, false);
+});
+
+test("only the kids team can clock in as the second adult", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const finance = staffOf(store, "dana@sample.onehope");
+  assert.throws(
+    () => store.clockIn(finance),
+    (error: AccessError) => error.code === "forbidden" && /kids team/.test(error.message),
+  );
+  const harper = store.login({
+    email: "harper@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  }).token;
+  assert.throws(() => store.clockIn(harper), (error: AccessError) => /kids volunteer/.test(error.message));
+  store.assignServing(lead, { personId: "person-harper", position: "Kids" });
+  assert.equal(store.clockIn(harper).onDuty, true);
+  assert.equal(store.clockIn(staffOf(store, "gray@sample.onehope")).adultsOnDuty, 2);
 });
 
 test("an invite can be claimed, undone while unclaimed, and a new staff member enrolls TOTP", async () => {
@@ -588,7 +635,16 @@ test("push saves a draft until Apple push is live, then asks before it sends", a
   assert.equal(draft.sent, false);
   assert.equal(draft.drafted, true);
   assert.match(draft.reason, /Nothing was sent/);
-  assert.ok(draft.count >= 1);
+  assert.equal(store.pushDesk(lead).counts.members, 9);
+  const signedUp = store.signup({
+    email: "guest.neighbor@example.com",
+    password: "gathering1",
+    displayName: "Guest Neighbor",
+    ip: "203.0.113.40",
+    userAgent: "phone",
+  });
+  assert.equal(signedUp.person.role, "member");
+  assert.equal(store.pushDesk(lead).counts.members, 10);
   assert.throws(
     () => store.sendPush(guest, { title: "Nope", body: "Nope", segment: "members" }),
     (error: AccessError) => error.code === "forbidden",

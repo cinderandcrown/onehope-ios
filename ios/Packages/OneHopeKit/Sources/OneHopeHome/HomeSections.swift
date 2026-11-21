@@ -158,6 +158,11 @@ struct LatestMessages: View {
                     VStack(alignment: .leading, spacing: Space.sm) {
                         VideoThumbnail(sermon: latest, height: 200, highRes: true)
                         Text(latest.title).font(.headline).foregroundStyle(BrandColor.ink).multilineTextAlignment(.leading)
+                        if !latest.speaker.isEmpty || !latest.passage.isEmpty {
+                            Text([latest.speaker, latest.passage].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.subheadline)
+                                .foregroundStyle(BrandColor.ink)
+                        }
                         if let published = latest.published {
                             Text(ChurchTime.dayLine(published)).font(.footnote).foregroundStyle(BrandColor.ink)
                         }

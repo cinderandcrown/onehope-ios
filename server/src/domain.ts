@@ -411,7 +411,9 @@ function pickupRefusal(reason: string, countsTowardLockout = false): PickupVerdi
 }
 
 export function evaluatePickup(input: PickupInput): PickupVerdict {
-  if (input.adultsOnDuty < 2) return pickupRefusal("Two adults must be on duty at the station.");
+  if (input.adultsOnDuty < 2) {
+    return pickupRefusal("Two adults from the kids team must be on duty at the station.");
+  }
   if (!input.guardianAuthorized) return pickupRefusal("This adult is not an authorized guardian.");
   if (input.custodyRestricted) return pickupRefusal("A custody restriction blocks this pickup.");
   if (!input.expectedCode) return pickupRefusal("This child is not checked in.");

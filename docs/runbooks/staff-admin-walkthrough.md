@@ -45,7 +45,7 @@ Open **Care**. If it asks, enter the 6-digit authenticator code and tap **Confir
 
 Open **Check-in**. This screen does not text families.
 
-- Tap **Clock in**. Pickup stays closed until a second adult clocks in.
+- Tap **Clock in** if you are on the kids team (kids director, kids team leader, or kids volunteer). Pickup stays closed until a second adult from the kids team clocks in. A pastor, finance teammate, or care teammate cannot be that second adult.
 - Filter by room. Tap **Check in** on a child. Read the 4-digit code to the adult, or **Copy code** / **Print label**.
 - Pickup: choose an allowed adult and type the code. A person marked “Cannot pick up” is not in the list.
 - Allergies stay off this screen.
@@ -76,7 +76,7 @@ If YouTube did not load, wait and open the page again. Nothing else changes.
 
 Open **Push**. The screen says nothing was sent, because Apple push is not turned on. **Save draft** keeps the words. Phones do not buzz.
 
-The ready-made notes are Sunday at 10:30, Kids check-in is open, and Prayer night. The menu shows how many people are in Members, Volunteers, and Parents.
+The ready-made notes are Sunday at 10:30, Kids check-in is open, and Prayer night. **Everyone with the app** is every person who has the app, guests included, not only people whose role is Member. Volunteers and Parents stay their own groups. The menu shows the count. Sends stay off until Apple push is actually connected.
 
 When Apple push is actually connected, the button asks you to confirm the group and the count before anything goes out.
 

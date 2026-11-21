@@ -115,7 +115,7 @@ test("kids pickup is two-adult, guardian verified, and custody aware", () => {
     store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "4821" }).allowed,
     false,
   );
-  store.clockIn(staff(store, "dana@sample.onehope"));
+  store.clockIn(staff(store, "gray@sample.onehope"));
   assert.equal(
     store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "0000" }).allowed,
     false,

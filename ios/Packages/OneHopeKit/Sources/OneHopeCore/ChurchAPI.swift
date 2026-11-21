@@ -213,22 +213,6 @@ public struct PathwayStep: Equatable, Sendable, Identifiable {
     public let status: String
 }
 
-public struct SermonLine: Equatable, Sendable, Identifiable {
-    public let id: String
-    public let title: String
-    public let thumbnail: String?
-    /// 1280x720 poster. YouTube has none for some older videos, so views fall back to `thumbnail`.
-    public let thumbnailHD: String?
-    public let published: Date?
-    /// "message" for full Sunday messages, "short" for clips.
-    public let kind: String
-    public let link: URL?
-
-    public var isShort: Bool {
-        kind == "short"
-    }
-}
-
 public enum MemberAction: Sendable {
     case join(String)
     case message(String, String)

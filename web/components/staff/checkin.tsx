@@ -39,8 +39,8 @@ export function CheckInDesk({
       <h1>Kids check-in</h1>
       <p className="help">
         How do I check a child in? Clock in, find the child, and tap Check in. Read the 4-digit code to the
-        adult at the desk, or print the label. We never text the family. Pickup needs the code, an allowed
-        adult, and two adults on duty.
+        adult at the desk, or print the label.         We never text the family. Pickup needs the code, an allowed adult, and two adults from the kids
+        team. A pastor or finance teammate cannot be the second adult.
       </p>
       {saved ? <p className="notice">Saved. The child is with their adult.</p> : null}
       {pickupNote ? <p className="notice">{pickupNote}</p> : null}
@@ -51,12 +51,23 @@ export function CheckInDesk({
             ? "No one is clocked in yet."
             : `On duty: ${board.namesOnDuty.join(", ")}.`}
         </p>
-        <p>{ready ? "Pickup can happen." : "Pickup stays closed until a second adult clocks in."}</p>
-        <form action={board.onDuty ? clockOutAction : clockInAction}>
-          <button className="button" type="submit">
-            {board.onDuty ? "Clock out" : "Clock in"}
-          </button>
-        </form>
+        <p>
+          {ready
+            ? "Pickup can happen."
+            : "Pickup stays closed until a second adult from the kids team clocks in."}
+        </p>
+        {board.canClockIn ? (
+          <form action={board.onDuty ? clockOutAction : clockInAction}>
+            <button className="button" type="submit">
+              {board.onDuty ? "Clock out" : "Clock in"}
+            </button>
+          </form>
+        ) : (
+          <p>
+            Only the kids team can be the second adult at pickup. Ask a kids director, a kids team leader, or
+            a kids volunteer to clock in.
+          </p>
+        )}
         <ConfirmInline />
       </article>
       <div className="template-row">

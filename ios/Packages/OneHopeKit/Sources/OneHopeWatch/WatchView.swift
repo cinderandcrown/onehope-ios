@@ -167,6 +167,11 @@ public struct WatchView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(sermon.title).font(.subheadline.weight(.semibold)).foregroundStyle(BrandColor.ink)
                             .multilineTextAlignment(.leading)
+                        if !sermon.speaker.isEmpty || !sermon.passage.isEmpty {
+                            Text([sermon.speaker, sermon.passage].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(BrandColor.ink)
+                        }
                         if let published = sermon.published {
                             Text(ChurchTime.dayLine(published)).font(.caption)
                         }

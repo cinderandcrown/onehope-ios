@@ -25,7 +25,6 @@ struct MemberParts {
 
 func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     let home = parts.home
-    let messages = parts.sermons.videos.filter { $0.kind != "short" }
     var snapshot = ChurchSnapshot.bundled()
     snapshot.fromAPI = true
     snapshot.offlineNote = ""
@@ -45,10 +44,12 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.serviceISO = home.countdown.service
     snapshot.announcements = home.announcements.map { SampleChurch.Announcement(id: $0.id, title: $0.title, body: $0.body, sample: $0.sample) }
     snapshot.events = home.events.map { eventItem($0, registered: false) }
-    snapshot.sermonTitle = messages.first?.title ?? ""
-    snapshot.sermonSample = messages.isEmpty
-    snapshot.sermonNote = messages.isEmpty ? "Sunday messages will appear here." : "From the church YouTube channel."
-    snapshot.sermons = parts.sermons.videos.map(sermonLine)
+    let ordered = SermonOrder.featuring(parts.sermons.videos.map(sermonLine), featuredLine(home.sampleSermon))
+    let lead = ordered.first { !$0.isShort }
+    snapshot.sermonTitle = lead?.title ?? ""
+    snapshot.sermonSample = lead == nil
+    snapshot.sermonNote = lead == nil ? "Sunday messages will appear here." : "From the church YouTube channel."
+    snapshot.sermons = ordered
     snapshot.groups = parts.groups.groups.map(groupLine)
     snapshot.images = ChurchImages(slots: home.images ?? [:])
     snapshot.media = churchMedia(home.media)
@@ -113,6 +114,24 @@ private func eventItem(_ event: HomeReply.Event, registered: Bool) -> SampleChur
         end: event.end.map { Date(timeIntervalSince1970: $0 / 1000) },
         registered: registered,
         url: event.url.flatMap(URL.init(string:))
+    )
+}
+
+private func featuredLine(_ featured: HomeReply.FeaturedMessage?) -> SermonLine? {
+    guard let featured else { return nil }
+    let title = featured.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let videoId = featured.videoId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !title.isEmpty, !videoId.isEmpty else { return nil }
+    return SermonLine(
+        id: videoId,
+        title: title,
+        thumbnail: featured.thumbnail,
+        thumbnailHD: nil,
+        published: nil,
+        kind: "message",
+        link: featured.link.flatMap(URL.init(string:)),
+        speaker: featured.speaker ?? "",
+        passage: featured.passage ?? ""
     )
 }
 

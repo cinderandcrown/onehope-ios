@@ -39,7 +39,7 @@ test("pickup requires two adults, a guardian, no custody block, and the code", (
   const shortStaffed = evaluatePickup({ ...ok, adultsOnDuty: 1 });
   assert.equal(shortStaffed.allowed, false);
   assert.equal(shortStaffed.countsTowardLockout, false);
-  assert.equal(shortStaffed.reason, "Two adults must be on duty at the station.");
+  assert.equal(shortStaffed.reason, "Two adults from the kids team must be on duty at the station.");
   assert.equal(evaluatePickup({ ...ok, guardianAuthorized: false }).countsTowardLockout, false);
   assert.equal(evaluatePickup({ ...ok, custodyRestricted: true }).countsTowardLockout, false);
   const wrongCode = evaluatePickup({ ...ok, code: "0000" });
