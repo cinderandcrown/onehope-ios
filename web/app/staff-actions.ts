@@ -1,11 +1,12 @@
 "use server";
 
 import {
-  AccessError,
   ROLES,
   announcementTemplate,
+  type ChurchStore,
   type Role,
   eventTemplate,
+  isAccessError,
   nextChurchMoment,
   parseChicagoLocal,
   serveTemplate,
@@ -14,7 +15,12 @@ import {
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { setFlash } from "@/lib/flash";
 import { clearIssued, rememberIssued } from "@/lib/issued-code";
+
+function desk<T>(token: string, fn: (store: ChurchStore) => Promise<T> | T) {
+  return withStore(fn, { token });
+}
 
 async function staffToken() {
   const jar = await cookies();
@@ -24,14 +30,14 @@ async function staffToken() {
 }
 
 function fail(path: string, error: unknown): never {
-  if (error instanceof AccessError) redirect(`${path}?error=1`);
+  if (isAccessError(error)) redirect(`${path}?error=1`);
   throw error;
 }
 
-function checkinFail(error: unknown): never {
-  const message =
-    error instanceof AccessError ? error.message : "That did not work. Check the code and try again.";
-  redirect(`/checkin?notice=${encodeURIComponent(message)}`);
+async function checkinFail(error: unknown): Promise<never> {
+  const message = isAccessError(error) ? error.message : "That did not work. Check the code and try again.";
+  await setFlash({ desk: "checkin", tone: "error", message });
+  redirect("/checkin");
 }
 
 function windowFrom(formData: FormData): { startsAt: number | null; endsAt: number | null } {
@@ -52,7 +58,7 @@ export async function postAnnouncementAction(formData: FormData) {
   const body = template?.body ?? String(formData.get("body") ?? "");
   const window = template ? { startsAt: null, endsAt: null } : windowFrom(formData);
   try {
-    await withStore((store) => store.createAnnouncement(token, { title, body, ...window }));
+    await desk(token, (store) => store.createAnnouncement(token, { title, body, ...window }));
   } catch (error) {
     fail("/communications", error);
   }
@@ -66,7 +72,7 @@ export async function updateAnnouncementAction(formData: FormData) {
   const body = String(formData.get("body") ?? "");
   const window = windowFrom(formData);
   try {
-    await withStore((store) => store.updateAnnouncement(token, id, { title, body, ...window }));
+    await desk(token, (store) => store.updateAnnouncement(token, id, { title, body, ...window }));
   } catch (error) {
     fail("/communications", error);
   }
@@ -99,7 +105,7 @@ export async function postEventAction(formData: FormData) {
   const description = template?.detail ?? String(formData.get("description") ?? "");
   const capacity = template ? null : capacityFrom(formData);
   try {
-    await withStore((store) =>
+    await desk(token, (store) =>
       store.createEvent(token, { title, location, description, capacity, ...timing }),
     );
   } catch (error) {
@@ -113,7 +119,7 @@ export async function updateEventAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const timing = scheduleFrom(formData, "/events");
   try {
-    await withStore((store) =>
+    await desk(token, (store) =>
       store.updateEvent(token, id, {
         title: String(formData.get("title") ?? ""),
         location: String(formData.get("location") ?? ""),
@@ -133,7 +139,7 @@ export async function cancelEventAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const cancelled = formData.get("cancelled") !== "no";
   try {
-    await withStore((store) => store.cancelEvent(token, id, cancelled));
+    await desk(token, (store) => store.cancelEvent(token, id, cancelled));
   } catch (error) {
     fail("/events", error);
   }
@@ -147,7 +153,7 @@ export async function postServeAction(formData: FormData) {
     ? nextChurchMoment(Date.now(), template)
     : scheduleFrom(formData, "/events");
   try {
-    await withStore((store) =>
+    await desk(token, (store) =>
       store.createOutreach(token, {
         title: template?.title ?? String(formData.get("title") ?? ""),
         location: template?.location ?? String(formData.get("location") ?? ""),
@@ -166,7 +172,7 @@ export async function updateServeAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const timing = scheduleFrom(formData, "/events");
   try {
-    await withStore((store) =>
+    await desk(token, (store) =>
       store.updateOutreach(token, id, {
         title: String(formData.get("title") ?? ""),
         location: String(formData.get("location") ?? ""),
@@ -185,7 +191,7 @@ export async function cancelServeAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const cancelled = formData.get("cancelled") !== "no";
   try {
-    await withStore((store) => store.cancelOutreach(token, id, cancelled));
+    await desk(token, (store) => store.cancelOutreach(token, id, cancelled));
   } catch (error) {
     fail("/events", error);
   }
@@ -196,10 +202,11 @@ export async function undoPersonAction(formData: FormData) {
   const token = await staffToken();
   const id = String(formData.get("id") ?? "");
   try {
-    await withStore((store) => store.undoAddPerson(token, id));
+    await desk(token, (store) => store.undoAddPerson(token, id));
   } catch (error) {
     fail("/people", error);
   }
+  await clearIssued();
   redirect("/people?saved=1");
 }
 
@@ -214,7 +221,7 @@ export async function changeRoleAction(formData: FormData) {
   const next = formData.get("next") === "/security" ? "/security" : "/people";
   if (!isRole(role)) redirect(`${next}?error=1`);
   try {
-    await withStore((store) => store.changeRole(token, { personId, role }));
+    await desk(token, (store) => store.changeRole(token, { personId, role }));
   } catch (error) {
     fail(next, error);
   }
@@ -225,7 +232,7 @@ export async function confirmTotpAction(formData: FormData) {
   const token = await staffToken();
   const code = String(formData.get("code") ?? "");
   try {
-    await withStore((store) => store.confirmTotp(token, code));
+    await desk(token, (store) => store.confirmTotp(token, code));
   } catch (error) {
     fail("/enroll", error);
   }
@@ -237,7 +244,7 @@ export async function issueInviteAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   let invite: { inviteToken: string; expires: number; displayName: string };
   try {
-    invite = await withStore((store) => store.issueInvite(token, email));
+    invite = await desk(token, (store) => store.issueInvite(token, email));
   } catch (error) {
     fail("/security", error);
   }
@@ -259,7 +266,7 @@ export async function clearIssuedAction(formData: FormData) {
 export async function featureMessageAction(formData: FormData) {
   const token = await staffToken();
   try {
-    await withStore((store) =>
+    await desk(token, (store) =>
       store.featureMessage(token, {
         videoId: String(formData.get("videoId") ?? ""),
         title: String(formData.get("title") ?? ""),
@@ -278,7 +285,7 @@ export async function featureMessageAction(formData: FormData) {
 export async function clearFeatureAction() {
   const token = await staffToken();
   try {
-    await withStore((store) => store.clearFeaturedMessage(token));
+    await desk(token, (store) => store.clearFeaturedMessage(token));
   } catch (error) {
     fail("/media", error);
   }
@@ -289,8 +296,9 @@ export async function assignServingAction(formData: FormData) {
   const token = await staffToken();
   const personId = String(formData.get("personId") ?? "");
   const position = String(formData.get("position") ?? "");
+  const positionId = String(formData.get("positionId") ?? "");
   try {
-    await withStore((store) => store.assignServing(token, { personId, position }));
+    await desk(token, (store) => store.assignServing(token, { personId, position, positionId }));
   } catch (error) {
     fail("/serving", error);
   }
@@ -301,7 +309,7 @@ export async function undoServingAction(formData: FormData) {
   const token = await staffToken();
   const id = String(formData.get("id") ?? "");
   try {
-    await withStore((store) => store.undoServing(token, id));
+    await desk(token, (store) => store.undoServing(token, id));
   } catch (error) {
     fail("/serving", error);
   }
@@ -311,20 +319,24 @@ export async function undoServingAction(formData: FormData) {
 export async function clockInAction() {
   const token = await staffToken();
   try {
-    await withStore((store) => store.clockIn(token));
+    await desk(token, (store) => store.clockIn(token));
   } catch (error) {
-    checkinFail(error);
+    await checkinFail(error);
+    throw error;
   }
+  await setFlash({ desk: "checkin", tone: "saved", message: "You are clocked in." });
   redirect("/checkin");
 }
 
 export async function clockOutAction() {
   const token = await staffToken();
   try {
-    await withStore((store) => store.clockOut(token));
+    await desk(token, (store) => store.clockOut(token));
   } catch (error) {
-    checkinFail(error);
+    await checkinFail(error);
+    throw error;
   }
+  await setFlash({ desk: "checkin", tone: "saved", message: "You are clocked out." });
   redirect("/checkin");
 }
 
@@ -332,10 +344,12 @@ export async function staffCheckInAction(formData: FormData) {
   const token = await staffToken();
   const childId = String(formData.get("childId") ?? "");
   try {
-    await withStore((store) => store.staffCheckIn(token, childId));
+    await desk(token, (store) => store.staffCheckIn(token, childId));
   } catch (error) {
-    checkinFail(error);
+    await checkinFail(error);
+    throw error;
   }
+  await setFlash({ desk: "checkin", tone: "saved", message: "Checked in. Read the code on this screen. Nothing was texted." });
   redirect(`/checkin?label=${encodeURIComponent(childId)}`);
 }
 
@@ -346,12 +360,17 @@ export async function stationPickupAction(formData: FormData) {
   const code = String(formData.get("code") ?? "");
   let result: { allowed: boolean; reason: string };
   try {
-    result = await withStore((store) => store.pickup(token, { childId, guardianPersonId, code }));
+    result = await desk(token, (store) => store.pickup(token, { childId, guardianPersonId, code }));
   } catch (error) {
-    checkinFail(error);
+    await checkinFail(error);
+    throw error;
   }
-  if (!result.allowed) redirect(`/checkin?notice=${encodeURIComponent(result.reason)}`);
-  redirect("/checkin?saved=1");
+  if (!result.allowed) {
+    await setFlash({ desk: "checkin", tone: "error", message: result.reason });
+    redirect("/checkin");
+  }
+  await setFlash({ desk: "checkin", tone: "saved", message: "Saved. The child is with their adult." });
+  redirect("/checkin");
 }
 
 export async function moderateTestimonyAction(formData: FormData) {
@@ -359,7 +378,7 @@ export async function moderateTestimonyAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const approved = formData.get("approved") === "yes";
   try {
-    await withStore((store) => store.moderateTestimony(token, id, approved));
+    await desk(token, (store) => store.moderateTestimony(token, id, approved));
   } catch (error) {
     fail("/care", error);
   }
@@ -373,7 +392,7 @@ export async function confirmStepUpAction(formData: FormData) {
   const section = next.startsWith("/") ? next.slice(1) : "";
   if (!/^[a-z]+$/.test(section)) redirect("/care?error=1");
   try {
-    await withStore((store) => store.stepUp(token, { code }));
+    await desk(token, (store) => store.stepUp(token, { code }));
   } catch (error) {
     fail(next, error);
   }
@@ -385,9 +404,35 @@ export async function archiveAnnouncementAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const archived = formData.get("archived") !== "no";
   try {
-    await withStore((store) => store.archiveAnnouncement(token, id, archived));
+    await desk(token, (store) => store.archiveAnnouncement(token, id, archived));
   } catch (error) {
     fail("/communications", error);
   }
   redirect("/communications?saved=1");
+}
+
+export async function addKidsTeamAction(formData: FormData) {
+  const token = await staffToken();
+  const personId = String(formData.get("personId") ?? "");
+  try {
+    await desk(token, (store) => store.addKidsTeamMember(token, personId));
+  } catch (error) {
+    await checkinFail(error);
+    throw error;
+  }
+  await setFlash({ desk: "checkin", tone: "saved", message: "Added to the kids team." });
+  redirect("/checkin");
+}
+
+export async function removeKidsTeamAction(formData: FormData) {
+  const token = await staffToken();
+  const personId = String(formData.get("personId") ?? "");
+  try {
+    await desk(token, (store) => store.removeKidsTeamMember(token, personId));
+  } catch (error) {
+    await checkinFail(error);
+    throw error;
+  }
+  await setFlash({ desk: "checkin", tone: "saved", message: "Removed from the kids team." });
+  redirect("/checkin");
 }

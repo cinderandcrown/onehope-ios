@@ -46,7 +46,13 @@ struct KidsScreen: View {
             if !notice.isEmpty {
                 Text(notice)
             }
-            KidsSection(kids: snapshot.kids, perform: perform, notice: $notice)
+            KidsSection(
+                kids: snapshot.kids,
+                canClockIn: snapshot.kidsCanClockIn,
+                onDuty: snapshot.kidsOnDuty,
+                perform: perform,
+                notice: $notice
+            )
         }
         .navigationTitle("Children's Church")
         .accessibilityIdentifier("more-kids-screen")

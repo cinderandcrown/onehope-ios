@@ -1,4 +1,5 @@
-import { Pool, type PoolClient, neonConfig } from "@neondatabase/serverless";
+import { Pool as NeonPool, type PoolClient as NeonClient, neonConfig } from "@neondatabase/serverless";
+import { Pool as PgPool, type PoolClient as PgClient } from "pg";
 
 import { ChurchStore } from "./store";
 import {
@@ -18,15 +19,28 @@ export { UnknownTenantError };
 
 if (typeof WebSocket !== "undefined") neonConfig.webSocketConstructor = WebSocket;
 
-let pool: Pool | null = null;
+type SqlPool = {
+  connect: () => Promise<NeonClient | PgClient>;
+};
+
+let pool: SqlPool | null = null;
 
 export function databaseUrl(): string | null {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
   return url.length > 0 ? url : null;
 }
 
-function sharedPool(url: string): Pool {
-  if (!pool) pool = new Pool({ connectionString: url, max: 5 });
+/** Neon hosts use the Neon driver. A local Postgres URL uses node-postgres. */
+export function isLocalPostgres(url: string): boolean {
+  return /localhost|127\.0\.0\.1/.test(url);
+}
+
+function sharedPool(url: string): SqlPool {
+  if (!pool) {
+    pool = isLocalPostgres(url)
+      ? new PgPool({ connectionString: url, max: 5 })
+      : new NeonPool({ connectionString: url, max: 5 });
+  }
   return pool;
 }
 
@@ -191,7 +205,7 @@ function getMemoryStore(): ChurchStore {
   return globalStore.__onehope;
 }
 
-function clientSql(client: PoolClient): SqlClient {
+function clientSql(client: NeonClient | PgClient): SqlClient {
   return {
     async exec(sqlText) {
       await client.query(sqlText);

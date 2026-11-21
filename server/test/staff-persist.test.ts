@@ -162,3 +162,34 @@ test("featured message, kids team, pickup, and push audience survive Postgres", 
   assert.equal(care.includes("person-dana"), false);
   assert.equal(care.includes("person-frankie"), false);
 });
+
+test("a staff session on Postgres is invisible until the request passes its token", async () => {
+  const db = new PGlite();
+  const sql = client(db);
+  await migrate(sql);
+  await seedTenantIfEmpty(sql, "onehope", { ...process.env, ONEHOPE_SAMPLE_DATA: "true" });
+  const token = await runRequest(
+    sql,
+    (store) => {
+      const session = store.login({
+        email: SAMPLE_PASTOR_EMAIL,
+        password: SAMPLE_PASSWORD,
+        ip: "203.0.113.8",
+        userAgent: "test",
+      });
+      store.verifyMfa(session.token, code());
+      return session.token;
+    },
+    "localhost",
+  );
+  await assert.rejects(
+    () => runRequest(sql, (store) => store.me(token), "localhost"),
+    (error: unknown) => error instanceof AccessError,
+  );
+  const me = await runRequest(sql, (store) => store.me(token), "localhost", process.env, { sessionToken: token });
+  assert.equal(me.role, "pastor");
+  const home = await runRequest(sql, (store) => store.staffHome(token), "localhost", process.env, {
+    sessionToken: token,
+  });
+  assert.ok(home.cards.length > 0);
+});

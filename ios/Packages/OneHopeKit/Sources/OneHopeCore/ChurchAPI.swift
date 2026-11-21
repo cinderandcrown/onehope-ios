@@ -102,6 +102,9 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var gifts: [GiftLine]
     public var needsStepUp: Bool
     public var kids: [KidLine]
+    /// A kids-team member can clock in from the phone. Everyone else stays false.
+    public var kidsCanClockIn: Bool
+    public var kidsOnDuty: Bool
     public var serving: [ServingLine]
     public var pathway: [PathwayStep]
     public var sermons: [SermonLine]
@@ -145,6 +148,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
             gifts: [],
             needsStepUp: false,
             kids: [],
+            kidsCanClockIn: false,
+            kidsOnDuty: false,
             serving: [],
             pathway: [],
             sermons: [],
@@ -222,6 +227,8 @@ public enum MemberAction: Sendable {
     case addChild(String, String)
     case checkIn(String)
     case pickup(String, String)
+    case clockIn
+    case clockOut
     /// Works for guests too.
     case followUp(FollowUpRequest)
     /// Works for guests too.

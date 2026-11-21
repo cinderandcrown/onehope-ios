@@ -393,7 +393,10 @@ async function route(
   }
   const report = path.match(/^\/api\/prayers\/([^/]+)\/report$/);
   if (method === "POST" && report?.[1]) return store.reportPrayer(need(), decodeURIComponent(report[1]));
-  if (method === "GET" && path === "/api/kids/mine") return { kids: store.myKids(need()) };
+  if (method === "GET" && path === "/api/kids/mine") {
+    const token = need();
+    return { kids: store.myKids(token), duty: store.kidsDuty(token) };
+  }
   if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
   if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());
   if (method === "POST" && path === "/api/kids/check-in")

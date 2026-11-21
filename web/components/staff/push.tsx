@@ -1,6 +1,7 @@
 import { PUSH_TEMPLATES, type ChurchStore } from "@onehope/server";
 
 import { savePush } from "@/app/actions";
+import { readFlash } from "@/lib/flash";
 
 function one(query: Record<string, string | string[] | undefined>, key: string) {
   const value = query[key];
@@ -17,7 +18,7 @@ function segmentLabel(id: string) {
   return SEGMENTS.find((item) => item[0] === id)?.[1] ?? id;
 }
 
-export function PushDesk({
+export async function PushDesk({
   store,
   token,
   query,
@@ -37,7 +38,8 @@ export function PushDesk({
       </section>
     );
   }
-  const confirming = one(query, "confirm") === "1";
+  const pending = await readFlash("push");
+  const confirming = pending?.tone === "confirm";
   const saved = one(query, "saved");
   const sent = one(query, "sent") === "1";
   const drafts = store.ministry(token).communications;
@@ -70,20 +72,20 @@ export function PushDesk({
         <article className="panel">
           <h2>Send this notification?</h2>
           <p>
-            <strong>{one(query, "title")}</strong>
+            <strong>{pending?.title}</strong>
           </p>
-          <p>{one(query, "body")}</p>
+          <p>{pending?.body}</p>
           <p>
-            {segmentLabel(one(query, "segment"))} · {one(query, "count")} people. This includes guests, not only
-            members. This is the last step before it goes out. Nothing is sent until you confirm.
+            {segmentLabel(pending?.segment ?? "")} · {pending?.count} people. This is everyone with the app,
+            guests included. This is the last step before it goes out. Nothing is sent until you confirm.
           </p>
           <form action={savePush}>
-            <input type="hidden" name="title" value={one(query, "title")} />
-            <input type="hidden" name="body" value={one(query, "body")} />
-            <input type="hidden" name="segment" value={one(query, "segment")} />
+            <input type="hidden" name="title" value={pending?.title ?? ""} />
+            <input type="hidden" name="body" value={pending?.body ?? ""} />
+            <input type="hidden" name="segment" value={pending?.segment ?? ""} />
             <input type="hidden" name="confirm" value="yes" />
             <button className="button" type="submit">
-              Send to {one(query, "count")} people
+              Send to {pending?.count} people
             </button>
           </form>
         </article>

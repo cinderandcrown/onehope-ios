@@ -135,7 +135,7 @@ export default async function MemberPage({
         listedInDirectory: me.listedInDirectory,
       };
       return { church, member };
-    });
+    }, token ? { token } : {});
   } catch {
     redirect("/member/start");
   }

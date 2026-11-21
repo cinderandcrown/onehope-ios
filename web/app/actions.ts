@@ -3,6 +3,8 @@
 import {
   AccessError,
   FOLLOW_UP_STATUSES,
+  type ChurchStore,
+  isAccessError,
   parseChicagoLocal,
   publicBaseUrl,
   pushTemplate,
@@ -12,7 +14,12 @@ import {
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { setFlash } from "@/lib/flash";
 import { rememberIssued } from "@/lib/issued-code";
+
+function desk<T>(token: string, fn: (store: ChurchStore) => Promise<T> | T) {
+  return withStore(fn, { token });
+}
 
 import { isLanguage } from "@/lib/i18n";
 
@@ -56,7 +63,7 @@ export async function signIn(formData: FormData) {
     await setSession(next.token);
     if (next.enroll) redirect("/enroll");
   } catch (error) {
-    if (error instanceof AccessError) redirect("/login?error=1");
+    if (isAccessError(error)) redirect("/login?error=1");
     throw error;
   }
   redirect("/overview");
@@ -65,7 +72,7 @@ export async function signIn(formData: FormData) {
 export async function signOut() {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;
-  if (token) await withStore((store) => store.logout(token));
+  if (token) await desk(token, (store) => store.logout(token));
   jar.delete("onehope_session");
   redirect("/login");
 }
@@ -83,7 +90,7 @@ export async function createGroupAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const summary = String(formData.get("summary") ?? "").trim();
   if (!name || !summary) redirect("/groups?error=1");
-  await withStore((store) => store.createGroup(token, { name, summary }));
+  await desk(token, (store) => store.createGroup(token, { name, summary }));
   redirect("/groups");
 }
 
@@ -99,16 +106,17 @@ export async function savePush(formData: FormData) {
   if (segment !== "members" && segment !== "volunteers" && segment !== "parents") redirect("/push?error=1");
   if (!title || !body) redirect("/push?error=1");
   const confirm = formData.get("confirm") === "yes";
-  const result = await withStore((store) => store.sendPush(token, { title, body, segment, confirm }));
+  const result = await desk(token, (store) => store.sendPush(token, { title, body, segment, confirm }));
   if (result.needsConfirm) {
-    const params = new URLSearchParams({
-      confirm: "1",
+    await setFlash({
+      desk: "push",
+      tone: "confirm",
       title,
       body,
       segment,
       count: String(result.count),
     });
-    redirect(`/push?${params.toString()}`);
+    redirect("/push");
   }
   redirect(`/push?saved=1&sent=${result.sent ? "1" : "0"}`);
 }
@@ -128,7 +136,7 @@ export async function saveSocialAction(formData: FormData) {
     .map((id, index) => ({ id, name: names[index] ?? "", url: urls[index] ?? "" }))
     .filter((link) => link.url.trim());
   try {
-    await withStore((store) => store.setSocialLinks(token, links));
+    await desk(token, (store) => store.setSocialLinks(token, links));
   } catch {
     redirect("/overview?error=1");
   }
@@ -144,7 +152,7 @@ export async function addPersonAction(formData: FormData) {
   const phone = String(formData.get("phone") ?? "");
   let person: { id: string; displayName: string; inviteToken: string; expires: number };
   try {
-    person = await withStore((store) => store.addPerson(token, { displayName, email, phone }));
+    person = await desk(token, (store) => store.addPerson(token, { displayName, email, phone }));
   } catch {
     redirect("/people?error=1");
   }
@@ -165,7 +173,7 @@ export async function editPersonAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const displayName = String(formData.get("displayName") ?? "");
   const phone = String(formData.get("phone") ?? "");
-  await withStore((store) => store.editPerson(token, id, { displayName, phone }));
+  await desk(token, (store) => store.editPerson(token, id, { displayName, phone }));
   redirect("/people");
 }
 
@@ -175,7 +183,7 @@ export async function moderatePrayerAction(formData: FormData) {
   if (!token) redirect("/login");
   const id = String(formData.get("id") ?? "");
   const approved = formData.get("approved") === "yes";
-  await withStore((store) => store.moderatePrayer(token, id, approved));
+  await desk(token, (store) => store.moderatePrayer(token, id, approved));
   redirect("/care");
 }
 
@@ -202,7 +210,7 @@ export async function updateFollowUpAction(formData: FormData) {
   if (dueRaw && dueAt === null) redirect("/care?error=time");
   const assigneeRaw = String(formData.get("assigneeId") ?? "");
   try {
-    await withStore((store) =>
+    await desk(token, (store) =>
       store.updateFollowUp(token, id, {
         status,
         assigneeId: formData.has("assigneeId") ? (assigneeRaw ? assigneeRaw : null) : undefined,
@@ -211,7 +219,7 @@ export async function updateFollowUpAction(formData: FormData) {
       }),
     );
   } catch (error) {
-    if (error instanceof AccessError) redirect("/care?error=1");
+    if (isAccessError(error)) redirect("/care?error=1");
     throw error;
   }
   redirect("/care?saved=1");

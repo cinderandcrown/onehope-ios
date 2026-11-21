@@ -6,20 +6,36 @@ import SwiftUI
 /// the code from check-in, a verified guardian, and two adults at the station.
 public struct KidsSection: View {
     let kids: [KidLine]
+    let canClockIn: Bool
+    let onDuty: Bool
     let perform: (MemberAction) async -> String
     @Binding var notice: String
     @State private var childName = ""
     @State private var classroom = "Preschool"
     @State private var codes: [String: String] = [:]
 
-    public init(kids: [KidLine], perform: @escaping (MemberAction) async -> String, notice: Binding<String>) {
+    public init(
+        kids: [KidLine],
+        canClockIn: Bool = false,
+        onDuty: Bool = false,
+        perform: @escaping (MemberAction) async -> String,
+        notice: Binding<String>
+    ) {
         self.kids = kids
+        self.canClockIn = canClockIn
+        self.onDuty = onDuty
         self.perform = perform
         self._notice = notice
     }
 
     public var body: some View {
         Section {
+            if canClockIn {
+                Button(onDuty ? "Clock out" : "Clock in") {
+                    Task { notice = await perform(onDuty ? .clockOut : .clockIn) }
+                }
+                .accessibilityIdentifier(onDuty ? "kids-clock-out" : "kids-clock-in")
+            }
             ForEach(kids) { child in
                 row(child)
             }

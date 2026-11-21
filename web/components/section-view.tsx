@@ -16,9 +16,11 @@ import {
   saveSocialAction,
 } from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
+import { redirect } from "next/navigation";
 import {
   AccessError,
   CAPABILITIES,
+  isAccessError,
   loadConfig,
   loadSermons,
   withStore,
@@ -94,7 +96,12 @@ export async function SectionView({
           loadConfig(process.env).youtubeChannelId,
         )
       : [];
-  return withStore((store) => renderSection(store, section, token, query, sermons));
+  try {
+    return await withStore((store) => renderSection(store, section, token, query, sermons), { token });
+  } catch (error) {
+    if (isAccessError(error)) redirect("/login");
+    throw error;
+  }
 }
 
 function renderSection(

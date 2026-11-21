@@ -104,6 +104,8 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
     snapshot.phonePublic = parts.me.person.phonePublic ?? false
     snapshot.listedInDirectory = parts.me.person.listedInDirectory ?? false
     snapshot.isStaff = staffRoles.contains(parts.me.person.role ?? "")
+    snapshot.kidsCanClockIn = parts.kids.duty?.canClockIn ?? false
+    snapshot.kidsOnDuty = parts.kids.duty?.onDuty ?? false
     return snapshot
 }
 

@@ -35,7 +35,7 @@ export function AnnouncementsDesk({
   const notice = one(query, "saved")
     ? "Saved. Home updates the next time someone opens the app."
     : one(query, "error") === "time"
-      ? "Check the date and time. Use the calendar field, and put the end after the start."
+      ? "This card ends before it starts. Put the end after the start."
       : one(query, "error")
         ? "That card could not be saved. Check the words and try again."
         : "";

@@ -1,8 +1,7 @@
-import type { ChurchStore } from "@onehope/server";
+import { SERVING_SPOTS, type ChurchStore } from "@onehope/server";
 
 import { assignServingAction, undoServingAction } from "@/app/staff-actions";
 
-const SPOTS = ["Door", "Kids", "Coffee", "Parking", "Welcome"] as const;
 
 function one(query: Record<string, string | string[] | undefined>, key: string) {
   const value = query[key];
@@ -48,9 +47,9 @@ export function ServingDesk({
       </p>
       {notice ? <p className="notice">{notice}</p> : null}
       <div className="template-row">
-        {SPOTS.map((spot) => (
-          <span className="badge" key={spot}>
-            {spot}
+        {SERVING_SPOTS.map((spot) => (
+          <span className="badge" key={spot.id}>
+            {spot.label}
           </span>
         ))}
       </div>
@@ -70,13 +69,14 @@ export function ServingDesk({
         </label>
         <label>
           Spot
-          <input name="position" required list="spots" placeholder="Door, Kids, Coffee..." />
+          <select name="positionId" required defaultValue="door">
+            {SERVING_SPOTS.map((spot) => (
+              <option key={spot.id} value={spot.id}>
+                {spot.label}
+              </option>
+            ))}
+          </select>
         </label>
-        <datalist id="spots">
-          {SPOTS.map((spot) => (
-            <option key={spot} value={spot} />
-          ))}
-        </datalist>
         <button className="button" type="submit">
           Ask them to serve
         </button>

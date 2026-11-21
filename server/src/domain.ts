@@ -179,6 +179,17 @@ export const SENSITIVE_STAFF_ROLES: ReadonlySet<Role> = new Set<Role>([
 
 export const TEAM_ASSIGNABLE_ROLES: ReadonlySet<Role> = new Set<Role>(["team_leader", "volunteer", "member"]);
 
+/** The only serving spot that counts as a kids-team assignment. Matched by id, not by the spot's name. */
+export const KIDS_POSITION_ID = "kids";
+
+export const SERVING_SPOTS = [
+  { id: "door", label: "Door" },
+  { id: KIDS_POSITION_ID, label: "Kids" },
+  { id: "coffee", label: "Coffee" },
+  { id: "parking", label: "Parking" },
+  { id: "welcome", label: "Welcome" },
+] as const;
+
 export class AccessError extends Error {
   readonly code:
     | "unauthenticated"

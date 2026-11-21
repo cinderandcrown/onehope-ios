@@ -148,8 +148,10 @@ struct MeReply: Decodable {
 
 struct KidsReply: Decodable {
     struct Kid: Decodable { let id: String; let displayName: String; let classroom: String; let sample: Bool; let checkedIn: Bool? }
+    struct Duty: Decodable { let canClockIn: Bool; let onDuty: Bool }
 
     let kids: [Kid]
+    let duty: Duty?
 }
 
 struct ServingReply: Decodable {

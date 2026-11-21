@@ -461,9 +461,23 @@ test("only the kids team can clock in as the second adult", () => {
     userAgent: "test",
   }).token;
   assert.throws(() => store.clockIn(harper), (error: AccessError) => /kids volunteer/.test(error.message));
-  store.assignServing(lead, { personId: "person-harper", position: "Kids" });
+  const asked = store.assignServing(lead, { personId: "person-harper", position: "Kids" });
+  assert.equal(asked.positionId, "kids");
+  assert.throws(() => store.clockIn(harper), (error: AccessError) => /kids team/.test(error.message));
+  const named = store.assignServing(lead, { personId: "person-harper", position: "Skid-steer parking" });
+  store.respond(harper, named.id, true);
+  assert.throws(() => store.clockIn(harper), (error: AccessError) => /kids team/.test(error.message));
+  store.respond(harper, asked.id, true);
   assert.equal(store.clockIn(harper).onDuty, true);
-  assert.equal(store.clockIn(staffOf(store, "gray@sample.onehope")).adultsOnDuty, 2);
+  const gray = staffOf(store, "gray@sample.onehope");
+  assert.equal(store.stationBoard(gray, null).canClockIn, true);
+  assert.equal(store.stationBoard(gray, null).canOperate, false);
+  assert.equal(store.clockIn(gray).adultsOnDuty, 2);
+  store.changeRole(gray, { personId: "person-avery", role: "volunteer" });
+  assert.throws(
+    () => store.changeRole(gray, { personId: "person-avery", role: "pastor" }),
+    (error: AccessError) => error.code === "forbidden",
+  );
 });
 
 test("an invite can be claimed, undone while unclaimed, and a new staff member enrolls TOTP", async () => {

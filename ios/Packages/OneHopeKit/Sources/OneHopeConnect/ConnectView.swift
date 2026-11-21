@@ -172,7 +172,13 @@ private struct MemberSections: View {
             }
         }
         groupNote
-        KidsSection(kids: snapshot.kids, perform: perform, notice: $notice)
+        KidsSection(
+            kids: snapshot.kids,
+            canClockIn: snapshot.kidsCanClockIn,
+            onDuty: snapshot.kidsOnDuty,
+            perform: perform,
+            notice: $notice
+        )
     }
 
     private var groupNote: some View {

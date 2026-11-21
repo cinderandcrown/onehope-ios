@@ -62,7 +62,7 @@ export async function deleteMember(formData: FormData) {
     await withStore((store) => {
       store.stepUp(token, { password });
       store.deleteSelf(token);
-    });
+    }, { token });
   } catch (error) {
     if (accessMessage(error)) redirect("/member?error=password");
     throw error;
@@ -74,7 +74,7 @@ export async function deleteMember(formData: FormData) {
 export async function signOutMember() {
   const jar = await cookies();
   const token = jar.get("onehope_member")?.value;
-  if (token) await withStore((store) => store.logout(token));
+  if (token) await withStore((store) => store.logout(token), { token });
   jar.delete("onehope_member");
   redirect("/member");
 }

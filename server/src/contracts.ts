@@ -370,7 +370,8 @@ export const personEditBodySchema = z
 export const servingAssignBodySchema = z
   .object({
     personId: z.string().trim().min(1).max(80),
-    position: z.string().trim().min(1).max(80),
+    position: z.string().trim().max(80).optional(),
+    positionId: z.string().trim().max(40).optional(),
   })
   .strict();
 

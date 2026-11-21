@@ -1,15 +1,24 @@
 import Link from "next/link";
-import type { ChurchStore } from "@onehope/server";
+import { labelRole, type ChurchStore } from "@onehope/server";
 
-import { confirmStepUpAction, clockInAction, clockOutAction, staffCheckInAction, stationPickupAction } from "@/app/staff-actions";
+import {
+  addKidsTeamAction,
+  confirmStepUpAction,
+  clockInAction,
+  clockOutAction,
+  removeKidsTeamAction,
+  staffCheckInAction,
+  stationPickupAction,
+} from "@/app/staff-actions";
 import { CopyButton, PrintButton } from "@/components/staff/clipboard";
+import { readFlash } from "@/lib/flash";
 
 function one(query: Record<string, string | string[] | undefined>, key: string) {
   const value = query[key];
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-export function CheckInDesk({
+export async function CheckInDesk({
   store,
   token,
   query,
@@ -30,9 +39,11 @@ export function CheckInDesk({
     );
   }
   const labelId = one(query, "label");
-  const label = labelId ? safeLabel(store, token, labelId) : null;
-  const failure = one(query, "notice") || one(query, "pickup");
-  const saved = one(query, "saved");
+  const label = labelId && board.canOperate ? safeLabel(store, token, labelId) : null;
+  const flash = await readFlash("checkin");
+  const failure = flash?.tone === "error" ? (flash.message ?? "") : "";
+  const saved = flash?.tone === "saved" ? (flash.message ?? "Saved.") : "";
+  const team = board.canManageTeam ? store.kidsTeamRoster(token) : null;
   const ready = board.adultsOnDuty >= 2;
   return (
     <section>
@@ -84,7 +95,47 @@ export function CheckInDesk({
           </Link>
         ))}
       </div>
-      {board.children.length === 0 ? (
+      {team ? (
+        <article className="panel">
+          <h2>Kids team</h2>
+          <p className="help">
+            People on this list can clock in as the second adult. A seeded church starts with an empty list
+            until you add them here.
+          </p>
+          {team.members.length === 0 ? <p>No one is on the kids team yet.</p> : null}
+          {team.members.map((person) => (
+            <form className="template-row" action={removeKidsTeamAction} key={person.id}>
+              <input type="hidden" name="personId" value={person.id} />
+              <span>
+                {person.displayName} · {labelRole(person.role)}
+              </span>
+              <button className="button secondary" type="submit">
+                Remove
+              </button>
+            </form>
+          ))}
+          {team.candidates.length > 0 ? (
+            <form className="form" action={addKidsTeamAction}>
+              <label>
+                Add someone
+                <select name="personId" required defaultValue={team.candidates[0]?.id}>
+                  {team.candidates.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.displayName} · {labelRole(person.role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="button" type="submit">
+                Add to the kids team
+              </button>
+            </form>
+          ) : null}
+        </article>
+      ) : null}
+      {!board.canOperate ? (
+        <p>Clock in here. A kids director releases the children.</p>
+      ) : board.children.length === 0 ? (
         <p>No children in this room yet. Families add children from the app, then they show up here.</p>
       ) : (
         board.children.map((child) => (

@@ -16,7 +16,7 @@ export default async function EnrollPage({
   const error = (await searchParams).error;
   let setup: { setupKey: string; otpauthUrl: string };
   try {
-    setup = await withStore((store) => store.beginTotp(token));
+    setup = await withStore((store) => store.beginTotp(token), { token });
   } catch {
     redirect("/overview");
   }

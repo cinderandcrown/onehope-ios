@@ -1,7 +1,8 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
+import { Pool as PgPool } from "pg";
 
 import { migrate } from "../src/migrate.ts";
-import { databaseUrl, seedTenantIfEmpty } from "../src/persist.ts";
+import { databaseUrl, isLocalPostgres, seedTenantIfEmpty } from "../src/persist.ts";
 import { importLegacySnapshot } from "../src/snapshot-import.ts";
 
 if (typeof WebSocket !== "undefined") neonConfig.webSocketConstructor = WebSocket;
@@ -12,7 +13,7 @@ if (!url) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: url, max: 1 });
+const pool = isLocalPostgres(url) ? new PgPool({ connectionString: url, max: 1 }) : new NeonPool({ connectionString: url, max: 1 });
 const client = await pool.connect();
 try {
   await migrate({

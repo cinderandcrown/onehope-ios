@@ -49,6 +49,8 @@ import {
   evaluatePickup,
   eventToIcs,
   findRoomConflict,
+  KIDS_POSITION_ID,
+  SERVING_SPOTS,
   isStaff,
   mayIssueInvite,
   nextSundayService,
@@ -312,6 +314,8 @@ export type StoreDocument = {
     id: string;
     personId: string;
     position: string;
+    /** Defined spot id, such as "kids". A free-typed name has none. */
+    positionId?: string | null;
     status: "pending" | "accepted" | "declined";
     sample: boolean;
   }[];
@@ -450,6 +454,7 @@ export class ChurchStore {
     id: string;
     personId: string;
     position: string;
+    positionId?: string | null;
     status: "pending" | "accepted" | "declined";
     sample: boolean;
   }[];
@@ -2047,16 +2052,22 @@ export class ChurchStore {
     return { removed: true as const };
   }
 
-  assignServing(token: string, input: { personId: string; position: string }) {
+  assignServing(token: string, input: { personId: string; position?: string; positionId?: string | null }) {
     const actor = this.actor(token);
     authorize(actor, "manage_serving", this.now());
     const person = this.requirePerson(input.personId);
-    const position = input.position.trim();
-    if (!position) throw new AccessError("invalid", "Name the spot, like Door or Kids.");
+    const position = (input.position ?? "").trim();
+    const requestedId = input.positionId?.trim() ?? "";
+    const known =
+      SERVING_SPOTS.find((spot) => spot.id === requestedId) ??
+      SERVING_SPOTS.find((spot) => spot.label.toLowerCase() === position.toLowerCase());
+    const label = known?.label ?? position;
+    if (!label) throw new AccessError("invalid", "Name the spot, like Door or Kids.");
     const row = {
       id: newId("serve"),
       personId: person.id,
-      position,
+      position: label,
+      positionId: known?.id ?? null,
       status: "pending" as const,
       sample: false,
     };
@@ -2098,6 +2109,43 @@ export class ChurchStore {
     this.ensurePathway(actor.personId);
     const view = this.pathwayView(actor.personId);
     return { sample: false as const, ...view };
+  }
+
+  kidsDuty(token: string) {
+    const actor = this.actor(token);
+    const person = this.requirePerson(actor.personId);
+    return { canClockIn: this.onKidsTeam(person), onDuty: this.station.has(person.id) };
+  }
+
+  kidsTeamRoster(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const members = [...this.kidsTeam]
+      .map((id) => this.people.get(id))
+      .filter((person): person is Person => Boolean(person && !person.deleted))
+      .map((person) => ({ id: person.id, displayName: person.displayName, role: person.role }));
+    const candidates = [...this.people.values()]
+      .filter((person) => !person.deleted && !this.kidsTeam.has(person.id))
+      .map((person) => ({ id: person.id, displayName: person.displayName, role: person.role }));
+    return { members, candidates };
+  }
+
+  addKidsTeamMember(token: string, personId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const person = this.requirePerson(personId);
+    if (person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    this.kidsTeam.add(person.id);
+    this.record(actor, "write", "kids_team", person.id, 1);
+    return { id: person.id, displayName: person.displayName };
+  }
+
+  removeKidsTeamMember(token: string, personId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    this.kidsTeam.delete(personId);
+    this.record(actor, "write", "kids_team", personId, 1);
+    return { removed: true as const };
   }
 
   myKids(token: string) {
@@ -2155,13 +2203,24 @@ export class ChurchStore {
    */
   stationBoard(token: string, classroom?: string | null) {
     const actor = this.actor(token);
-    authorize(actor, "manage_checkin", this.now());
+    const person = this.requirePerson(actor.personId);
+    const canOperate = allows(actor.role, "manage_checkin");
+    if (!canOperate && !this.onKidsTeam(person)) {
+      throw new AccessError(
+        "forbidden",
+        "This desk is for the kids team. Ask a kids director, a kids team leader, or a kids volunteer.",
+      );
+    }
     const room = classroom?.trim() ?? "";
-    const children = [...this.children.values()].filter((child) => !room || child.classroom === room);
+    const children = canOperate
+      ? [...this.children.values()].filter((child) => !room || child.classroom === room)
+      : [];
     return {
+      canOperate,
+      canManageTeam: canOperate,
       adultsOnDuty: this.kidsOnDuty(),
       onDuty: this.station.has(actor.personId),
-      canClockIn: this.onKidsTeam(this.requirePerson(actor.personId)),
+      canClockIn: this.onKidsTeam(person),
       namesOnDuty: [...this.station]
         .filter((id) => {
           const person = this.people.get(id);
@@ -2288,6 +2347,11 @@ export class ChurchStore {
       "volunteer",
       "member",
     ] as const;
+    if (actor.role === "team_leader") {
+      return roles
+        .filter((role) => mayIssueInvite(actor.role, role))
+        .map((role) => ({ id: role, label: labelRole(role) }));
+    }
     return roles
       .filter((role) => {
         const staffMove =
@@ -2323,6 +2387,12 @@ export class ChurchStore {
         "forbidden",
         "You can only give a role at or below your own, never a pastor or Master Admin seat.",
       );
+    }
+    if (actor.role === "team_leader") {
+      person.role = input.role;
+      this.refreshSessions(person);
+      this.record(actor, "write", "role", person.id, 2);
+      return this.toPerson(person);
     }
     const staffMove =
       input.role === "pastor" ||
@@ -2676,7 +2746,7 @@ export class ChurchStore {
   }
 
   private segmentLabel(segment: "members" | "volunteers" | "parents") {
-    if (segment === "members") return "everyone with the app, including guests";
+    if (segment === "members") return "everyone with the app, guests included";
     if (segment === "volunteers") return "volunteers";
     return "parents";
   }
@@ -2710,10 +2780,13 @@ export class ChurchStore {
     if (person.deleted) return false;
     if (person.role === "kids_director") return true;
     if (this.kidsTeam.has(person.id)) return true;
-    const servesKids =
-      this.schedule.some((row) => row.personId === person.id && /kid/i.test(row.position)) ||
-      this.volunteers.some((row) => row.personId === person.id && /kid/i.test(row.positionId));
-    return servesKids && (person.role === "volunteer" || person.role === "team_leader");
+    const acceptedKidsSpot =
+      (person.role === "volunteer" || person.role === "team_leader") &&
+      this.schedule.some(
+        (row) =>
+          row.personId === person.id && row.status === "accepted" && row.positionId === KIDS_POSITION_ID,
+      );
+    return acceptedKidsSpot;
   }
 
   private kidsOnDuty(): number {
