@@ -2408,9 +2408,7 @@ export class ChurchStore {
     if (!mayChangeRole(actor.role, person.role, input.role)) {
       throw new AccessError(
         "forbidden",
-        actor.role === "team_leader"
-          ? "You can only change a role below your own level."
-          : "You can only give a role at or below your own, never a pastor or Master Admin seat.",
+        "You can only change roles below your own level, never a pastor or Master Admin seat.",
       );
     }
     if (actor.role === "team_leader") {
@@ -3548,9 +3546,7 @@ export class ChurchStore {
         ? "Only a Master Admin can make a code for a Master Admin seat."
         : targetRole === "pastor"
           ? "Only a Master Admin can make a code for a pastor seat."
-          : issuerRole === "team_leader"
-            ? "You can only make a code for a role below your own level."
-            : "You can't make a code for someone above your level.",
+          : "You can only make a code for a role below your own level.",
     );
   }
 

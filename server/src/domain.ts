@@ -137,8 +137,9 @@ export function isStaff(role: Role): boolean {
 
 /**
  * Higher numbers outrank lower ones.
- * An invite or role change may target someone at or below the issuer.
- * A pastor seat and a Master Admin seat are the exception: only a Master Admin may target those.
+ * A Master Admin may target any role. Every other role may invite or change roles only strictly below its own
+ * level (a care teammate cannot seat finance or another care teammate). Pastor and Master Admin seats are
+ * Master Admin only.
  */
 const ROLE_PRIVILEGE: Record<Role, number> = {
   master_admin: 70,
@@ -157,19 +158,14 @@ const ROLE_PRIVILEGE: Record<Role, number> = {
 };
 
 export function mayIssueInvite(issuerRole: Role, targetRole: Role): boolean {
-  if (targetRole === "master_admin" || targetRole === "pastor") return issuerRole === "master_admin";
-  if (issuerRole === "team_leader") return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader;
-  return ROLE_PRIVILEGE[targetRole] <= ROLE_PRIVILEGE[issuerRole];
+  if (issuerRole === "master_admin") return true;
+  if (targetRole === "master_admin" || targetRole === "pastor") return false;
+  // Everyone else reaches only roles strictly below their own: no peer seats.
+  return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE[issuerRole];
 }
 
-/** A team leader may change only roles strictly below team leader, never another team leader. */
+/** Both the person's current role and the new role must be strictly below the actor (Master Admin excepted). */
 export function mayChangeRole(actorRole: Role, currentRole: Role, targetRole: Role): boolean {
-  if (actorRole === "team_leader") {
-    return (
-      ROLE_PRIVILEGE[currentRole] < ROLE_PRIVILEGE.team_leader &&
-      ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader
-    );
-  }
   return mayIssueInvite(actorRole, currentRole) && mayIssueInvite(actorRole, targetRole);
 }
 
