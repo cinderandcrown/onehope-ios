@@ -1597,6 +1597,26 @@
         }
       }
     },
+    "/api/care/testimonies": {
+      "get": {
+        "operationId": "get__api_care_testimonies",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/care/reported-prayers": {
+      "get": {
+        "operationId": "get__api_care_reported_prayers",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
     "/api/staff/announcements": {
       "get": {
         "operationId": "get__api_staff_announcements",

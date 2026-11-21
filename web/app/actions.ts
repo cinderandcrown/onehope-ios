@@ -3,6 +3,7 @@
 import {
   AccessError,
   FOLLOW_UP_STATUSES,
+  parseChicagoLocal,
   publicBaseUrl,
   type FollowUpStatus,
   withStore,
@@ -169,11 +170,22 @@ export async function updateFollowUpAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = formData.get("status");
   if (!id || !isFollowUpStatus(status)) redirect("/care?error=1");
+  const dueRaw = String(formData.get("dueAt") ?? "").trim();
+  const dueAt = dueRaw ? parseChicagoLocal(dueRaw) : null;
+  if (dueRaw && dueAt === null) redirect("/care?error=time");
+  const assigneeRaw = String(formData.get("assigneeId") ?? "");
   try {
-    await withStore((store) => store.updateFollowUp(token, id, status));
+    await withStore((store) =>
+      store.updateFollowUp(token, id, {
+        status,
+        assigneeId: formData.has("assigneeId") ? (assigneeRaw ? assigneeRaw : null) : undefined,
+        dueAt: formData.has("dueAt") ? dueAt : undefined,
+        staffNote: formData.has("staffNote") ? String(formData.get("staffNote") ?? "") : undefined,
+      }),
+    );
   } catch (error) {
     if (error instanceof AccessError) redirect("/care?error=1");
     throw error;
   }
-  redirect("/care");
+  redirect("/care?saved=1");
 }

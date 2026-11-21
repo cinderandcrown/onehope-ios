@@ -276,7 +276,22 @@ export const supportBodySchema = z
   })
   .strict();
 
-export const followUpStatusBodySchema = z.object({ status: z.enum(FOLLOW_UP_STATUSES) }).strict();
+export const followUpStatusBodySchema = z
+  .object({
+    status: z.enum(FOLLOW_UP_STATUSES).optional(),
+    assigneeId: z.string().trim().max(80).nullable().optional(),
+    dueAt: z.number().int().nullable().optional(),
+    staffNote: z.string().max(2000).optional(),
+  })
+  .strict()
+  .refine(
+    (body) =>
+      body.status !== undefined ||
+      body.assigneeId !== undefined ||
+      body.dueAt !== undefined ||
+      body.staffNote !== undefined,
+    { message: "Nothing to save." },
+  );
 
 export const socialBodySchema = z
   .object({

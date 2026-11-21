@@ -182,6 +182,32 @@ export async function cancelServeAction(formData: FormData) {
   redirect("/events?saved=1");
 }
 
+export async function moderateTestimonyAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  const approved = formData.get("approved") === "yes";
+  try {
+    await withStore((store) => store.moderateTestimony(token, id, approved));
+  } catch (error) {
+    fail("/care", error);
+  }
+  redirect("/care?saved=1");
+}
+
+export async function confirmStepUpAction(formData: FormData) {
+  const token = await staffToken();
+  const code = String(formData.get("code") ?? "");
+  const next = String(formData.get("next") ?? "/care");
+  const section = next.startsWith("/") ? next.slice(1) : "";
+  if (!/^[a-z]+$/.test(section)) redirect("/care?error=1");
+  try {
+    await withStore((store) => store.stepUp(token, { code }));
+  } catch (error) {
+    fail(next, error);
+  }
+  redirect(next);
+}
+
 export async function archiveAnnouncementAction(formData: FormData) {
   const token = await staffToken();
   const id = String(formData.get("id") ?? "");

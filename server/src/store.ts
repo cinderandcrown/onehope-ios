@@ -161,6 +161,10 @@ type FollowUpRow = {
   status: FollowUpStatus;
   createdAt: number;
   sample: boolean;
+  assigneeId?: string | null;
+  dueAt?: number | null;
+  /** Encrypted `{ note }` written by staff. Older rows omit it. */
+  noteCiphertext?: string;
 };
 
 /** Church Center fields are optional so groups staff create, and snapshots from builds 1–5, still load. */
@@ -201,6 +205,8 @@ type PrayerRow = {
   contactRequested?: boolean;
   /** Sent from the public neighborhood page. Still waits for staff. */
   neighborhood?: boolean;
+  /** A member asked staff to look at this again. It is off the wall until a decision. */
+  reported?: boolean;
 };
 
 type AmenRow = { prayerId: string; personId: string };
@@ -1221,6 +1227,7 @@ export class ChurchStore {
           body: showBody ? prayer.body : "",
           serve: showBody && (own || staffReader) ? (prayer.serve ?? "") : "",
           contactRequested: (own || staffReader) && prayer.contactRequested === true,
+          reported: staffReader && prayer.reported === true,
           prayedCount: onWall ? this.amens.filter((amen) => amen.prayerId === prayer.id).length : 0,
           prayed: actor
             ? this.amens.some((amen) => amen.prayerId === prayer.id && amen.personId === actor.personId)
@@ -1272,6 +1279,7 @@ export class ChurchStore {
     const prayer = this.prayers.find((item) => item.id === prayerId);
     if (!prayer) throw new AccessError("not_found", "That prayer isn't here.");
     prayer.approved = approved;
+    prayer.reported = false;
     this.record(actor, "write", "prayer", prayer.id, prayer.visibility === "private" ? 3 : 1);
     return { id: prayer.id, approved: prayer.approved };
   }
@@ -1287,6 +1295,7 @@ export class ChurchStore {
       throw new AccessError("not_found", "That prayer isn't on the wall.");
     }
     prayer.approved = false;
+    prayer.reported = true;
     this.record(actor, "write", "prayer_report", prayer.id, 1);
     return { id: prayer.id, reported: true as const };
   }
@@ -2342,14 +2351,75 @@ export class ChurchStore {
     return this.followUpViews(actor);
   }
 
-  updateFollowUp(token: string, id: string, status: FollowUpStatus) {
+  updateFollowUp(
+    token: string,
+    id: string,
+    input:
+      | FollowUpStatus
+      | {
+          status?: FollowUpStatus;
+          assigneeId?: string | null;
+          dueAt?: number | null;
+          staffNote?: string;
+        },
+  ) {
     const actor = this.actor(token);
     authorize(actor, "view_care_notes", this.now());
     const row = this.followUps.find((item) => item.id === id);
     if (!row) throw new AccessError("not_found", "That follow-up isn't here.");
-    row.status = status;
+    const patch = typeof input === "string" ? { status: input } : input;
+    if (patch.status) row.status = patch.status;
+    if (patch.assigneeId !== undefined) {
+      if (patch.assigneeId === null || patch.assigneeId === "") row.assigneeId = null;
+      else {
+        const person = this.requirePerson(patch.assigneeId);
+        if (person.deleted || !isStaff(person.role)) {
+          throw new AccessError("invalid", "Choose someone on staff.");
+        }
+        row.assigneeId = person.id;
+      }
+    }
+    if (patch.dueAt !== undefined) row.dueAt = patch.dueAt;
+    if (typeof patch.staffNote === "string") {
+      row.noteCiphertext = encryptString(JSON.stringify({ note: patch.staffNote.trim() }), this.key);
+    }
     this.record(actor, "write", "follow_up", row.id, 3);
-    return { id: row.id, status: row.status };
+    return {
+      id: row.id,
+      status: row.status,
+      assigneeId: row.assigneeId ?? null,
+      dueAt: row.dueAt ?? null,
+    };
+  }
+
+  careAssignees(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return [...this.people.values()]
+      .filter((person) => !person.deleted && isStaff(person.role))
+      .map((person) => ({ id: person.id, displayName: person.displayName }));
+  }
+
+  pendingTestimonies(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return this.testimonies
+      .filter((row) => !row.approved)
+      .map((row) => {
+        this.record(actor, "read", "testimony", row.id, 2);
+        return { id: row.id, displayName: row.displayName, body: row.body, approved: false as const };
+      });
+  }
+
+  reportedPrayers(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return this.prayers
+      .filter((prayer) => prayer.reported === true && !prayer.approved)
+      .map((prayer) => {
+        this.record(actor, "read", "prayer", prayer.id, 1);
+        return { id: prayer.id, body: prayer.body, sample: prayer.sample };
+      });
   }
 
   exportSelf(token: string) {
@@ -2438,6 +2508,12 @@ export class ChurchStore {
           status: row.status,
           createdAt: row.createdAt,
           sample: row.sample,
+          assigneeId: row.assigneeId ?? null,
+          assigneeName: row.assigneeId
+            ? (this.people.get(row.assigneeId)?.displayName ?? "")
+            : "",
+          dueAt: row.dueAt ?? null,
+          staffNote: row.noteCiphertext ? textField(this.readJson(row.noteCiphertext), "note") : "",
         };
       });
   }
@@ -3583,7 +3659,10 @@ export class ChurchStore {
     for (const check of this.checks.values()) check.ciphertext = rotate(check.ciphertext);
     for (const secret of this.secrets.values()) secret.ciphertext = rotate(secret.ciphertext);
     for (const request of this.requests) request.ciphertext = rotate(request.ciphertext);
-    for (const row of this.followUps) row.ciphertext = rotate(row.ciphertext);
+    for (const row of this.followUps) {
+      row.ciphertext = rotate(row.ciphertext);
+      if (row.noteCiphertext) row.noteCiphertext = rotate(row.noteCiphertext);
+    }
   }
 
   private scrubFormerMembers() {

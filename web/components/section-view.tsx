@@ -1,15 +1,14 @@
 import { ChurchImage } from "@/components/church-image";
 import { AnnouncementsDesk } from "@/components/staff/announcements";
+import { CareDesk } from "@/components/staff/care";
 import { EventsDesk } from "@/components/staff/events";
 
 import {
   addPersonAction,
   editPersonAction,
   createGroupAction,
-  moderatePrayerAction,
   savePush,
   saveSocialAction,
-  updateFollowUpAction,
 } from "@/app/actions";
 import type { SectionId } from "@/lib/i18n";
 import {
@@ -233,123 +232,8 @@ function renderSection(
         </section>
       );
     }
-    case "care": {
-      const care = store.ministry(token).care;
-      return (
-        <section>
-          <h1>Care</h1>
-          {care.notes.length === 0 ? (
-            <p>No care notes are visible to you.</p>
-          ) : (
-            care.notes.map((note) => (
-              <article className="card" key={note.id}>
-                <p>{note.body}</p>
-              </article>
-            ))
-          )}
-          {care.queue.locked ? (
-            <Locked title="Staff care queue" />
-          ) : (
-            <>
-              <article className="panel">
-                <h2>Next steps from the app</h2>
-                {care.queue.followUps.length === 0 ? (
-                  <p>
-                    No one has asked for a next step yet. Know Jesus, baptism, Growth Track, Plan a Visit,
-                    prayer contact requests, and Support/Assistance requests land here.
-                  </p>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>When</th>
-                        <th>Next step</th>
-                        <th>Name</th>
-                        <th>Contact</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {care.queue.followUps.map((row) => (
-                        <tr key={row.id}>
-                          <td>
-                            {new Date(row.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago" })}
-                          </td>
-                          <td>
-                            {row.label}
-                            {row.needs.length > 0 ? <p className="muted">{row.needs.join(" · ")}</p> : null}
-                          </td>
-                          <td>
-                            {row.name}
-                            {row.member ? " (member)" : " (guest)"}
-                          </td>
-                          <td>
-                            {[row.email, row.phone].filter(Boolean).join(" · ") ||
-                              (row.contactConsent ? "Account email" : "No contact shared")}
-                          </td>
-                          <td>
-                            <form action={updateFollowUpAction}>
-                              <input type="hidden" name="id" value={row.id} />
-                              <select
-                                name="status"
-                                defaultValue={row.status}
-                                aria-label={`Status for ${row.name}`}
-                              >
-                                <option value="new">New</option>
-                                <option value="contacted">Contacted</option>
-                                <option value="closed">Closed</option>
-                              </select>
-                              <button className="button" type="submit">
-                                Save
-                              </button>
-                            </form>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </article>
-              <article className="panel">
-                <h2>Follow-up</h2>
-                {care.queue.visitors.map((visitor) => (
-                  <p key={visitor.id}>
-                    {visitor.name} · {visitor.state}
-                  </p>
-                ))}
-                {care.queue.requests.map((request) => (
-                  <p key={request.id}>
-                    {request.kind}: {request.detail}
-                  </p>
-                ))}
-              </article>
-              <article className="panel">
-                <h2>Prayers to share</h2>
-                <p className="help">
-                  How do I share a prayer? Read it, then Share with the church or Keep private. Private stays
-                  off the wall.
-                </p>
-                {store
-                  .listPrayers(token)
-                  .filter((prayer) => !prayer.approved && prayer.body)
-                  .map((prayer) => (
-                    <form key={prayer.id} action={moderatePrayerAction}>
-                      <p>{prayer.body}</p>
-                      <input type="hidden" name="id" value={prayer.id} />
-                      <button className="button" name="approved" value="yes" type="submit">
-                        Share with the church
-                      </button>
-                      <button className="button secondary" name="approved" value="no" type="submit">
-                        Keep private
-                      </button>
-                    </form>
-                  ))}
-              </article>
-            </>
-          )}
-        </section>
-      );
-    }
+    case "care":
+      return <CareDesk store={store} token={token} query={query} />;
     case "groups": {
       return (
         <section>

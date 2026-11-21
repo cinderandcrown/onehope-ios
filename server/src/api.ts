@@ -122,6 +122,8 @@ export const API_ROUTES = [
   ["POST", "/api/support"],
   ["GET", "/api/growth"],
   ["GET", "/api/care/follow-ups"],
+  ["GET", "/api/care/testimonies"],
+  ["GET", "/api/care/reported-prayers"],
   ["POST", "/api/care/follow-ups/{id}"],
   ["GET", "/api/social"],
   ["POST", "/api/social"],
@@ -532,13 +534,19 @@ async function route(
   if (method === "GET" && roster?.[1])
     return { group: store.groupRoster(need(), decodeURIComponent(roster[1])) };
   if (method === "GET" && path === "/api/care/follow-ups") return { followUps: store.followUpsFor(need()) };
+  if (method === "GET" && path === "/api/care/testimonies") {
+    return { testimonies: store.pendingTestimonies(need()) };
+  }
+  if (method === "GET" && path === "/api/care/reported-prayers") {
+    return { prayers: store.reportedPrayers(need()) };
+  }
   const followUp = path.match(/^\/api\/care\/follow-ups\/([^/]+)$/);
   if (method === "POST" && followUp?.[1]) {
     return {
       followUp: store.updateFollowUp(
         need(),
         decodeURIComponent(followUp[1]),
-        parse(followUpStatusBodySchema, body).status,
+        parse(followUpStatusBodySchema, body),
       ),
     };
   }

@@ -241,6 +241,92 @@ test("a canceled church event is not put back by the catalog", () => {
   assert.equal(moment.end - moment.start, 90 * 60 * 1000);
 });
 
+test("care can assign, note, and date a follow-up, and reported prayers and testimonies wait for staff", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const guest = member(store);
+  const careLogin = store.login({
+    email: "eden@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(careLogin.token, code());
+  const follow = store.submitFollowUp(
+    guest,
+    { kind: "visit", name: "Neighbor", email: "neighbor@example.com", phone: "", consent: true },
+    "care-test",
+  );
+  assert.throws(
+    () => store.updateFollowUp(careLogin.token, follow.id, "contacted"),
+    (error: AccessError) => error.code === "step_up_required",
+  );
+  assert.throws(
+    () => store.reportedPrayers(guest),
+    (error: AccessError) => error.code === "forbidden" || error.code === "step_up_required",
+  );
+  store.stepUp(careLogin.token, { code: code() });
+  const due = parseChicagoLocal("2026-11-25T15:00");
+  assert.ok(due);
+  store.updateFollowUp(careLogin.token, follow.id, {
+    status: "contacted",
+    assigneeId: "person-eden",
+    dueAt: due,
+    staffNote: "Called Tuesday",
+  });
+  const saved = store.followUpsFor(careLogin.token).find((row) => row.id === follow.id);
+  assert.equal(saved?.status, "contacted");
+  assert.equal(saved?.assigneeId, "person-eden");
+  assert.equal(saved?.staffNote, "Called Tuesday");
+  assert.equal(JSON.stringify(store.toDocument()).includes("Called Tuesday"), false);
+  assert.throws(
+    () => store.updateFollowUp(careLogin.token, follow.id, { assigneeId: "person-avery" }),
+    (error: AccessError) => error.code === "invalid",
+  );
+
+  const prayer = store.submitPrayer(guest, { body: "Pray for our street.", visibility: "public" });
+  store.moderatePrayer(careLogin.token, prayer.id, true);
+  const harper = store.login({
+    email: "harper@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  }).token;
+  assert.equal(store.reportPrayer(harper, prayer.id).reported, true);
+  assert.equal(store.reportedPrayers(careLogin.token).some((row) => row.id === prayer.id), true);
+  store.moderatePrayer(careLogin.token, prayer.id, false);
+  assert.equal(store.reportedPrayers(careLogin.token).some((row) => row.id === prayer.id), false);
+
+  const testimony = store.submitTestimony(guest, {
+    displayName: "Avery Sample",
+    body: "Jesus met me this week.",
+    consent: true,
+  });
+  const handle = createApi({ store });
+  const hidden = await handle(
+    new Request("http://localhost/api/care/testimonies", {
+      headers: { authorization: `Bearer ${guest}` },
+    }),
+  );
+  assert.equal(hidden.status, 403);
+  const listed = await handle(
+    new Request("http://localhost/api/care/testimonies", {
+      headers: { authorization: `Bearer ${careLogin.token}` },
+    }),
+  );
+  assert.equal(listed.status, 200);
+  store.moderateTestimony(careLogin.token, testimony.id, true);
+  assert.equal(
+    store.community(null).testimonies.some((row) => row.id === testimony.id),
+    true,
+  );
+  const denied = await handle(
+    new Request("http://localhost/api/care/reported-prayers", {
+      headers: { authorization: `Bearer ${guest}` },
+    }),
+  );
+  assert.equal(denied.status, 403);
+});
+
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {
   const config = loadConfig({});
   const store = new ChurchStore(config, {
