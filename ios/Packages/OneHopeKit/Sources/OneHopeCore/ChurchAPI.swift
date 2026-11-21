@@ -102,6 +102,9 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var gifts: [GiftLine]
     public var needsStepUp: Bool
     public var kids: [KidLine]
+    /// A kids-team member can clock in from the phone. Everyone else stays false.
+    public var kidsCanClockIn: Bool
+    public var kidsOnDuty: Bool
     public var serving: [ServingLine]
     public var pathway: [PathwayStep]
     public var sermons: [SermonLine]
@@ -112,6 +115,7 @@ public struct ChurchSnapshot: Equatable, Sendable {
     public var listedInDirectory: Bool
     public var isStaff: Bool
     public var images: ChurchImages
+    public var media: ChurchMedia
 
     public static func bundled(offline: Bool = false) -> ChurchSnapshot {
         ChurchSnapshot(
@@ -144,6 +148,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
             gifts: [],
             needsStepUp: false,
             kids: [],
+            kidsCanClockIn: false,
+            kidsOnDuty: false,
             serving: [],
             pathway: [],
             sermons: [],
@@ -153,7 +159,8 @@ public struct ChurchSnapshot: Equatable, Sendable {
             phonePublic: false,
             listedInDirectory: false,
             isStaff: false,
-            images: .empty
+            images: .empty,
+            media: .empty
         )
     }
 }
@@ -211,20 +218,6 @@ public struct PathwayStep: Equatable, Sendable, Identifiable {
     public let status: String
 }
 
-public struct SermonLine: Equatable, Sendable, Identifiable {
-    public let id: String
-    public let title: String
-    public let thumbnail: String?
-    public let published: Date?
-    /// "message" for full Sunday messages, "short" for clips.
-    public let kind: String
-    public let link: URL?
-
-    public var isShort: Bool {
-        kind == "short"
-    }
-}
-
 public enum MemberAction: Sendable {
     case join(String)
     case message(String, String)
@@ -234,6 +227,9 @@ public enum MemberAction: Sendable {
     case addChild(String, String)
     case checkIn(String)
     case pickup(String, String)
+    case clockIn
+    case clockOut
+    case answerServing(String, Bool)
     /// Works for guests too.
     case followUp(FollowUpRequest)
     /// Works for guests too.
@@ -241,6 +237,8 @@ public enum MemberAction: Sendable {
     /// Confirms the password, then gives. Only offered when giving is switched on.
     case gift(GiftRequest, password: String)
     case readDailyWord
+    /// Takes a prayer off the wall until a pastor looks at it.
+    case reportPrayer(String)
 }
 
 public struct FundLine: Equatable, Sendable, Identifiable {
@@ -305,15 +303,15 @@ public struct ChurchClient: Sendable {
     }
 
     public func loadMember(token: String) async throws -> ChurchSnapshot {
-        let church = try await loadPublic(token: token)
-        let directory: PeopleReply = try await send("/api/directory", method: "GET", token: token, json: nil)
-        let prayers: PrayersReply = try await send("/api/prayers", method: "GET", token: token, json: nil)
-        let me: MeReply = try await send("/api/me", method: "GET", token: token, json: nil)
-        let kids: KidsReply = try await send("/api/kids/mine", method: "GET", token: token, json: nil)
-        let serving: ServingReply = try await send("/api/serving/mine", method: "GET", token: token, json: nil)
-        let pathway: PathwayReply = try await send("/api/pathways/mine", method: "GET", token: token, json: nil)
-        let funds: FundsReply = try await send("/api/giving/funds", method: "GET", token: nil, json: nil)
-        let eventMine: EventsMineReply = try await send("/api/events/mine", method: "GET", token: token, json: nil)
+        async let churchParts = loadPublic(token: token)
+        async let directory: PeopleReply = send("/api/directory?limit=200", method: "GET", token: token, json: nil)
+        async let prayers: PrayersReply = send("/api/prayers", method: "GET", token: token, json: nil)
+        async let me: MeReply = send("/api/me", method: "GET", token: token, json: nil)
+        async let kids: KidsReply = send("/api/kids/mine", method: "GET", token: token, json: nil)
+        async let serving: ServingReply = send("/api/serving/mine", method: "GET", token: token, json: nil)
+        async let pathway: PathwayReply = send("/api/pathways/mine", method: "GET", token: token, json: nil)
+        async let funds: FundsReply = send("/api/giving/funds", method: "GET", token: nil, json: nil)
+        async let eventMine: EventsMineReply = send("/api/events/mine", method: "GET", token: token, json: nil)
         var gifts: [GiftLine] = []
         var needsStepUp = false
         do {
@@ -322,9 +320,9 @@ public struct ChurchClient: Sendable {
         } catch {
             needsStepUp = true
         }
-        return memberSnapshot(
+        return try await memberSnapshot(
             MemberParts(
-                church: church,
+                church: churchParts,
                 directory: directory,
                 prayers: prayers,
                 me: me,
@@ -339,15 +337,16 @@ public struct ChurchClient: Sendable {
         )
     }
 
+    /// The six public reads run side by side, so the first screen waits for the slowest one, not the sum.
     private func loadPublic(token: String?) async throws -> PublicParts {
-        let home: HomeReply = try await send("/api/home", method: "GET", token: nil, json: nil)
-        let sermons: SermonsReply = try await send("/api/sermons", method: "GET", token: nil, json: nil)
-        let groups: GroupsReply = try await send("/api/groups", method: "GET", token: token, json: nil)
-        let knowJesus: KnowJesusReply = try await send("/api/know-jesus", method: "GET", token: nil, json: nil)
-        let daily: DailyWordReply = try await send("/api/daily-word", method: "GET", token: token, json: nil)
+        async let home: HomeReply = send("/api/home", method: "GET", token: nil, json: nil)
+        async let sermons: SermonsReply = send("/api/sermons?limit=30", method: "GET", token: nil, json: nil)
+        async let groups: GroupsReply = send("/api/groups", method: "GET", token: token, json: nil)
+        async let knowJesus: KnowJesusReply = send("/api/know-jesus", method: "GET", token: nil, json: nil)
+        async let daily: DailyWordReply = send("/api/daily-word", method: "GET", token: token, json: nil)
         // Older servers have no growth content; the rest of the app still loads.
-        let growth: GrowthInfo? = try? await send("/api/growth", method: "GET", token: nil, json: nil)
-        return PublicParts(home: home, sermons: sermons, groups: groups, knowJesus: knowJesus, daily: daily, growth: growth)
+        async let growth: GrowthInfo? = try? send("/api/growth", method: "GET", token: nil, json: nil)
+        return try await PublicParts(home: home, sermons: sermons, groups: groups, knowJesus: knowJesus, daily: daily, growth: growth)
     }
 
     func send<Response: Decodable>(

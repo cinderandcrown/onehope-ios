@@ -136,7 +136,7 @@ test("a member can sign in, act, and see a clear password error", async ({ page 
   const tag = (await page.getByLabel("Security code", { exact: true }).locator("strong").textContent()) ?? "";
   await page.getByLabel("Security code for pickup").fill(tag);
   await page.getByRole("button", { name: "Pick up QA Child" }).click();
-  await expect(page.getByText(/Two adults must be on duty|QA Child is picked up/)).toBeVisible();
+  await expect(page.getByText(/Two adults from the kids team must be on duty|QA Child is picked up/)).toBeVisible();
 
   await page.getByRole("tab", { name: "Know Jesus" }).click();
   await page.getByRole("button", { name: "I want to be baptized" }).click();

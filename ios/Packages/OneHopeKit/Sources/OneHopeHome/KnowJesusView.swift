@@ -71,6 +71,7 @@ public struct KnowJesusView: View {
             }
             .padding()
         }
+        .tabBarClearance()
         .background(BrandColor.paper)
         .navigationTitle(L10n.text(.knowJesus))
         .sheet(item: $asking) { kind in
@@ -92,7 +93,7 @@ public struct KnowJesusView: View {
                 } label: {
                     Text(kind.label).frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("decision-\(kind.rawValue)")
             }
             if !notice.isEmpty {

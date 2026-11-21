@@ -47,6 +47,10 @@ public extension ChurchClient {
         let _: EmptyReply = try await send("/api/events/\(eventId)/register", method: "POST", token: token, json: Data("{}".utf8))
     }
 
+    func reportPrayer(token: String, prayerId: String) async throws {
+        let _: EmptyReply = try await send("/api/prayers/\(prayerId)/report", method: "POST", token: token, json: Data("{}".utf8))
+    }
+
     func submitPrayer(token: String, serve: String, contact: Bool, body: String) async throws {
         let _: EmptyReply = try await send(
             "/api/prayers",
@@ -112,6 +116,24 @@ public extension ChurchClient {
         return reply.code
     }
 
+    func clockIn(token: String) async throws {
+        let _: EmptyReply = try await send("/api/kids/clock-in", method: "POST", token: token, json: Data("{}".utf8))
+    }
+
+    func clockOut(token: String) async throws {
+        let _: EmptyReply = try await send("/api/kids/clock-out", method: "POST", token: token, json: Data("{}".utf8))
+    }
+
+    func answerServing(token: String, id: String, accept: Bool) async throws {
+        struct Body: Encodable { let accept: Bool }
+        let _: EmptyReply = try await send(
+            "/api/serving/\(id)/respond",
+            method: "POST",
+            token: token,
+            json: JSONEncoder().encode(Body(accept: accept))
+        )
+    }
+
     func householdPickup(token: String, childId: String, code: String) async throws -> String {
         let reply: ReasonReply = try await send(
             "/api/kids/household-pickup",
@@ -159,13 +181,16 @@ public extension ChurchClient {
         case let .prayer(serve, contact, body):
             try await submitPrayer(token: token, serve: serve, contact: contact, body: body)
             return "Your prayer request was sent to the pastors."
+        case let .reportPrayer(id):
+            try await reportPrayer(token: token, prayerId: id)
+            return "Thank you. That request was taken down and a pastor will review it."
         case .readDailyWord:
             let streak = try await markDailyWordRead(token: token)
             return streak == 1 ? "1 day in a row" : "\(streak) days in a row"
         case let .gift(request, password):
             try await give(token: token, request: request, password: password)
             return "Thank you. Your gift is set up (\(request.recurring.label.lowercased()))."
-        case .followUp, .support, .addChild, .checkIn, .pickup:
+        case .followUp, .support, .addChild, .checkIn, .pickup, .clockIn, .clockOut, .answerServing:
             return ""
         }
     }
@@ -180,6 +205,15 @@ public extension ChurchClient {
             return "Checked in. Security code \(code). Keep it for pickup."
         case let .pickup(id, code):
             return try await householdPickup(token: token, childId: id, code: code)
+        case .clockIn:
+            try await clockIn(token: token)
+            return "You are clocked in."
+        case .clockOut:
+            try await clockOut(token: token)
+            return "You are clocked out."
+        case let .answerServing(id, accept):
+            try await answerServing(token: token, id: id, accept: accept)
+            return accept ? "You're on the schedule." : "You declined that spot."
         default:
             return nil
         }

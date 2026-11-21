@@ -115,7 +115,7 @@ test("kids pickup is two-adult, guardian verified, and custody aware", () => {
     store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "4821" }).allowed,
     false,
   );
-  store.clockIn(staff(store, "dana@sample.onehope"));
+  store.clockIn(staff(store, "gray@sample.onehope"));
   assert.equal(
     store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: "0000" }).allowed,
     false,
@@ -253,6 +253,12 @@ test("sample shortcut is labeled and refused in production", () => {
     (error: AccessError) => error.code === "forbidden",
   );
   assert.throws(() => loadConfig({ ONEHOPE_ENV: "production" }));
+  assert.equal(loadConfig({}).env, "demo");
+  assert.equal(loadConfig({ VERCEL_ENV: "preview" }).env, "demo");
+  assert.equal(loadConfig({ ONEHOPE_ENV: "demo", VERCEL_ENV: "production" }).env, "demo");
+  const productionKey = Buffer.alloc(32, 9).toString("base64");
+  assert.equal(loadConfig({ VERCEL_ENV: "production", FIELD_ENCRYPTION_KEY: productionKey }).env, "production");
+  assert.throws(() => loadConfig({ VERCEL_ENV: "production" }));
 });
 
 test("deletion removes a member's private rows and leaves the other household intact", () => {

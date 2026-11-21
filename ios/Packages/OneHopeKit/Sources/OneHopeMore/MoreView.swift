@@ -34,7 +34,7 @@ public struct MoreView: View {
 
     /// Pushed from Connect, so it has no navigation stack of its own.
     public var body: some View {
-        List {
+        HopeList {
             if !notice.isEmpty {
                 Text(notice)
             }

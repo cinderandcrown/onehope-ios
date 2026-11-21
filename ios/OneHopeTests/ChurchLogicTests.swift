@@ -73,6 +73,40 @@ final class ChurchLogicTests: XCTestCase {
         }
     }
 
+    func testFeaturedMessageLeadsAndBlankFallsBackToTheNewestMessage() {
+        let rss = [
+            SermonLine(id: "s1", title: "Short", thumbnail: nil, thumbnailHD: nil, published: nil, kind: "short", link: nil),
+            SermonLine(id: "m1", title: "Sunday message", thumbnail: nil, thumbnailHD: nil, published: nil, kind: "message", link: nil),
+        ]
+        let plain = SermonOrder.featuring(rss, featured: nil)
+        XCTAssertEqual(plain.map(\.id), ["s1", "m1"])
+        let featured = SermonLine(
+            id: "feat1",
+            title: "Staff title",
+            thumbnail: nil,
+            thumbnailHD: nil,
+            published: nil,
+            kind: "message",
+            link: nil,
+            speaker: "Pastor Sample",
+            passage: "John 3:16"
+        )
+        let ordered = SermonOrder.featuring(rss, featured: featured)
+        XCTAssertEqual(ordered.map(\.id), ["feat1", "s1", "m1"])
+        XCTAssertEqual(ordered.first?.speaker, "Pastor Sample")
+        let moved = SermonOrder.featuring(rss, featured: SermonLine(
+            id: "m1",
+            title: "Renamed",
+            thumbnail: nil,
+            thumbnailHD: nil,
+            published: nil,
+            kind: "message",
+            link: nil
+        ))
+        XCTAssertEqual(moved.map(\.id), ["m1", "s1"])
+        XCTAssertEqual(moved.first?.title, "Renamed")
+    }
+
     func testGuestLoadsTheChurchWithoutAnAccount() async throws {
         let transport = FixtureTransport { url, _ in
             Self.publicReply(url.path) ?? (401, Data(#"{"ok":false,"error":"Sign in again.","code":"unauthenticated"}"#.utf8))

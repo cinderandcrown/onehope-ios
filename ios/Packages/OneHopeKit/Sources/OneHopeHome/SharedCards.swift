@@ -20,11 +20,11 @@ public struct InviteCard: View {
                     ShareLink(item: url, subject: Text(invite.title), message: Text(invite.shareText)) {
                         Label("Send an invite", systemImage: "square.and.arrow.up")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("share-invite")
                 }
                 if let maps = URL(string: invite.mapsUrl) {
-                    Link("Maps", destination: maps).buttonStyle(.bordered)
+                    Link("Maps", destination: maps).buttonStyle(SecondaryButtonStyle())
                 }
             }
         }
@@ -48,15 +48,17 @@ public struct DailyWordCard: View {
     public var body: some View {
         if let daily = snapshot.daily {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Daily Word · \(daily.reference)").font(.caption.weight(.semibold)).foregroundStyle(BrandColor.olive)
-                Text("\u{201C}\(daily.text)\u{201D}").font(.body.italic())
+                Text("Today's encouragement · \(daily.reference)").eyebrow()
+                Text("\u{201C}\(daily.text)\u{201D}")
+                    .font(.system(.title3, design: .serif).italic())
+                    .foregroundStyle(BrandColor.ink)
                 Text("Read \(daily.read) (KJV)").font(.footnote)
                 Text(daily.prompt).font(.callout)
                 let days = streakCount(today: daily.day)
                 Button(readToday(daily.day) ? "Read today" : "I read today's Word") {
                     Task { await markRead(today: daily.day) }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryButtonStyle())
                 .disabled(readToday(daily.day))
                 .accessibilityIdentifier("daily-word-read")
                 if days > 0 {
@@ -67,6 +69,7 @@ public struct DailyWordCard: View {
                 }
             }
             .churchCard()
+            .announce(notice)
         }
     }
 
@@ -115,7 +118,7 @@ public struct FollowUpForm: View {
 
     public var body: some View {
         NavigationStack {
-            Form {
+            HopeForm {
                 if !signedIn {
                     Section("About you") {
                         TextField("Your name", text: $name)
@@ -136,7 +139,7 @@ public struct FollowUpForm: View {
                     Text("Nothing is shared outside the church staff.")
                 }
                 if !notice.isEmpty {
-                    Text(notice).font(.footnote).foregroundStyle(BrandColor.terracotta)
+                    Text(notice).font(.footnote).foregroundStyle(BrandColor.terracottaDeep)
                 }
                 Button(busy ? "Sending…" : "Send") {
                     Task { await send() }

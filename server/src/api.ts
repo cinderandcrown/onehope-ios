@@ -2,7 +2,8 @@ import { assertTruthful } from "./adapter-registry";
 import { CAPABILITIES } from "./capabilities";
 import { AccessError, assertNever, assertNoCardData, isAccessError } from "./domain";
 import { originAllowed } from "./public-url";
-import { facebookLive, loadSermons } from "./adapters";
+import { facebookLive } from "./adapters";
+import { cachedSermons, isCacheablePublicGet, pageOf, withPublicCache } from "./http-cache";
 import {
   bookingBodySchema,
   codeBodySchema,
@@ -10,6 +11,8 @@ import {
   healthSchema,
   integrationBodySchema,
   announcementBodySchema,
+  archiveBodySchema,
+  cancelBodySchema,
   claimBodySchema,
   inviteBodySchema,
   checkInBodySchema,
@@ -27,6 +30,7 @@ import {
   personCreateBodySchema,
   personEditBodySchema,
   servingAssignBodySchema,
+  servingRespondBodySchema,
   neighborhoodPrayerBodySchema,
   coffeeOrderBodySchema,
   groupBodySchema,
@@ -39,11 +43,13 @@ import {
   prayerBodySchema,
   proposalBodySchema,
   pushBodySchema,
+  featureBodySchema,
   roleChangeBodySchema,
   stepUpBodySchema,
 } from "./contracts";
 import { createLogger, noopReporter, type ErrorReporter, type Logger } from "./logger";
 import type { ChurchStore } from "./store";
+import { parseChicagoLocal } from "./staff-desk";
 import { VERSION } from "./version";
 import type { ZodType } from "zod";
 
@@ -55,6 +61,8 @@ export const API_ROUTES = [
   ["POST", "/api/auth/claim"],
   ["POST", "/api/security/invites"],
   ["POST", "/api/auth/mfa"],
+  ["POST", "/api/auth/totp/start"],
+  ["POST", "/api/auth/totp/confirm"],
   ["POST", "/api/auth/step-up"],
   ["POST", "/api/auth/logout"],
   ["POST", "/api/auth/sample-staff"],
@@ -79,20 +87,39 @@ export const API_ROUTES = [
   ["GET", "/api/prayers"],
   ["POST", "/api/prayers"],
   ["POST", "/api/prayers/{id}/moderate"],
+  ["POST", "/api/prayers/{id}/report"],
   ["GET", "/api/kids/mine"],
   ["GET", "/api/serving/mine"],
+  ["POST", "/api/serving/{id}/respond"],
   ["GET", "/api/pathways/mine"],
   ["POST", "/api/kids/check-in"],
+  ["POST", "/api/kids/clock-in"],
+  ["POST", "/api/kids/clock-out"],
+  ["GET", "/api/kids/roster"],
+  ["GET", "/api/kids/station"],
+  ["POST", "/api/kids/staff-check-in"],
   ["POST", "/api/kids/household-pickup"],
   ["POST", "/api/household/children"],
   ["POST", "/api/announcements"],
+  ["POST", "/api/announcements/{id}"],
+  ["POST", "/api/announcements/{id}/archive"],
+  ["GET", "/api/staff/announcements"],
   ["POST", "/api/events"],
+  ["POST", "/api/events/{id}"],
+  ["POST", "/api/events/{id}/cancel"],
+  ["GET", "/api/staff/events"],
+  ["GET", "/api/staff/outreach"],
+  ["POST", "/api/outreach/{id}"],
+  ["POST", "/api/outreach/{id}/cancel"],
   ["POST", "/api/groups"],
   ["GET", "/api/giving/quickbooks"],
   ["GET", "/api/audit"],
   ["GET", "/api/kids/{id}/label"],
   ["POST", "/api/kids/pickup"],
   ["POST", "/api/communications/push"],
+  ["GET", "/api/media/featured"],
+  ["POST", "/api/media/feature"],
+  ["POST", "/api/media/feature/clear"],
   ["GET", "/api/modules"],
   ["GET", "/api/security/seats"],
   ["POST", "/api/security/roles"],
@@ -109,6 +136,8 @@ export const API_ROUTES = [
   ["POST", "/api/support"],
   ["GET", "/api/growth"],
   ["GET", "/api/care/follow-ups"],
+  ["GET", "/api/care/testimonies"],
+  ["GET", "/api/care/reported-prayers"],
   ["POST", "/api/care/follow-ups/{id}"],
   ["GET", "/api/social"],
   ["POST", "/api/social"],
@@ -181,6 +210,20 @@ export function createApi(deps: Deps) {
       const token = bearerOrCookie(request);
       const body = request.method === "GET" || request.method === "HEAD" ? {} : await readBody(request);
       if (request.method !== "GET" && request.method !== "HEAD") assertNoCardData(body);
+      if (request.method === "GET" && url.pathname === "/api/audit" && url.searchParams.get("format") === "csv") {
+        if (!token) throw new AccessError("unauthenticated", "Sign in again.");
+        const csv = deps.store.auditCsv(token, dayRange(url.searchParams));
+        return finish(
+          deps,
+          request,
+          new Response(csv, {
+            headers: {
+              "content-type": "text/csv; charset=utf-8",
+              "content-disposition": 'attachment; filename="onehope-audit.csv"',
+            },
+          }),
+        );
+      }
       const icsPath = url.pathname.match(/^\/api\/events\/([^/]+)\/ics$/);
       if (request.method === "GET" && icsPath?.[1]) {
         const calendar = deps.store.ics(decodeURIComponent(icsPath[1]));
@@ -191,8 +234,19 @@ export function createApi(deps: Deps) {
           },
         });
       }
-      const result = await route(deps, token, request.method, url.pathname, body, clientAddress(request));
+      const result = await route(
+        deps,
+        token,
+        request.method,
+        url.pathname,
+        body,
+        clientAddress(request),
+        url.searchParams,
+      );
       log.log("info", "request", { method: request.method, path: url.pathname, status: 200 });
+      if (isCacheablePublicGet(request.method, url.pathname, token !== null)) {
+        return finish(deps, request, withPublicCache(request, result));
+      }
       return finish(deps, request, Response.json({ ok: true, ...result }));
     } catch (error) {
       if (isAccessError(error)) {
@@ -237,6 +291,7 @@ async function route(
   path: string,
   body: unknown,
   client: string,
+  query: URLSearchParams = new URLSearchParams(),
 ): Promise<Record<string, unknown>> {
   const store = deps.store;
   const need = () => {
@@ -259,6 +314,9 @@ async function route(
   }
   if (method === "POST" && path === "/api/auth/mfa")
     return store.verifyMfa(need(), parse(codeBodySchema, body).code);
+  if (method === "POST" && path === "/api/auth/totp/start") return store.beginTotp(need());
+  if (method === "POST" && path === "/api/auth/totp/confirm")
+    return store.confirmTotp(need(), parse(codeBodySchema, body).code);
   if (method === "POST" && path === "/api/auth/step-up")
     return store.stepUp(need(), parse(stepUpBodySchema, body));
   if (method === "POST" && path === "/api/auth/logout") {
@@ -273,14 +331,34 @@ async function route(
   if (method === "POST" && path === "/api/account/delete") return store.deleteSelf(need());
   if (method === "GET" && path === "/api/home") return store.publicHome();
   if (method === "GET" && path === "/api/sermons") {
-    const videos = await loadSermons(deps.fetchImpl ?? fetch, store.config.youtubeChannelId);
-    return { videos, sample: videos.length === 0 };
+    const all = await cachedSermons(deps.fetchImpl ?? fetch, store.config.youtubeChannelId);
+    const page = pageOf(query, { limit: 50, max: 100 });
+    const kind = query.get("kind");
+    const filtered = kind === "message" || kind === "short" ? all.filter((video) => video.kind === kind) : all;
+    const videos = filtered.slice(page.offset, page.offset + page.limit);
+    const next = page.offset + videos.length;
+    return {
+      videos,
+      sample: all.length === 0,
+      total: filtered.length,
+      nextOffset: next < filtered.length ? next : null,
+    };
   }
   const ics = path.match(/^\/api\/events\/([^/]+)\/ics$/);
   if (method === "GET" && ics?.[1]) return { ics: store.ics(decodeURIComponent(ics[1])) };
   const register = path.match(/^\/api\/events\/([^/]+)\/register$/);
   if (method === "POST" && register?.[1]) return store.register(need(), decodeURIComponent(register[1]));
-  if (method === "GET" && path === "/api/directory") return { people: store.directory(need()) };
+  if (method === "GET" && path === "/api/directory") {
+    const page = pageOf(query, { limit: 200, max: 500 });
+    const needle = (query.get("q") ?? "").trim().toLowerCase();
+    const everyone = store.directory(need());
+    const matching = needle
+      ? everyone.filter((person) => person.displayName.toLowerCase().includes(needle))
+      : everyone;
+    const people = matching.slice(page.offset, page.offset + page.limit);
+    const next = page.offset + people.length;
+    return { people, total: matching.length, nextOffset: next < matching.length ? next : null };
+  }
   if (method === "GET" && path === "/api/giving/funds")
     return { funds: store.funds(), ...store.givingAvailability() };
   if (method === "POST" && path === "/api/giving/gifts")
@@ -315,20 +393,91 @@ async function route(
       parse(moderateBodySchema, body).approved,
     );
   }
-  if (method === "GET" && path === "/api/kids/mine") return { kids: store.myKids(need()) };
+  const report = path.match(/^\/api\/prayers\/([^/]+)\/report$/);
+  if (method === "POST" && report?.[1]) return store.reportPrayer(need(), decodeURIComponent(report[1]));
+  if (method === "GET" && path === "/api/kids/mine") {
+    const token = need();
+    return { kids: store.myKids(token), duty: store.kidsDuty(token) };
+  }
   if (method === "GET" && path === "/api/serving/mine") return { assignments: store.serving(need()) };
+  const respondServing = path.match(/^\/api\/serving\/([^/]+)\/respond$/);
+  if (method === "POST" && respondServing?.[1]) {
+    return store.respond(need(), decodeURIComponent(respondServing[1]), parse(servingRespondBodySchema, body).accept);
+  }
   if (method === "GET" && path === "/api/pathways/mine") return store.myPathway(need());
   if (method === "POST" && path === "/api/kids/check-in")
     return store.checkIn(need(), parse(checkInBodySchema, body).childId);
+  if (method === "POST" && path === "/api/kids/clock-in") return store.clockIn(need());
+  if (method === "POST" && path === "/api/kids/clock-out") return store.clockOut(need());
+  if (method === "GET" && path === "/api/kids/roster") {
+    return { children: store.roster(need(), query.get("classroom")) };
+  }
+  if (method === "GET" && path === "/api/kids/station") {
+    return { station: store.stationBoard(need(), query.get("classroom")) };
+  }
+  if (method === "POST" && path === "/api/kids/staff-check-in") {
+    return store.staffCheckIn(need(), parse(checkInBodySchema, body).childId);
+  }
   if (method === "POST" && path === "/api/kids/household-pickup")
     return store.householdPickup(need(), parse(householdPickupBodySchema, body));
   if (method === "POST" && path === "/api/household/children")
     return { child: store.addChild(need(), parse(childBodySchema, body)) };
   if (method === "POST" && path === "/api/announcements")
     return { announcement: store.createAnnouncement(need(), parse(announcementBodySchema, body)) };
+  const archiveAnnouncement = path.match(/^\/api\/announcements\/([^/]+)\/archive$/);
+  if (method === "POST" && archiveAnnouncement?.[1]) {
+    return store.archiveAnnouncement(
+      need(),
+      decodeURIComponent(archiveAnnouncement[1]),
+      parse(archiveBodySchema, body).archived,
+    );
+  }
+  const editAnnouncement = path.match(/^\/api\/announcements\/([^/]+)$/);
+  if (method === "POST" && editAnnouncement?.[1]) {
+    return {
+      announcement: store.updateAnnouncement(
+        need(),
+        decodeURIComponent(editAnnouncement[1]),
+        parse(announcementBodySchema, body),
+      ),
+    };
+  }
+  if (method === "GET" && path === "/api/staff/announcements") {
+    return { announcements: store.staffAnnouncements(need()) };
+  }
   if (method === "GET" && path === "/api/events/mine") return { events: store.listEvents(need()) };
   if (method === "POST" && path === "/api/events")
     return { event: store.createEvent(need(), parse(eventBodySchema, body)) };
+  const cancelEvent = path.match(/^\/api\/events\/([^/]+)\/cancel$/);
+  if (method === "POST" && cancelEvent?.[1]) {
+    return store.cancelEvent(need(), decodeURIComponent(cancelEvent[1]), parse(cancelBodySchema, body).cancelled);
+  }
+  const editEvent = path.match(/^\/api\/events\/([^/]+)$/);
+  if (method === "POST" && editEvent?.[1] && editEvent[1] !== "mine") {
+    return {
+      event: store.updateEvent(need(), decodeURIComponent(editEvent[1]), parse(eventBodySchema, body)),
+    };
+  }
+  if (method === "GET" && path === "/api/staff/events") return { events: store.staffEvents(need()) };
+  if (method === "GET" && path === "/api/staff/outreach") return { serveDays: store.staffServeDays(need()) };
+  const cancelServe = path.match(/^\/api\/outreach\/([^/]+)\/cancel$/);
+  if (method === "POST" && cancelServe?.[1]) {
+    return store.cancelOutreach(
+      need(),
+      decodeURIComponent(cancelServe[1]),
+      parse(cancelBodySchema, body).cancelled,
+    );
+  }
+  const editServe = path.match(/^\/api\/outreach\/([^/]+)$/);
+  if (method === "POST" && editServe?.[1]) {
+    const input = parse(outreachBodySchema, body);
+    return {
+      outreach: store.updateOutreach(need(), decodeURIComponent(editServe[1]), {
+        ...input,
+        detail: input.detail ?? "",
+      }),
+    };
+  }
   if (method === "POST" && path === "/api/groups" && method === "POST")
     return { group: store.createGroup(need(), parse(groupBodySchema, body)) };
   if (method === "GET" && path === "/api/giving/quickbooks") return { csv: store.quickbooksCsv(need()) };
@@ -339,6 +488,10 @@ async function route(
     return store.pickup(need(), parse(pickupBodySchema, body));
   if (method === "POST" && path === "/api/communications/push")
     return store.sendPush(need(), parse(pushBodySchema, body));
+  if (method === "GET" && path === "/api/media/featured") return { message: store.featuredMessage() };
+  if (method === "POST" && path === "/api/media/feature")
+    return { message: store.featureMessage(need(), parse(featureBodySchema, body)) };
+  if (method === "POST" && path === "/api/media/feature/clear") return store.clearFeaturedMessage(need());
   if (method === "GET" && path === "/api/modules") return { modules: store.modules() };
   if (method === "GET" && path === "/api/security/seats") return { seats: store.seatsFor(need()) };
   if (method === "POST" && path === "/api/security/invites") {
@@ -434,13 +587,19 @@ async function route(
   if (method === "GET" && roster?.[1])
     return { group: store.groupRoster(need(), decodeURIComponent(roster[1])) };
   if (method === "GET" && path === "/api/care/follow-ups") return { followUps: store.followUpsFor(need()) };
+  if (method === "GET" && path === "/api/care/testimonies") {
+    return { testimonies: store.pendingTestimonies(need()) };
+  }
+  if (method === "GET" && path === "/api/care/reported-prayers") {
+    return { prayers: store.reportedPrayers(need()) };
+  }
   const followUp = path.match(/^\/api\/care\/follow-ups\/([^/]+)$/);
   if (method === "POST" && followUp?.[1]) {
     return {
       followUp: store.updateFollowUp(
         need(),
         decodeURIComponent(followUp[1]),
-        parse(followUpStatusBodySchema, body).status,
+        parse(followUpStatusBodySchema, body),
       ),
     };
   }
@@ -503,6 +662,14 @@ function assertMutation(request: Request) {
     throw new AccessError("forbidden", "The request origin wasn't valid.");
   }
   if (originHost !== host) throw new AccessError("forbidden", "Cross-site changes are refused.");
+}
+
+function dayRange(query: URLSearchParams): { from: number | null; to: number | null } {
+  const fromRaw = query.get("from") ?? "";
+  const toRaw = query.get("to") ?? "";
+  const from = fromRaw ? parseChicagoLocal(fromRaw) : null;
+  const toStart = toRaw ? parseChicagoLocal(toRaw) : null;
+  return { from, to: toStart === null ? null : toStart + 24 * 60 * 60 * 1000 - 1 };
 }
 
 function statusFor(code: AccessError["code"]): number {

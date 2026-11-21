@@ -1,4 +1,5 @@
 import OneHopeCore
+import OneHopeDesign
 import SwiftUI
 
 /// Links to the church's Toolkit, Recovery page, and Support/Assistance form.
@@ -8,7 +9,7 @@ struct GrowSection: View {
     let perform: (MemberAction) async -> String
 
     var body: some View {
-        Section("Grow and care") {
+        TitledSection("Grow and care") {
             NavigationLink(growth.toolkit.title) {
                 ToolkitView(toolkit: growth.toolkit)
             }
@@ -29,29 +30,29 @@ struct ToolkitView: View {
     let toolkit: ToolkitInfo
 
     var body: some View {
-        List {
+        HopeList {
             Section {
                 link(toolkit.readingPlan)
                 link(toolkit.proclamations)
                 link(toolkit.playlist)
             }
-            Section("Scriptures to speak") {
+            TitledSection("Scriptures to speak") {
                 ForEach(toolkit.scriptures, id: \.reference) { verse in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verse.text)
-                        Text("\(verse.reference) (KJV)").font(.footnote).foregroundStyle(.secondary)
+                        Text("\(verse.reference) (KJV)").font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.8))
                     }
                 }
             }
-            Section("Staff reads") {
+            TitledSection("Staff reads") {
                 ForEach(toolkit.staffReads) { book in
                     VStack(alignment: .leading) {
                         Text(book.title)
-                        Text(book.author).font(.footnote).foregroundStyle(.secondary)
+                        Text(book.author).font(.footnote).foregroundStyle(BrandColor.ink.opacity(0.8))
                     }
                 }
             }
-            Section("Podcast picks") {
+            TitledSection("Podcast picks") {
                 ForEach(toolkit.podcasts, id: \.self) { podcast in
                     Text(podcast)
                 }
@@ -74,9 +75,9 @@ struct RecoveryView: View {
     @AppStorage("onehope.recovery.scores") private var stored = ""
 
     var body: some View {
-        List {
+        HopeList {
             if let group = recovery.group {
-                Section(group.name) {
+                TitledSection(group.name) {
                     Text(group.schedule)
                     if !group.area.isEmpty {
                         Text(group.area).font(.footnote)
@@ -145,7 +146,7 @@ struct SupportFormView: View {
     @State private var notice = ""
 
     var body: some View {
-        Form {
+        HopeForm {
             Section {
                 ForEach(support.needs) { need in
                     Toggle(need.label, isOn: binding(for: need.id))
@@ -156,7 +157,7 @@ struct SupportFormView: View {
                 Text(support.intro)
             }
             if !signedIn {
-                Section("How can we reach you?") {
+                TitledSection("How can we reach you?") {
                     TextField("Your name", text: $name).textContentType(.name)
                     TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress)
                     TextField("Phone", text: $phone).textContentType(.telephoneNumber).keyboardType(.phonePad)

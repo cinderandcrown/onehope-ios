@@ -37,7 +37,10 @@ jobs:
         run: |
           mkdir -p server/coverage
           cd server
-          node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info test/*.test.ts
+          node --import tsx --test --experimental-test-coverage \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \
+            test/*.test.ts
         continue-on-error: false
 
       - name: Build
@@ -53,6 +56,50 @@ jobs:
 
       - name: Dependency audit
         run: npm audit --omit=dev --audit-level=high
+
+  postgres-desk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: onehope
+          POSTGRES_PASSWORD: onehope
+          POSTGRES_DB: onehope
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U onehope -d onehope"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Staff desk on Postgres
+        working-directory: web
+        env:
+          DATABASE_URL: postgres://onehope:onehope@127.0.0.1:5432/onehope
+          ONEHOPE_SAMPLE_DATA: "true"
+          ONEHOPE_PG_DRIVER: neon
+          ONEHOPE_PG_WS_PROXY: 127.0.0.1:4444
+          ONEHOPE_PG_WS_PORT: "4444"
+        run: |
+          node ../server/scripts/pg-ws-proxy.mjs &
+          for _ in $(seq 1 25); do
+            if (echo >/dev/tcp/127.0.0.1/4444) >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.2
+          done
+          npx playwright install --with-deps chromium && npx playwright test --config playwright.postgres.config.ts
 
       - uses: actions/upload-artifact@v4
         if: always()

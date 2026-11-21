@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomInt } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
 
 import {
   CHURCH_EVENTS,
@@ -37,6 +37,8 @@ import {
   type Role,
   AccessError,
   CHURCH,
+  allows,
+  labelRole,
   MODULES,
   RETENTION_YEARS,
   SAMPLE_FUNNEL,
@@ -47,7 +49,11 @@ import {
   evaluatePickup,
   eventToIcs,
   findRoomConflict,
+  KIDS_POSITION_ID,
+  SERVING_SPOTS,
   isStaff,
+  mayChangeRole,
+  mayIssueInvite,
   nextSundayService,
   projectDirectory,
   sameHousehold,
@@ -55,6 +61,12 @@ import {
   zebraLabel,
 } from "./domain";
 import { coffeeGuide } from "./coffee";
+import {
+  announcementIsLive,
+  type AnnouncementCard,
+  formatChicago,
+  windowError,
+} from "./staff-desk";
 import {
   DEFAULT_PATHWAY,
   FOLLOW_UP_LABELS,
@@ -71,6 +83,7 @@ import {
   nextStreak,
   streakEncouragement,
 } from "./faith";
+import { EMPTY_MEDIA, blankImages } from "./media";
 import { inviteUrl } from "./public-url";
 import { SITE_SOCIAL, type SocialLink, cleanSocialLinks } from "./social";
 import {
@@ -81,7 +94,7 @@ import {
   verifySquareSignature,
 } from "./square";
 import { SAMPLE_PASSWORD, SAMPLE_PASTOR_EMAIL, SAMPLE_TOTP_BASE32 } from "./sample-accounts";
-import { decodeBase32, totpCode, totpMatches } from "./totp";
+import { decodeBase32, encodeBase32, totpCode, totpMatches } from "./totp";
 
 type GiftRow = {
   id: string;
@@ -113,7 +126,20 @@ type Person = PersonView & {
   deleted: boolean;
   lastIp: string | null;
   lastUserAgent: string | null;
+  /** Who added this person from the desk, and when. Sample seats leave both empty. */
+  addedBy?: string | null;
+  addedAt?: number | null;
 };
+
+type IssuedInvite = {
+  email: string;
+  expires: number;
+  issuerRole: Role | null;
+  issuerId: string;
+};
+
+/** Undo an add only while the same person is still signed in. Staff sessions last 15 minutes. */
+const UNDO_ADD_MS = 10 * 60 * 1000;
 
 type Session = {
   token: string;
@@ -125,6 +151,8 @@ type Session = {
   ip: string;
   userAgent: string;
   sample: boolean;
+  /** Base32 secret while a staff member is setting up an authenticator. Never logged. */
+  pendingTotp?: string | null;
 };
 
 type AuditEntry = {
@@ -155,6 +183,10 @@ type FollowUpRow = {
   status: FollowUpStatus;
   createdAt: number;
   sample: boolean;
+  assigneeId?: string | null;
+  dueAt?: number | null;
+  /** Encrypted `{ note }` written by staff. Older rows omit it. */
+  noteCiphertext?: string;
 };
 
 /** Church Center fields are optional so groups staff create, and snapshots from builds 1–5, still load. */
@@ -177,6 +209,9 @@ type EventRow = {
   sample: boolean;
   /** Registration that lives on Church Center. */
   url?: string;
+  cancelled?: boolean;
+  /** A person changed this row, so the catalog must not replace it. */
+  staffEdited?: boolean;
 };
 
 type PrayerRow = {
@@ -192,6 +227,8 @@ type PrayerRow = {
   contactRequested?: boolean;
   /** Sent from the public neighborhood page. Still waits for staff. */
   neighborhood?: boolean;
+  /** A member asked staff to look at this again. It is off the wall until a decision. */
+  reported?: boolean;
 };
 
 type AmenRow = { prayerId: string; personId: string };
@@ -223,6 +260,7 @@ type OutreachRow = {
   start: number;
   end: number;
   sample: boolean;
+  cancelled?: boolean;
 };
 type CoffeeOrderRow = {
   id: string;
@@ -244,7 +282,7 @@ const GUEST_LIMIT_PER_CLIENT = 5;
 const GUEST_LIMIT_TOTAL = 120;
 const MEMBER_LIMIT = 10;
 
-type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret: string | null };
+type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret?: string | null };
 
 export type StoreDocument = {
   version: 1;
@@ -262,7 +300,7 @@ export type StoreDocument = {
   messages: { id: string; groupId: string; authorId: string; body: string; sample: boolean }[];
   events: EventRow[];
   registrations: { id: string; eventId: string; personId: string; status: "registered" | "waitlist" }[];
-  announcements: { id: string; title: string; body: string; sample: boolean }[];
+  announcements: AnnouncementCard[];
   prayers: PrayerRow[];
   notes: {
     id: string;
@@ -277,6 +315,8 @@ export type StoreDocument = {
     id: string;
     personId: string;
     position: string;
+    /** Defined spot id, such as "kids". A free-typed name has none. */
+    positionId?: string | null;
     status: "pending" | "accepted" | "declined";
     sample: boolean;
   }[];
@@ -294,8 +334,14 @@ export type StoreDocument = {
   pathways: { personId: string; steps: { id: string; title: string; status: string }[] }[];
   visitors: { id: string; name: string; state: string; sample: boolean }[];
   requests: { id: string; kind: string; personId: string; ciphertext: string; sample: boolean }[];
-  drafts: { id: string; title: string; segment: string; sample: boolean }[];
-  invites?: { tokenHash: string; email: string; expires: number }[];
+  drafts: { id: string; title: string; body?: string; segment: string; sample: boolean }[];
+  invites?: {
+    tokenHash: string;
+    email: string;
+    expires: number;
+    issuerRole?: Role | null;
+    issuerId?: string;
+  }[];
   /** Added in build 6. Older snapshots do not have these and load as empty. */
   followUps?: FollowUpRow[];
   streaks?: StreakRow[];
@@ -309,6 +355,17 @@ export type StoreDocument = {
   outreachRsvps?: { id: string; outreachId: string; personId: string }[];
   coffeeOrders?: CoffeeOrderRow[];
   social?: SocialLink[];
+  /** Person ids on the kids team, besides the kids director role. Older snapshots load as empty. */
+  kidsTeam?: string[];
+  /** The message staff chose for Home and Watch. Older snapshots omit it. */
+  featuredMessage?: {
+    videoId: string;
+    title: string;
+    speaker: string;
+    passage: string;
+    link: string;
+    thumbnail: string;
+  } | null;
 };
 
 export type StoreOptions = {
@@ -318,6 +375,11 @@ export type StoreOptions = {
   totpOverrides?: Record<string, string>;
   /** Explicit opt-in so tests can assert production guards against a memory store. */
   memoryForTests?: boolean;
+  /**
+   * Present only when a test is pretending Apple push is connected.
+   * Production has no sender, so the desk saves a draft and says nothing was sent.
+   */
+  pushSender?: (input: { title: string; body: string; segment: string; count: number }) => number;
   /** Fictional households for tests. The app boots with public church facts when this is false. */
   fixture?: boolean;
 };
@@ -345,6 +407,7 @@ export class ChurchStore {
   readonly config: AppConfig;
   private readonly now: () => number;
   private readonly fetchImpl: typeof fetch | undefined;
+  private readonly pushSender: StoreOptions["pushSender"];
   private readonly key: Buffer;
   private readonly fixture: boolean;
   private readonly dummyHash: string;
@@ -352,7 +415,7 @@ export class ChurchStore {
   private readonly gifts = new Map<string, GiftRow>();
   private readonly children = new Map<string, ChildRow>();
   private readonly sessions = new Map<string, Session>();
-  private readonly invites = new Map<string, { email: string; expires: number }>();
+  private readonly invites = new Map<string, IssuedInvite>();
   private readonly auditLog: AuditEntry[] = [];
   private readonly alerts: { id: string; personId: string; at: number; kind: string; detail: string }[] = [];
   private readonly proposals = new Map<string, Proposal>();
@@ -374,7 +437,7 @@ export class ChurchStore {
     personId: string;
     status: "registered" | "waitlist";
   }[];
-  private readonly announcements: { id: string; title: string; body: string; sample: boolean }[];
+  private readonly announcements: AnnouncementCard[];
   private readonly prayers: PrayerRow[];
   private readonly notes: {
     id: string;
@@ -392,6 +455,7 @@ export class ChurchStore {
     id: string;
     personId: string;
     position: string;
+    positionId?: string | null;
     status: "pending" | "accepted" | "declined";
     sample: boolean;
   }[];
@@ -419,7 +483,7 @@ export class ChurchStore {
     ciphertext: string;
     sample: boolean;
   }[];
-  private readonly drafts: { id: string; title: string; segment: string; sample: boolean }[] = [];
+  private readonly drafts: { id: string; title: string; body?: string; segment: string; sample: boolean }[] = [];
   private readonly followUps: FollowUpRow[] = [];
   private readonly streaks = new Map<string, StreakRow>();
   private readonly throttle = new Map<string, number[]>();
@@ -431,6 +495,15 @@ export class ChurchStore {
   private readonly outreachRsvps: { id: string; outreachId: string; personId: string }[] = [];
   private readonly coffeeOrders: CoffeeOrderRow[] = [];
   private social: SocialLink[] = SITE_SOCIAL.map((link) => ({ ...link }));
+  private readonly kidsTeam = new Set<string>();
+  private featured: {
+    videoId: string;
+    title: string;
+    speaker: string;
+    passage: string;
+    link: string;
+    thumbnail: string;
+  } | null = null;
   private boundTenant: { id: string; name: string; timezone: string; pickupOnly: boolean } | null = null;
 
   static demo(env: NodeJS.ProcessEnv = process.env): ChurchStore {
@@ -451,6 +524,7 @@ export class ChurchStore {
     this.config = config;
     this.now = options.now ?? Date.now;
     this.fetchImpl = options.fetchImpl;
+    this.pushSender = options.pushSender;
     this.key = config.fieldEncryptionKey;
     this.fixture = options.fixture ?? true;
     this.dummyHash = localAuthProvider.hashPassword("not-a-real-password");
@@ -489,8 +563,17 @@ export class ChurchStore {
     this.boundTenant = tenant;
   }
 
+  /** Photos belong to one tenant. Another tenant on the same deploy gets the brand-colored fallback. */
+  private mediaApplies(): boolean {
+    return !this.boundTenant || this.boundTenant.id === this.config.mediaTenant;
+  }
+
   churchImages(): AppConfig["images"] {
-    return this.config.images;
+    return this.mediaApplies() ? this.config.images : blankImages();
+  }
+
+  churchMedia(): AppConfig["media"] {
+    return this.mediaApplies() ? this.config.media : EMPTY_MEDIA;
   }
 
   currentTenant(): {
@@ -506,7 +589,7 @@ export class ChurchStore {
       timezone: "America/Chicago",
       pickupOnly: false,
     };
-    return { ...tenant, images: this.config.images };
+    return { ...tenant, images: this.churchImages() };
   }
 
   status(version: string) {
@@ -565,8 +648,9 @@ export class ChurchStore {
     person.lastIp = input.ip;
     person.lastUserAgent = input.userAgent;
     const staff = isStaff(person.role);
-    const token =
-      this.config.env === "demo" && person.id === "person-avery" ? "session-member-demo" : newId("session");
+    // Every sign-in gets its own token. A fixed token collides with the stored session row
+    // when the demo runs on a database. The published demo sessions come from ensureDemoSessions.
+    const token = newId("session");
     this.sessions.set(token, {
       token,
       personId: person.id,
@@ -613,17 +697,21 @@ export class ChurchStore {
   }
 
   issueInvite(token: string, email: string) {
-    this.requireEditor(token);
+    const actor = this.requireEditor(token);
     const cleaned = email.trim().toLowerCase();
     const person = this.byEmail(cleaned);
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    this.assertMayInvite(actor.role, person.role);
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
+    const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
     this.invites.set(hashInvite(inviteToken), {
       email: cleaned,
-      expires: this.now() + 7 * 24 * 60 * 60 * 1000,
+      expires,
+      issuerRole: actor.role,
+      issuerId: actor.personId,
     });
-    return { email: cleaned, inviteToken };
+    return { email: cleaned, displayName: person.displayName, inviteToken, expires };
   }
 
   claimInvite(input: {
@@ -640,6 +728,9 @@ export class ChurchStore {
     }
     const person = this.byEmail(email);
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    if (!invite.issuerRole || !mayIssueInvite(invite.issuerRole, person.role)) {
+      throw new AccessError("unauthenticated", "That invite is not valid.");
+    }
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
     person.passwordHash = localAuthProvider.hashPassword(input.password);
@@ -654,6 +745,42 @@ export class ChurchStore {
       throw new AccessError("unauthenticated", "That authentication code is wrong.");
     }
     session.mfaVerified = true;
+    session.lastActivity = this.now();
+    return { mfaVerified: true as const };
+  }
+
+  /** Staff with no authenticator yet need the setup screen before a code will work. */
+  totpStatus(token: string): "enroll" | "code" {
+    const session = this.session(token);
+    const person = this.requirePerson(session.personId);
+    if (!isStaff(person.role) || person.totpSecret) return "code";
+    return "enroll";
+  }
+
+  beginTotp(token: string) {
+    const session = this.session(token);
+    const person = this.requirePerson(session.personId);
+    if (!isStaff(person.role)) throw new AccessError("forbidden", "Members sign in with a password.");
+    if (person.totpSecret) throw new AccessError("invalid", "An authenticator is already set up.");
+    if (!session.pendingTotp) session.pendingTotp = encodeBase32(randomBytes(20));
+    const setupKey = session.pendingTotp;
+    const otpauthUrl = `otpauth://totp/One%20Hope:${encodeURIComponent(person.email)}?secret=${setupKey}&issuer=One%20Hope&algorithm=SHA1&digits=6&period=30`;
+    return { setupKey, otpauthUrl };
+  }
+
+  confirmTotp(token: string, code: string) {
+    const session = this.session(token);
+    const person = this.requirePerson(session.personId);
+    if (!isStaff(person.role)) throw new AccessError("forbidden", "Members sign in with a password.");
+    if (!session.pendingTotp) throw new AccessError("invalid", "Start authenticator setup again.");
+    const secret = decodeBase32(session.pendingTotp);
+    if (!totpMatches(secret, code, this.now())) {
+      throw new AccessError("unauthenticated", "That code didn't match. Check the time and try again.");
+    }
+    person.totpSecret = secret;
+    session.pendingTotp = null;
+    session.mfaVerified = true;
+    session.stepUpUntil = this.now() + this.config.stepUpMs;
     session.lastActivity = this.now();
     return { mfaVerified: true as const };
   }
@@ -702,12 +829,22 @@ export class ChurchStore {
   }
 
   logout(token: string) {
+    if (this.config.env === "demo" && (token === "session-staff-demo" || token === "session-member-demo")) return;
     this.sessions.delete(token);
   }
 
   me(token: string) {
     const actor = this.actor(token);
     return this.toPerson(this.requirePerson(actor.personId));
+  }
+
+  /** The staff web desk. A member session is not enough. */
+  staffMe(token: string) {
+    const person = this.me(token);
+    if (!isStaff(person.role)) {
+      throw new AccessError("forbidden", "This desk is for church staff.");
+    }
+    return person;
   }
 
   alertsFor(token: string) {
@@ -734,15 +871,31 @@ export class ChurchStore {
       invite: { ...INVITE, url: inviteUrl(this.config.publicBaseUrl) },
       social: this.socialLinks(),
       countdown: { preService: when.preService.toISOString(), service: when.service.toISOString() },
-      announcements: this.announcements.map((item) => ({ ...item })),
+      announcements: this.announcements
+        .filter((item) => announcementIsLive(item, this.now()))
+        .map((item) => ({ ...item })),
       events: this.upcomingEvents().map((event) => this.eventView(event)),
-      sampleSermon: {
-        sample: false as const,
-        title: "",
-        speaker: "One Hope",
-        passage: "",
-      },
-      images: this.config.images,
+      sampleSermon: this.featured
+        ? {
+            sample: false as const,
+            title: this.featured.title,
+            speaker: this.featured.speaker,
+            passage: this.featured.passage,
+            videoId: this.featured.videoId,
+            link: this.featured.link,
+            thumbnail: this.featured.thumbnail,
+          }
+        : {
+            sample: false as const,
+            title: "",
+            speaker: "One Hope",
+            passage: "",
+            videoId: "",
+            link: "",
+            thumbnail: "",
+          },
+      images: this.churchImages(),
+      media: this.churchMedia(),
     };
   }
 
@@ -839,29 +992,127 @@ export class ChurchStore {
     return this.releaseChild(actor, child, input.code, actor.personId);
   }
 
-  createAnnouncement(token: string, input: { title: string; body: string }) {
+  createAnnouncement(
+    token: string,
+    input: { title: string; body: string; startsAt?: number | null; endsAt?: number | null },
+  ) {
     const actor = this.requireEditor(token);
-    const item = { id: newId("ann"), title: input.title.trim(), body: input.body.trim(), sample: false };
+    const item = this.announcementFrom(input);
     this.announcements.push(item);
     this.record(actor, "write", "announcement", item.id, 0);
-    return item;
+    return { ...item };
   }
 
-  createEvent(token: string, input: { title: string; location: string; start: number; end: number }) {
+  updateAnnouncement(
+    token: string,
+    id: string,
+    input: { title: string; body: string; startsAt?: number | null; endsAt?: number | null },
+  ) {
     const actor = this.requireEditor(token);
-    const event = {
-      id: newId("event"),
-      title: input.title.trim(),
-      start: input.start,
-      end: input.end,
-      location: input.location.trim(),
-      description: "",
-      capacity: null,
-      sample: false,
-    };
+    const current = this.announcements.find((item) => item.id === id);
+    if (!current) throw new AccessError("not_found", "That home card isn't here.");
+    const next = this.announcementFrom(input, id);
+    current.title = next.title;
+    current.body = next.body;
+    current.startsAt = next.startsAt;
+    current.endsAt = next.endsAt;
+    current.staffEdited = true;
+    this.record(actor, "write", "announcement", current.id, 0);
+    return { ...current };
+  }
+
+  archiveAnnouncement(token: string, id: string, archived: boolean) {
+    const actor = this.requireEditor(token);
+    const current = this.announcements.find((item) => item.id === id);
+    if (!current) throw new AccessError("not_found", "That home card isn't here.");
+    current.archived = archived;
+    current.staffEdited = true;
+    this.record(actor, "write", "announcement", current.id, 0);
+    return { id: current.id, archived: current.archived === true };
+  }
+
+  staffAnnouncements(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "announcement", "list", 0);
+    return this.announcements.map((item) => ({
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      sample: item.sample,
+      startsAt: item.startsAt ?? null,
+      endsAt: item.endsAt ?? null,
+      archived: item.archived === true,
+      staffEdited: item.staffEdited === true,
+      live: announcementIsLive(item, this.now()),
+    }));
+  }
+
+  createEvent(
+    token: string,
+    input: {
+      title: string;
+      location: string;
+      start: number;
+      end: number;
+      description?: string;
+      capacity?: number | null;
+    },
+  ) {
+    const actor = this.requireEditor(token);
+    const event = this.eventFrom(input);
     this.events.push(event);
     this.record(actor, "write", "event", event.id, 0);
-    return event;
+    return { ...event };
+  }
+
+  updateEvent(
+    token: string,
+    id: string,
+    input: {
+      title: string;
+      location: string;
+      start: number;
+      end: number;
+      description?: string;
+      capacity?: number | null;
+    },
+  ) {
+    const actor = this.requireEditor(token);
+    const current = this.events.find((event) => event.id === id);
+    if (!current) throw new AccessError("not_found", "That event isn't here.");
+    const next = this.eventFrom(input, id);
+    current.title = next.title;
+    current.location = next.location;
+    current.start = next.start;
+    current.end = next.end;
+    current.description = next.description;
+    current.capacity = next.capacity;
+    current.staffEdited = true;
+    this.record(actor, "write", "event", current.id, 0);
+    return { ...current };
+  }
+
+  cancelEvent(token: string, id: string, cancelled: boolean) {
+    const actor = this.requireEditor(token);
+    const current = this.events.find((event) => event.id === id);
+    if (!current) throw new AccessError("not_found", "That event isn't here.");
+    current.cancelled = cancelled;
+    current.staffEdited = true;
+    this.record(actor, "write", "event", current.id, 0);
+    return { id: current.id, cancelled: current.cancelled === true };
+  }
+
+  staffEvents(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "event", "list", 0);
+    const now = this.now();
+    return this.events
+      .filter((event) => event.cancelled === true || event.end >= now - 24 * 60 * 60 * 1000)
+      .sort((left, right) => left.start - right.start)
+      .map((event) => ({
+        ...this.eventView(event),
+        cancelled: event.cancelled === true,
+      }));
   }
 
   createGroup(token: string, input: { name: string; summary: string }) {
@@ -955,6 +1206,8 @@ export class ChurchStore {
         `${CHURCH.name}, ${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
         `Year ${year}`,
         ...lines,
+        "No goods or services were provided in exchange for these contributions, unless a line above says otherwise.",
+        "Keep this for your records. Ask a tax adviser how your gifts apply to you.",
       ].join("\n"),
     };
   }
@@ -1054,6 +1307,7 @@ export class ChurchStore {
     if (!item) throw new AccessError("not_found", "That assignment isn't here.");
     if (item.personId !== actor.personId)
       throw new AccessError("forbidden", "You can answer your own assignment.");
+    if (item.status !== "pending") throw new AccessError("invalid", "You already answered that ask.");
     item.status = accept ? "accepted" : "declined";
     return { ...item };
   }
@@ -1098,6 +1352,7 @@ export class ChurchStore {
           body: showBody ? prayer.body : "",
           serve: showBody && (own || staffReader) ? (prayer.serve ?? "") : "",
           contactRequested: (own || staffReader) && prayer.contactRequested === true,
+          reported: staffReader && prayer.reported === true,
           prayedCount: onWall ? this.amens.filter((amen) => amen.prayerId === prayer.id).length : 0,
           prayed: actor
             ? this.amens.some((amen) => amen.prayerId === prayer.id && amen.personId === actor.personId)
@@ -1149,8 +1404,25 @@ export class ChurchStore {
     const prayer = this.prayers.find((item) => item.id === prayerId);
     if (!prayer) throw new AccessError("not_found", "That prayer isn't here.");
     prayer.approved = approved;
+    prayer.reported = false;
     this.record(actor, "write", "prayer", prayer.id, prayer.visibility === "private" ? 3 : 1);
     return { id: prayer.id, approved: prayer.approved };
+  }
+
+  /**
+   * A member reports a prayer on the wall. It leaves the wall at once and waits for a pastor,
+   * who can approve it again. Authors cannot report their own request.
+   */
+  reportPrayer(token: string, prayerId: string) {
+    const actor = this.actor(token);
+    const prayer = this.prayers.find((item) => item.id === prayerId);
+    if (!prayer || prayer.visibility !== "public" || !prayer.approved || prayer.authorId === actor.personId) {
+      throw new AccessError("not_found", "That prayer isn't on the wall.");
+    }
+    prayer.approved = false;
+    prayer.reported = true;
+    this.record(actor, "write", "prayer_report", prayer.id, 1);
+    return { id: prayer.id, reported: true as const };
   }
 
   markPrayed(token: string, prayerId: string) {
@@ -1192,6 +1464,47 @@ export class ChurchStore {
 
   socialLinks() {
     return this.social.map((link) => ({ ...link }));
+  }
+
+  featuredMessage() {
+    return this.featured ? { ...this.featured } : null;
+  }
+
+  featureMessage(
+    token: string,
+    input: { videoId: string; title: string; speaker?: string; passage?: string; link: string; thumbnail?: string },
+  ) {
+    const actor = this.requireEditor(token);
+    const videoId = input.videoId.trim();
+    const title = input.title.trim();
+    const link = input.link.trim();
+    const speaker = (input.speaker ?? "").trim() || "One Hope";
+    const passage = (input.passage ?? "").trim();
+    if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) {
+      throw new AccessError("invalid", "That video could not be featured.");
+    }
+    if (!title || title.length > 140) throw new AccessError("invalid", "Add a title for the message.");
+    if (speaker.length > 80 || passage.length > 80) throw new AccessError("invalid", "Please shorten that.");
+    if (!youtubeMessageLink(videoId, link)) {
+      throw new AccessError("invalid", "Use the YouTube link for that message.");
+    }
+    this.featured = {
+      videoId,
+      title,
+      speaker,
+      passage,
+      link,
+      thumbnail: (input.thumbnail ?? "").startsWith("https://") ? input.thumbnail!.trim() : "",
+    };
+    this.record(actor, "write", "sermon", videoId, 0);
+    return { ...this.featured };
+  }
+
+  clearFeaturedMessage(token: string) {
+    const actor = this.requireEditor(token);
+    this.featured = null;
+    this.record(actor, "write", "sermon", "cleared", 0);
+    return { cleared: true as const };
   }
 
   setSocialLinks(token: string, links: SocialLink[]) {
@@ -1307,10 +1620,7 @@ export class ChurchStore {
 
   listOutreach() {
     return this.outreach
-      .map((row) => ({
-        ...row,
-        signedUp: 0,
-      }))
+      .filter((row) => row.cancelled !== true)
       .map((row) => ({
         id: row.id,
         title: row.title,
@@ -1328,21 +1638,56 @@ export class ChurchStore {
     input: { title: string; detail: string; location: string; start: number; end: number },
   ) {
     const actor = this.requireEditor(token);
-    const title = input.title.trim();
-    const location = input.location.trim();
-    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
-    const row: OutreachRow = {
-      id: newId("outreach"),
-      title,
-      detail: input.detail.trim(),
-      location,
-      start: input.start,
-      end: input.end,
-      sample: false,
-    };
+    const row = this.outreachFrom(input);
     this.outreach.push(row);
     this.record(actor, "write", "outreach", row.id, 0);
-    return { id: row.id, title: row.title };
+    return { id: row.id, title: row.title, start: row.start, end: row.end };
+  }
+
+  updateOutreach(
+    token: string,
+    id: string,
+    input: { title: string; detail: string; location: string; start: number; end: number },
+  ) {
+    const actor = this.requireEditor(token);
+    const current = this.outreach.find((row) => row.id === id);
+    if (!current) throw new AccessError("not_found", "That serve day isn't here.");
+    const next = this.outreachFrom(input, id);
+    current.title = next.title;
+    current.detail = next.detail;
+    current.location = next.location;
+    current.start = next.start;
+    current.end = next.end;
+    this.record(actor, "write", "outreach", current.id, 0);
+    return { id: current.id, title: current.title };
+  }
+
+  cancelOutreach(token: string, id: string, cancelled: boolean) {
+    const actor = this.requireEditor(token);
+    const current = this.outreach.find((row) => row.id === id);
+    if (!current) throw new AccessError("not_found", "That serve day isn't here.");
+    current.cancelled = cancelled;
+    this.record(actor, "write", "outreach", current.id, 0);
+    return { id: current.id, cancelled: current.cancelled === true };
+  }
+
+  staffServeDays(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "outreach", "list", 0);
+    return this.outreach
+      .slice()
+      .sort((left, right) => left.start - right.start)
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        detail: row.detail,
+        location: row.location,
+        start: row.start,
+        end: row.end,
+        sample: row.sample,
+        cancelled: row.cancelled === true,
+        signedUp: this.outreachRsvps.filter((rsvp) => rsvp.outreachId === row.id).length,
+      }));
   }
 
   undoOutreach(token: string, id: string) {
@@ -1360,7 +1705,7 @@ export class ChurchStore {
   rsvpOutreach(token: string, id: string) {
     const actor = this.actor(token);
     const row = this.outreach.find((item) => item.id === id);
-    if (!row) throw new AccessError("not_found", "That serve opportunity isn't here.");
+    if (!row || row.cancelled) throw new AccessError("not_found", "That serve day isn't open.");
     if (!this.outreachRsvps.some((rsvp) => rsvp.outreachId === id && rsvp.personId === actor.personId)) {
       this.outreachRsvps.push({ id: newId("rsvp"), outreachId: id, personId: actor.personId });
     }
@@ -1384,12 +1729,21 @@ export class ChurchStore {
 
   coffeePublic() {
     const settings = squareSettings(this.config);
-    return coffeeGuide({
-      live: settings.orderingLive,
-      applicationId: settings.orderingLive ? settings.applicationId : "",
-      locationId: settings.orderingLive ? settings.locationId : "",
-      environment: settings.environment,
-    });
+    const images = this.churchImages();
+    return {
+      ...coffeeGuide({
+        live: settings.orderingLive,
+        applicationId: settings.orderingLive ? settings.applicationId : "",
+        locationId: settings.orderingLive ? settings.locationId : "",
+        environment: settings.environment,
+      }),
+      photos: {
+        hero: images.revival,
+        sign: images.revival_sign ?? "",
+        menu: images.revival_menu ?? "",
+        gallery: this.churchMedia().revival.gallery,
+      },
+    };
   }
 
   async coffeeCatalog() {
@@ -1519,11 +1873,11 @@ export class ChurchStore {
         title: "Kids here today",
         count: here,
         detail: here === 0 ? "No children are checked in yet." : "Two adults stay at the door for pickup.",
-        help: "How do I check a child in? Open Check-in, find the child, and keep the pickup code for the family. The app does not text them.",
+        help: "How do I check a child in? Open Check-in, clock in, and read the code to the family. The app does not text them. Pickup needs two adults.",
         href: "/checkin",
       });
     }
-    if (this.unlocked(actor, "view_care_notes")) {
+    if (allows(actor.role, "view_care_notes")) {
       const waiting = this.followUps.filter((row) => row.status === "new");
       const yes = waiting.filter((row) => row.kind === "salvation").length;
       cards.push({
@@ -1534,7 +1888,7 @@ export class ChurchStore {
           yes > 0
             ? `${yes} said yes to Jesus. Reach out yourself. Nothing is sent from here.`
             : "New next steps. Nothing is emailed from here.",
-        help: "How do I follow up? Open Care, read the name, and mark Contacted after you talk. The app never texts or emails them for you.",
+        help: "How do I follow up? Open Care, assign someone, add a note and a due date, then mark Contacted after you talk. Nothing is texted.",
         href: "/care",
       });
       const pending = this.prayers.filter((prayer) => prayer.visibility === "public" && !prayer.approved);
@@ -1557,7 +1911,7 @@ export class ChurchStore {
         title: "Help needed Sunday",
         count: needed.length,
         detail: needed.length === 0 ? "No open spots." : "These people have not answered yet.",
-        help: "How do I fill a spot? Open Serving, pick someone who already helps, and add them. They can say yes in the app. You can undo it while it is still waiting.",
+        help: "How do I fill a spot? Open Serving, pick a person and a spot, and tap Ask them. Undo it while it still says waiting.",
         href: "/serving",
       });
     }
@@ -1568,8 +1922,25 @@ export class ChurchStore {
         title: "What's coming up",
         count: upcoming.length,
         detail: upcoming[0] ? `Next: ${upcoming[0].title}` : "Add a gathering so people can see it.",
-        help: "How do I post an event? Open Events, type a name and a place, and tap Add. People see it in the app.",
+        help: "How do I post an event? Open Events, pick the real date and time, and tap Add. Cancel takes it off the app.",
         href: "/events",
+      });
+      const liveCards = this.announcements.filter((item) => announcementIsLive(item, this.now()) && !item.sample);
+      cards.push({
+        id: "home-cards",
+        title: "On the app Home",
+        count: liveCards.length,
+        detail: liveCards[0] ? liveCards[0].title : "Nothing is on Home yet.",
+        help: "How do I post a card? Open Communications, tap a ready-made card or write your own. Times are Central.",
+        href: "/communications",
+      });
+      cards.push({
+        id: "message",
+        title: "This Sunday's message",
+        count: null,
+        detail: this.featured?.title || "No message is featured yet.",
+        help: "How do I feature a message? Open Media, pick the YouTube video, and tap Feature on Home.",
+        href: "/media",
       });
     }
     if (actor.role === "finance" || actor.role === "pastor" || actor.role === "master_admin") {
@@ -1598,7 +1969,7 @@ export class ChurchStore {
     return {
       greeting: greeting(this.now(), this.requirePerson(actor.personId).displayName),
       role: actor.role,
-      cards: cards.slice(0, 6),
+      cards: cards.slice(0, 8),
     };
   }
 
@@ -1613,6 +1984,10 @@ export class ChurchStore {
         email: person.email,
         phone: person.phone,
         role: person.role,
+        claimed: Boolean(person.passwordHash),
+        sample: person.sample,
+        canUndo: this.canUndoAdd(actor, person),
+        canInvite: !person.passwordHash && mayIssueInvite(actor.role, person.role),
       }));
   }
 
@@ -1635,16 +2010,25 @@ export class ChurchStore {
       listed: false,
     });
     if (input.phone?.trim()) person.phone = input.phone.trim();
+    person.addedBy = actor.personId;
+    person.addedAt = this.now();
     this.people.set(person.id, person);
     this.ensurePathway(person.id);
+    const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
-    this.invites.set(hashInvite(inviteToken), { email, expires: this.now() + 7 * 24 * 60 * 60 * 1000 });
+    this.invites.set(hashInvite(inviteToken), {
+      email,
+      expires,
+      issuerRole: actor.role,
+      issuerId: actor.personId,
+    });
     this.record(actor, "write", "person", person.id, 1);
     return {
       id: person.id,
       displayName,
       email,
       inviteToken,
+      expires,
       note: "Read this code to them in person. Nothing was emailed.",
     };
   }
@@ -1665,8 +2049,11 @@ export class ChurchStore {
   undoAddPerson(token: string, personId: string) {
     const actor = this.requireEditor(token);
     const person = this.requirePerson(personId);
-    if (person.passwordHash || person.sample) {
-      throw new AccessError("invalid", "This person already has a password, so this can't be undone here.");
+    if (!this.canUndoAdd(actor, person)) {
+      throw new AccessError(
+        "forbidden",
+        "You can undo an add only for someone you added in the last 10 minutes, and never for a staff or Master Admin seat.",
+      );
     }
     this.eraseOwnedData(person.id, person.householdId);
     person.deleted = true;
@@ -1677,16 +2064,29 @@ export class ChurchStore {
     return { removed: true as const };
   }
 
-  assignServing(token: string, input: { personId: string; position: string }) {
+  assignServing(token: string, input: { personId: string; position?: string; positionId?: string | null }) {
     const actor = this.actor(token);
     authorize(actor, "manage_serving", this.now());
     const person = this.requirePerson(input.personId);
-    const position = input.position.trim();
-    if (!position) throw new AccessError("invalid", "Name the spot, like Door or Kids.");
+    const position = (input.position ?? "").trim();
+    const requestedId = input.positionId?.trim() ?? "";
+    const known =
+      SERVING_SPOTS.find((spot) => spot.id === requestedId) ??
+      SERVING_SPOTS.find((spot) => spot.label.toLowerCase() === position.toLowerCase());
+    const label = known?.label ?? position;
+    if (!label) throw new AccessError("invalid", "Name the spot, like Door or Kids.");
+    const duplicate = this.schedule.some(
+      (row) =>
+        row.personId === person.id &&
+        row.status !== "declined" &&
+        row.position.toLowerCase() === label.toLowerCase(),
+    );
+    if (duplicate) throw new AccessError("invalid", "That person already has this spot.");
     const row = {
       id: newId("serve"),
       personId: person.id,
-      position,
+      position: label,
+      positionId: known?.id ?? null,
       status: "pending" as const,
       sample: false,
     };
@@ -1730,6 +2130,43 @@ export class ChurchStore {
     return { sample: false as const, ...view };
   }
 
+  kidsDuty(token: string) {
+    const actor = this.actor(token);
+    const person = this.requirePerson(actor.personId);
+    return { canClockIn: this.onKidsTeam(person), onDuty: this.station.has(person.id) };
+  }
+
+  kidsTeamRoster(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const members = [...this.kidsTeam]
+      .map((id) => this.people.get(id))
+      .filter((person): person is Person => Boolean(person && !person.deleted))
+      .map((person) => ({ id: person.id, displayName: person.displayName, role: person.role }));
+    const candidates = [...this.people.values()]
+      .filter((person) => !person.deleted && !this.kidsTeam.has(person.id))
+      .map((person) => ({ id: person.id, displayName: person.displayName, role: person.role }));
+    return { members, candidates };
+  }
+
+  addKidsTeamMember(token: string, personId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const person = this.requirePerson(personId);
+    if (person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    this.kidsTeam.add(person.id);
+    this.record(actor, "write", "kids_team", person.id, 1);
+    return { id: person.id, displayName: person.displayName };
+  }
+
+  removeKidsTeamMember(token: string, personId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    this.kidsTeam.delete(personId);
+    this.record(actor, "write", "kids_team", personId, 1);
+    return { removed: true as const };
+  }
+
   myKids(token: string) {
     const actor = this.actor(token);
     return [...this.children.values()]
@@ -1764,25 +2201,127 @@ export class ChurchStore {
     };
   }
 
-  roster(token: string) {
+  roster(token: string, classroom?: string | null) {
     const actor = this.actor(token);
     authorize(actor, "manage_checkin", this.now());
-    return [...this.children.values()].map((child) => ({
-      id: child.id,
+    const room = classroom?.trim() ?? "";
+    return [...this.children.values()]
+      .filter((child) => !room || child.classroom === room)
+      .map((child) => ({
+        id: child.id,
+        displayName: child.displayName,
+        classroom: child.classroom,
+        sample: child.sample,
+        checkedIn: textField(this.readJson(child.ciphertext), "code") !== "",
+      }));
+  }
+
+  /**
+   * The operator board. The security code is here so the desk can read it to the
+   * family. It is not texted. Medical notes stay off this board.
+   */
+  stationBoard(token: string, classroom?: string | null) {
+    const actor = this.actor(token);
+    const person = this.requirePerson(actor.personId);
+    const canOperate = allows(actor.role, "manage_checkin");
+    if (!canOperate && !this.onKidsTeam(person)) {
+      throw new AccessError(
+        "forbidden",
+        "This desk is for the kids team. Ask a kids director, a kids team leader, or a kids volunteer.",
+      );
+    }
+    const room = classroom?.trim() ?? "";
+    const children = canOperate
+      ? [...this.children.values()].filter((child) => !room || child.classroom === room)
+      : [];
+    return {
+      canOperate,
+      canManageTeam: canOperate,
+      adultsOnDuty: this.kidsOnDuty(),
+      onDuty: this.station.has(actor.personId),
+      canClockIn: this.onKidsTeam(person),
+      namesOnDuty: [...this.station]
+        .filter((id) => {
+          const person = this.people.get(id);
+          return person ? this.onKidsTeam(person) : false;
+        })
+        .map((id) => this.people.get(id)?.displayName ?? "Staff"),
+      classrooms: [...new Set([...this.children.values()].map((child) => child.classroom))].sort(),
+      children: children.map((child) => {
+        const code = textField(this.readJson(child.ciphertext), "code");
+        return {
+          id: child.id,
+          displayName: child.displayName,
+          classroom: child.classroom,
+          checkedIn: code !== "",
+          code,
+          guardians: child.guardianIds.map((id) => ({
+            id,
+            displayName: this.people.get(id)?.displayName ?? "Adult",
+            blocked: child.restrictedPersonIds.includes(id),
+          })),
+        };
+      }),
+    };
+  }
+
+  /** Checks a child in at the desk. The code is shown once on this screen and is never texted. */
+  staffCheckIn(token: string, childId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const child = this.children.get(childId);
+    if (!child) throw new AccessError("not_found", "That child isn't here.");
+    const code = String(randomInt(1000, 10_000));
+    this.writeKidFields(child, { code, checkedInAt: this.now() });
+    this.record(actor, "write", "kid_checkin", child.id, 3);
+    return { childId: child.id, displayName: child.displayName, classroom: child.classroom, code };
+  }
+
+  stationLabel(token: string, childId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_checkin", this.now());
+    const child = this.children.get(childId);
+    if (!child) throw new AccessError("not_found", "That child isn't here.");
+    const code = textField(this.readJson(child.ciphertext), "code");
+    if (!code) throw new AccessError("invalid", "Check the child in before printing a label.");
+    this.record(actor, "read", "kid_label", child.id, 1);
+    return {
       displayName: child.displayName,
       classroom: child.classroom,
-      sample: child.sample,
-    }));
+      code,
+      zpl: zebraLabel(child.displayName, code),
+      brother: `BROTHER LABEL\nOne Hope Kids\n${child.displayName}\nCode ${code}\n`,
+      socketOpened: false as const,
+    };
   }
 
   clockIn(token: string) {
     const actor = this.actor(token);
-    if (!isStaff(actor.role))
-      throw new AccessError("forbidden", "Only staff can clock into a check-in station.");
-    if (!actor.mfaVerified)
+    const person = this.requirePerson(actor.personId);
+    if (!this.onKidsTeam(person)) {
+      throw new AccessError(
+        "forbidden",
+        "Only the kids team can be the second adult at pickup. Ask a kids director, a kids team leader, or a kids volunteer to clock in.",
+      );
+    }
+    if (isStaff(actor.role) && !actor.mfaVerified) {
       throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
+    }
     this.station.add(actor.personId);
-    return { adultsOnDuty: this.station.size };
+    return { adultsOnDuty: this.kidsOnDuty(), onDuty: true as const };
+  }
+
+  clockOut(token: string) {
+    const actor = this.actor(token);
+    const person = this.requirePerson(actor.personId);
+    if (!this.onKidsTeam(person) && !this.station.has(actor.personId)) {
+      throw new AccessError(
+        "forbidden",
+        "Only the kids team can be the second adult at pickup. Ask a kids director, a kids team leader, or a kids volunteer to clock in.",
+      );
+    }
+    this.station.delete(actor.personId);
+    return { adultsOnDuty: this.kidsOnDuty(), onDuty: false as const };
   }
 
   pickup(token: string, input: PickupBody) {
@@ -1816,6 +2355,31 @@ export class ChurchStore {
     return { id: moduleId, enabled };
   }
 
+  assignableRoles(token: string) {
+    const actor = this.actor(token);
+    const roles = [
+      "pastor",
+      "care_team",
+      "finance",
+      "kids_director",
+      "team_leader",
+      "volunteer",
+      "member",
+    ] as const;
+    if (actor.role === "team_leader") {
+      return roles
+        .filter((role) => mayChangeRole(actor.role, "member", role))
+        .map((role) => ({ id: role, label: labelRole(role) }));
+    }
+    return roles
+      .filter((role) => {
+        const staffMove =
+          role === "pastor" || role === "care_team" || role === "finance" || role === "kids_director";
+        return allows(actor.role, staffMove ? "grant_staff_roles" : "assign_team_roles");
+      })
+      .map((role) => ({ id: role, label: labelRole(role) }));
+  }
+
   changeRole(token: string, input: RoleChangeBody) {
     const actor = this.actor(token);
     const person = this.requirePerson(input.personId);
@@ -1836,6 +2400,20 @@ export class ChurchStore {
     ] as const;
     if (!(churchRoles as readonly string[]).includes(input.role)) {
       throw new AccessError("forbidden", "That role is not assigned from the church Command Center.");
+    }
+    if (!mayChangeRole(actor.role, person.role, input.role)) {
+      throw new AccessError(
+        "forbidden",
+        actor.role === "team_leader"
+          ? "You can only change a role below your own level."
+          : "You can only give a role at or below your own, never a pastor or Master Admin seat.",
+      );
+    }
+    if (actor.role === "team_leader") {
+      person.role = input.role;
+      this.refreshSessions(person);
+      this.record(actor, "write", "role", person.id, 2);
+      return this.toPerson(person);
     }
     const staffMove =
       input.role === "pastor" ||
@@ -1898,10 +2476,39 @@ export class ChurchStore {
     return this.finishProposal(proposal, actor);
   }
 
-  audit(token: string) {
+  audit(token: string, range?: { from?: number | null; to?: number | null }) {
     const actor = this.actor(token);
     authorize(actor, "view_audit_log", this.now());
-    return this.auditLog.map((entry) => ({ ...entry }));
+    return this.auditLog
+      .filter((entry) => {
+        if (range?.from != null && entry.at < range.from) return false;
+        if (range?.to != null && entry.at > range.to) return false;
+        return true;
+      })
+      .map((entry) => ({
+        ...entry,
+        actorName: this.people.get(entry.actorId)?.displayName ?? "Staff",
+      }));
+  }
+
+  auditCsv(token: string, range?: { from?: number | null; to?: number | null }) {
+    const rows = this.audit(token, range);
+    const lines = ["When (Central),Who,Action,Record,Record id,Tier"];
+    for (const row of rows) {
+      lines.push(
+        [
+          formatChicago(row.at),
+          row.actorName,
+          row.action,
+          row.resource,
+          row.resourceId,
+          String(row.tier),
+        ]
+          .map(csvCell)
+          .join(","),
+      );
+    }
+    return lines.join("\n");
   }
 
   integrations(token: string) {
@@ -2079,18 +2686,137 @@ export class ChurchStore {
     return this.pathwayView(input.personId);
   }
 
-  sendPush(token: string, input: PushBody) {
+  pushDesk(token: string) {
     const actor = this.actor(token);
     authorize(actor, "compose_communications", this.now());
-    const draft = { id: newId("draft"), title: input.title, segment: input.segment, sample: true };
-    this.drafts.push(draft);
-    this.record(actor, "write", "push_draft", draft.id, 2);
     return {
-      sent: false as const,
-      reason: "Sends are disabled in this build.",
+      live: this.apnsLive(),
+      counts: {
+        members: this.segmentCount("members"),
+        volunteers: this.segmentCount("volunteers"),
+        parents: this.segmentCount("parents"),
+      },
+    };
+  }
+
+  sendPush(token: string, input: PushBody & { confirm?: boolean }) {
+    const actor = this.actor(token);
+    authorize(actor, "compose_communications", this.now());
+    const count = this.segmentCount(input.segment);
+    const live = this.apnsLive();
+    if (live && !input.confirm) {
+      return {
+        sent: false as const,
+        drafted: false as const,
+        live: true as const,
+        needsConfirm: true as const,
+        count,
+        title: input.title,
+        segment: input.segment,
+        reason: `This would notify ${count} ${count === 1 ? "person" : "people"} (${this.segmentLabel(input.segment)}). Nothing has been sent yet.`,
+      };
+    }
+    if (!live || !this.pushSender) {
+      const draft = {
+        id: newId("draft"),
+        title: input.title,
+        body: input.body,
+        segment: input.segment,
+        sample: true,
+      };
+      this.drafts.push(draft);
+      this.record(actor, "write", "push_draft", draft.id, 2);
+      return {
+        sent: false as const,
+        drafted: true as const,
+        live,
+        needsConfirm: false as const,
+        count,
+        title: input.title,
+        segment: input.segment,
+        reason: live
+          ? "Nothing was sent. Apple push is marked on, but this build has no device list, so it was saved as a draft."
+          : "Nothing was sent. Apple push is not turned on, so this was saved as a draft.",
+      };
+    }
+    const delivered = this.pushSender({
+      title: input.title,
+      body: input.body,
+      segment: input.segment,
+      count,
+    });
+    const draft = {
+      id: newId("draft"),
+      title: input.title,
+      body: input.body,
+      segment: input.segment,
+      sample: false,
+    };
+    this.drafts.push(draft);
+    this.record(actor, "write", "push_send", draft.id, 2);
+    return {
+      sent: true as const,
+      drafted: false as const,
+      live: true as const,
+      needsConfirm: false as const,
+      count: delivered,
       title: input.title,
       segment: input.segment,
+      reason: `Sent to ${delivered} ${delivered === 1 ? "person" : "people"}.`,
     };
+  }
+
+  private segmentLabel(segment: "members" | "volunteers" | "parents") {
+    if (segment === "members") return "everyone with the app (every account with a password)";
+    if (segment === "volunteers") return "volunteers";
+    return "parents";
+  }
+
+  private apnsLive() {
+    if (this.pushSender) return true;
+    return false;
+  }
+
+  private segmentCount(segment: "members" | "volunteers" | "parents") {
+    if (segment === "parents") {
+      const ids = new Set<string>();
+      for (const child of this.children.values()) for (const id of child.guardianIds) ids.add(id);
+      return [...ids].filter((id) => {
+        const person = this.people.get(id);
+        return person && !person.deleted;
+      }).length;
+    }
+    return [...this.people.values()].filter((person) => {
+      if (person.deleted) return false;
+      if (segment === "volunteers") return person.role === "volunteer" || person.role === "team_leader";
+      return Boolean(person.passwordHash);
+    }).length;
+  }
+
+  /**
+   * Kids director, a kids team leader, a kids volunteer, or anyone on the kids-team list.
+   * A pastor, finance teammate, or care teammate does not count unless they are on that list.
+   */
+  private onKidsTeam(person: Person): boolean {
+    if (person.deleted) return false;
+    if (person.role === "kids_director") return true;
+    if (this.kidsTeam.has(person.id)) return true;
+    const acceptedKidsSpot =
+      (person.role === "volunteer" || person.role === "team_leader") &&
+      this.schedule.some(
+        (row) =>
+          row.personId === person.id && row.status === "accepted" && row.positionId === KIDS_POSITION_ID,
+      );
+    return acceptedKidsSpot;
+  }
+
+  private kidsOnDuty(): number {
+    let count = 0;
+    for (const personId of this.station) {
+      const person = this.people.get(personId);
+      if (person && this.onKidsTeam(person)) count += 1;
+    }
+    return count;
   }
 
   knowJesus() {
@@ -2163,14 +2889,75 @@ export class ChurchStore {
     return this.followUpViews(actor);
   }
 
-  updateFollowUp(token: string, id: string, status: FollowUpStatus) {
+  updateFollowUp(
+    token: string,
+    id: string,
+    input:
+      | FollowUpStatus
+      | {
+          status?: FollowUpStatus;
+          assigneeId?: string | null;
+          dueAt?: number | null;
+          staffNote?: string;
+        },
+  ) {
     const actor = this.actor(token);
     authorize(actor, "view_care_notes", this.now());
     const row = this.followUps.find((item) => item.id === id);
     if (!row) throw new AccessError("not_found", "That follow-up isn't here.");
-    row.status = status;
+    const patch = typeof input === "string" ? { status: input } : input;
+    if (patch.status) row.status = patch.status;
+    if (patch.assigneeId !== undefined) {
+      if (patch.assigneeId === null || patch.assigneeId === "") row.assigneeId = null;
+      else {
+        const person = this.requirePerson(patch.assigneeId);
+        if (person.deleted || !allows(person.role, "view_care_notes")) {
+          throw new AccessError("invalid", "Choose someone who can open Care.");
+        }
+        row.assigneeId = person.id;
+      }
+    }
+    if (patch.dueAt !== undefined) row.dueAt = patch.dueAt;
+    if (typeof patch.staffNote === "string") {
+      row.noteCiphertext = encryptString(JSON.stringify({ note: patch.staffNote.trim() }), this.key);
+    }
     this.record(actor, "write", "follow_up", row.id, 3);
-    return { id: row.id, status: row.status };
+    return {
+      id: row.id,
+      status: row.status,
+      assigneeId: row.assigneeId ?? null,
+      dueAt: row.dueAt ?? null,
+    };
+  }
+
+  careAssignees(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return [...this.people.values()]
+      .filter((person) => !person.deleted && allows(person.role, "view_care_notes"))
+      .map((person) => ({ id: person.id, displayName: person.displayName, role: person.role }));
+  }
+
+  pendingTestimonies(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return this.testimonies
+      .filter((row) => !row.approved)
+      .map((row) => {
+        this.record(actor, "read", "testimony", row.id, 2);
+        return { id: row.id, displayName: row.displayName, body: row.body, approved: false as const };
+      });
+  }
+
+  reportedPrayers(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_care_notes", this.now());
+    return this.prayers
+      .filter((prayer) => prayer.reported === true && !prayer.approved)
+      .map((prayer) => {
+        this.record(actor, "read", "prayer", prayer.id, 1);
+        return { id: prayer.id, body: prayer.body, sample: prayer.sample };
+      });
   }
 
   exportSelf(token: string) {
@@ -2259,6 +3046,12 @@ export class ChurchStore {
           status: row.status,
           createdAt: row.createdAt,
           sample: row.sample,
+          assigneeId: row.assigneeId ?? null,
+          assigneeName: row.assigneeId
+            ? (this.people.get(row.assigneeId)?.displayName ?? "")
+            : "",
+          dueAt: row.dueAt ?? null,
+          staffNote: row.noteCiphertext ? textField(this.readJson(row.noteCiphertext), "note") : "",
         };
       });
   }
@@ -2431,19 +3224,24 @@ export class ChurchStore {
     if (isStaff(person.role) && !session.mfaVerified) {
       throw new AccessError("mfa_required", "Staff must finish multi-factor authentication.");
     }
-    if (
+    const now = this.now();
+    const refreshAfter = 60_000;
+    const sampleSession =
       this.config.env === "demo" &&
-      (session.userAgent === "member-demo" || session.userAgent === "staff-demo")
+      (session.userAgent === "staff-demo" || session.userAgent === "member-demo");
+    if (
+      sampleSession &&
+      session.userAgent === "staff-demo" &&
+      session.stepUpUntil < now + this.config.stepUpMs / 2
     ) {
-      session.lastActivity = this.now();
-      if (session.userAgent === "staff-demo") session.stepUpUntil = this.now() + this.config.stepUpMs;
+      session.stepUpUntil = now + this.config.stepUpMs;
     }
     const idle = isStaff(person.role) ? this.config.sessionIdleStaffMs : this.config.sessionIdleMemberMs;
-    if (this.now() - session.lastActivity > idle) {
+    if (!sampleSession && now - session.lastActivity > idle) {
       this.sessions.delete(token);
       throw new AccessError("session_expired", "Your session timed out.");
     }
-    session.lastActivity = this.now();
+    if (now - session.lastActivity >= refreshAfter) session.lastActivity = now;
     return {
       personId: person.id,
       householdId: person.householdId,
@@ -2455,6 +3253,13 @@ export class ChurchStore {
   }
 
   private session(token: string) {
+    if (
+      this.config.env === "demo" &&
+      (token === "session-staff-demo" || token === "session-member-demo") &&
+      !this.sessions.has(token)
+    ) {
+      this.ensureDemoSession(token);
+    }
     const session = this.sessions.get(token);
     if (!session) throw new AccessError("unauthenticated", "Sign in again.");
     return session;
@@ -2560,10 +3365,69 @@ export class ChurchStore {
     };
   }
 
-  /** Events that have not ended, soonest first. */
+  /** Events that have not ended and were not canceled, soonest first. */
   private upcomingEvents() {
     const now = this.now();
-    return this.events.filter((event) => event.end >= now).sort((left, right) => left.start - right.start);
+    return this.events
+      .filter((event) => event.cancelled !== true && event.end >= now)
+      .sort((left, right) => left.start - right.start);
+  }
+
+  private eventFrom(
+    input: {
+      title: string;
+      location: string;
+      start: number;
+      end: number;
+      description?: string;
+      capacity?: number | null;
+    },
+    id = newId("event"),
+  ): EventRow {
+    const title = input.title.trim();
+    const location = input.location.trim();
+    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
+    if (!Number.isFinite(input.start) || !Number.isFinite(input.end) || input.end <= input.start) {
+      throw new AccessError("invalid", "The end has to be after the start.");
+    }
+    const capacity = input.capacity ?? null;
+    if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1)) {
+      throw new AccessError("invalid", "Capacity has to be a whole number, or leave it open.");
+    }
+    return {
+      id,
+      title,
+      start: input.start,
+      end: input.end,
+      location,
+      description: (input.description ?? "").trim(),
+      capacity,
+      sample: false,
+      cancelled: false,
+      staffEdited: true,
+    };
+  }
+
+  private outreachFrom(
+    input: { title: string; detail: string; location: string; start: number; end: number },
+    id = newId("outreach"),
+  ): OutreachRow {
+    const title = input.title.trim();
+    const location = input.location.trim();
+    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
+    if (!Number.isFinite(input.start) || !Number.isFinite(input.end) || input.end <= input.start) {
+      throw new AccessError("invalid", "The end has to be after the start.");
+    }
+    return {
+      id,
+      title,
+      detail: input.detail.trim(),
+      location,
+      start: input.start,
+      end: input.end,
+      sample: false,
+      cancelled: false,
+    };
   }
 
   private requireGroup(groupId: string, personId: string) {
@@ -2625,7 +3489,7 @@ export class ChurchStore {
       expectedCode: textField(this.readJson(child.ciphertext), "code"),
       guardianAuthorized: child.guardianIds.includes(guardianPersonId),
       custodyRestricted: child.restrictedPersonIds.includes(guardianPersonId),
-      adultsOnDuty: this.station.size,
+      adultsOnDuty: this.kidsOnDuty(),
     });
     if (verdict.allowed) {
       this.writeKidFields(child, { code: undefined, checkedInAt: undefined });
@@ -2635,6 +3499,57 @@ export class ChurchStore {
       this.throttle.set(key, [...misses, now]);
     }
     return { allowed: verdict.allowed, reason: verdict.reason };
+  }
+
+  private announcementFrom(
+    input: { title: string; body: string; startsAt?: number | null; endsAt?: number | null },
+    id = newId("ann"),
+  ): AnnouncementCard {
+    const title = input.title.trim();
+    const body = input.body.trim();
+    if (!title || !body) throw new AccessError("invalid", "Add a title and a short note.");
+    if (title.length > 80 || body.length > 500) throw new AccessError("invalid", "Please shorten that card.");
+    const startsAt = input.startsAt ?? null;
+    const endsAt = input.endsAt ?? null;
+    const problem = windowError(startsAt, endsAt);
+    if (problem) throw new AccessError("invalid", problem);
+    return {
+      id,
+      title,
+      body,
+      sample: false,
+      startsAt,
+      endsAt,
+      archived: false,
+      staffEdited: true,
+    };
+  }
+
+  /** Built-in Home cards are added once. An existing row, edited or not, is left alone. */
+  private placeDefaultAnnouncement(row: AnnouncementCard) {
+    if (this.announcements.some((item) => item.id === row.id)) return;
+    this.announcements.push(row);
+  }
+
+  private assertMayInvite(issuerRole: Role, targetRole: Role) {
+    if (mayIssueInvite(issuerRole, targetRole)) return;
+    throw new AccessError(
+      "forbidden",
+      targetRole === "master_admin"
+        ? "Only a Master Admin can make a code for a Master Admin seat."
+        : targetRole === "pastor"
+          ? "Only a Master Admin can make a code for a pastor seat."
+          : issuerRole === "team_leader"
+            ? "You can only make a code for a role below your own level."
+            : "You can't make a code for someone above your level.",
+    );
+  }
+
+  private canUndoAdd(actor: Actor, person: Person): boolean {
+    if (person.deleted || person.passwordHash || person.sample) return false;
+    if (isStaff(person.role)) return false;
+    if (!person.addedBy || person.addedBy !== actor.personId || person.addedAt == null) return false;
+    return this.now() - person.addedAt <= UNDO_ADD_MS;
   }
 
   private requireEditor(token: string): Actor {
@@ -2751,33 +3666,55 @@ export class ChurchStore {
       if (index === -1) rows.push(row);
       else rows[index] = row;
     };
-    upsert(this.announcements, {
+    // Insert the built-in cards only when the church does not already have them.
+    // A saved edit, archive, or schedule must survive the next boot.
+    this.placeDefaultAnnouncement({
       id: "ann-sunday",
       title: "Sunday gathering",
       body: "10:30 a.m. Come early for donuts and coffee.",
       sample: false,
+      startsAt: null,
+      endsAt: null,
+      archived: false,
+      staffEdited: false,
     });
-    upsert(this.announcements, {
+    this.placeDefaultAnnouncement({
       id: "ann-kids",
       title: "One Hope Kids",
       body: "Kids ministry is open during the Sunday gathering, from 3 months through 5th grade.",
       sample: false,
+      startsAt: null,
+      endsAt: null,
+      archived: false,
+      staffEdited: false,
     });
     const sunday = this.events.find((event) => event.id === "event-sunday");
-    if (!sunday || sunday.end < this.now()) {
+    if (!sunday?.cancelled && (!sunday || sunday.end < this.now())) {
       const service = nextSundayService(new Date(this.now())).service.getTime();
-      upsert(this.events, {
-        id: "event-sunday",
-        title: "Sunday gathering",
-        start: service,
-        end: service + 90 * 60 * 1000,
-        location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
-        description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
-        capacity: null,
-        sample: false,
-      });
+      if (sunday?.staffEdited) {
+        const length = Math.max(sunday.end - sunday.start, 60 * 60 * 1000);
+        sunday.start = service;
+        sunday.end = service + length;
+      } else {
+        upsert(this.events, {
+          id: "event-sunday",
+          title: "Sunday gathering",
+          start: service,
+          end: service + 90 * 60 * 1000,
+          location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
+          description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
+          capacity: null,
+          sample: false,
+          cancelled: false,
+          staffEdited: false,
+        });
+      }
     }
-    for (const event of CHURCH_EVENTS) upsert(this.events, { ...event, capacity: null, sample: false });
+    for (const event of CHURCH_EVENTS) {
+      const existing = this.events.find((item) => item.id === event.id);
+      if (existing?.staffEdited || existing?.cancelled) continue;
+      upsert(this.events, { ...event, capacity: null, sample: false, cancelled: false, staffEdited: false });
+    }
     const retired = new Set(RETIRED_GROUP_IDS);
     this.groups.splice(0, this.groups.length, ...this.groups.filter((group) => !retired.has(group.id)));
     this.messages.splice(
@@ -2872,6 +3809,8 @@ export class ChurchStore {
         listed: true,
       }),
     );
+    this.kidsTeam.add("person-frankie");
+    this.kidsTeam.add("person-gray");
     add(
       this.makePerson({
         id: "person-harper",
@@ -3151,10 +4090,10 @@ export class ChurchStore {
   toDocument(): StoreDocument {
     return {
       version: 1,
-      people: [...this.people.values()].map((person) => ({
-        ...person,
-        totpSecret: person.totpSecret ? person.totpSecret.toString("base64") : null,
-      })),
+      people: [...this.people.values()].map((person) => {
+        const { totpSecret, ...rest } = person;
+        return totpSecret ? { ...rest, totpSecret: totpSecret.toString("base64") } : rest;
+      }),
       gifts: [...this.gifts.values()],
       children: [...this.children.values()],
       sessions: [...this.sessions.values()],
@@ -3202,6 +4141,8 @@ export class ChurchStore {
       outreachRsvps: this.outreachRsvps.map((row) => ({ ...row })),
       coffeeOrders: this.coffeeOrders.map((row) => ({ ...row })),
       social: this.social.map((link) => ({ ...link })),
+      featuredMessage: this.featured ? { ...this.featured } : null,
+      kidsTeam: [...this.kidsTeam],
     };
   }
 
@@ -3213,9 +4154,10 @@ export class ChurchStore {
     if (document.version !== 1) throw new Error("This snapshot version is not supported.");
     this.people.clear();
     for (const person of document.people) {
+      const { totpSecret, ...rest } = person;
       this.people.set(person.id, {
-        ...person,
-        totpSecret: person.totpSecret ? Buffer.from(person.totpSecret, "base64") : null,
+        ...rest,
+        totpSecret: totpSecret ? Buffer.from(totpSecret, "base64") : null,
       });
     }
     replaceMap(this.gifts, document.gifts);
@@ -3254,7 +4196,12 @@ export class ChurchStore {
     this.drafts.splice(0, this.drafts.length, ...document.drafts);
     this.invites.clear();
     for (const invite of document.invites ?? []) {
-      this.invites.set(invite.tokenHash, { email: invite.email, expires: invite.expires });
+      this.invites.set(invite.tokenHash, {
+        email: invite.email,
+        expires: invite.expires,
+        issuerRole: invite.issuerRole ?? null,
+        issuerId: invite.issuerId ?? "",
+      });
     }
     this.followUps.splice(0, this.followUps.length, ...(document.followUps ?? []));
     this.streaks.clear();
@@ -3272,6 +4219,9 @@ export class ChurchStore {
     this.social = document.social
       ? document.social.map((link) => ({ ...link }))
       : SITE_SOCIAL.map((link) => ({ ...link }));
+    this.featured = document.featuredMessage ? { ...document.featuredMessage } : null;
+    this.kidsTeam.clear();
+    for (const personId of document.kidsTeam ?? []) this.kidsTeam.add(personId);
   }
 
   installDocument(document: StoreDocument): void {
@@ -3293,7 +4243,10 @@ export class ChurchStore {
     for (const check of this.checks.values()) check.ciphertext = rotate(check.ciphertext);
     for (const secret of this.secrets.values()) secret.ciphertext = rotate(secret.ciphertext);
     for (const request of this.requests) request.ciphertext = rotate(request.ciphertext);
-    for (const row of this.followUps) row.ciphertext = rotate(row.ciphertext);
+    for (const row of this.followUps) {
+      row.ciphertext = rotate(row.ciphertext);
+      if (row.noteCiphertext) row.noteCiphertext = rotate(row.noteCiphertext);
+    }
   }
 
   private scrubFormerMembers() {
@@ -3401,10 +4354,15 @@ export class ChurchStore {
   }
 
   private ensureDemoSessions() {
-    if (this.config.env !== "demo") return;
-    if (!this.sessions.has("session-member-demo")) {
-      this.sessions.set("session-member-demo", {
-        token: "session-member-demo",
+    this.ensureDemoSession("session-member-demo");
+    this.ensureDemoSession("session-staff-demo");
+  }
+
+  private ensureDemoSession(token: string) {
+    if (this.config.env !== "demo" || this.sessions.has(token)) return;
+    if (token === "session-member-demo") {
+      this.sessions.set(token, {
+        token,
         personId: "person-avery",
         createdAt: this.now(),
         lastActivity: this.now(),
@@ -3415,9 +4373,9 @@ export class ChurchStore {
         sample: true,
       });
     }
-    if (!this.sessions.has("session-staff-demo")) {
-      this.sessions.set("session-staff-demo", {
-        token: "session-staff-demo",
+    if (token === "session-staff-demo") {
+      this.sessions.set(token, {
+        token,
         personId: "person-reese",
         createdAt: this.now(),
         lastActivity: this.now(),
@@ -3467,6 +4425,27 @@ function supportNeeds(value: unknown): SupportNeedId[] {
   const needs = (value as { needs: unknown }).needs;
   if (!Array.isArray(needs)) return [];
   return needs.filter((need): need is SupportNeedId => SUPPORT_NEEDS.some((item) => item.id === need));
+}
+
+function csvCell(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
+  return value;
+}
+
+function youtubeMessageLink(videoId: string, link: string): boolean {
+  try {
+    const url = new URL(link);
+    if (url.protocol !== "https:") return false;
+    if (url.hostname === "youtu.be") return url.pathname.replace(/^\//, "") === videoId;
+    if (url.hostname !== "www.youtube.com" && url.hostname !== "youtube.com") return false;
+    return (
+      url.searchParams.get("v") === videoId ||
+      url.pathname === `/shorts/${videoId}` ||
+      url.pathname === `/embed/${videoId}`
+    );
+  } catch {
+    return false;
+  }
 }
 
 function textField(value: unknown, key: string): string {

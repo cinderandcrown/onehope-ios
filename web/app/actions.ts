@@ -3,12 +3,23 @@
 import {
   AccessError,
   FOLLOW_UP_STATUSES,
+  type ChurchStore,
+  isAccessError,
+  parseChicagoLocal,
   publicBaseUrl,
+  pushTemplate,
   type FollowUpStatus,
-  withStore,
 } from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+
+import { withChurch } from "@/lib/church";
+import { setFlash } from "@/lib/flash";
+import { rememberIssued } from "@/lib/issued-code";
+
+function desk<T>(token: string, fn: (store: ChurchStore) => Promise<T> | T) {
+  return withChurch(fn, { token });
+}
 
 import { isLanguage } from "@/lib/i18n";
 
@@ -37,18 +48,22 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const code = String(formData.get("code") ?? "");
   try {
-    const token = await withStore((store) => {
+    const next = await withChurch((store) => {
       const session = store.login({ email, password, ip: "command-center", userAgent: "staff-form" });
+      if (session.mfaRequired && store.totpStatus(session.token) === "enroll") {
+        return { token: session.token, enroll: true as const };
+      }
       if (session.mfaRequired) {
         if (!/^\d{6}$/.test(code)) throw new AccessError("mfa_required", "Enter the 6-digit code.");
         store.verifyMfa(session.token, code);
         store.stepUp(session.token, { code });
       }
-      return session.token;
+      return { token: session.token, enroll: false as const };
     });
-    await setSession(token);
+    await setSession(next.token);
+    if (next.enroll) redirect("/enroll");
   } catch (error) {
-    if (error instanceof AccessError) redirect("/login?error=1");
+    if (isAccessError(error)) redirect("/login?error=1");
     throw error;
   }
   redirect("/overview");
@@ -57,7 +72,7 @@ export async function signIn(formData: FormData) {
 export async function signOut() {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;
-  if (token) await withStore((store) => store.logout(token));
+  if (token) await desk(token, (store) => store.logout(token));
   jar.delete("onehope_session");
   redirect("/login");
 }
@@ -75,35 +90,35 @@ export async function createGroupAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const summary = String(formData.get("summary") ?? "").trim();
   if (!name || !summary) redirect("/groups?error=1");
-  await withStore((store) => store.createGroup(token, { name, summary }));
+  await desk(token, (store) => store.createGroup(token, { name, summary }));
   redirect("/groups");
 }
 
-export async function createEventAction(formData: FormData) {
-  const jar = await cookies();
-  const token = jar.get("onehope_session")?.value;
-  if (!token) redirect("/login");
-  const title = String(formData.get("title") ?? "").trim();
-  const location = String(formData.get("location") ?? "").trim();
-  if (!title || !location) redirect("/events?error=1");
-  const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  await withStore((store) =>
-    store.createEvent(token, { title, location, start, end: start + 90 * 60 * 1000 }),
-  );
-  redirect("/events");
-}
 
 export async function savePush(formData: FormData) {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;
   if (!token) redirect("/login");
-  const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const template = pushTemplate(String(formData.get("template") ?? ""));
+  const title = (template?.title ?? String(formData.get("title") ?? "")).trim();
+  const body = (template?.body ?? String(formData.get("body") ?? "")).trim();
   const segment = formData.get("segment");
   if (segment !== "members" && segment !== "volunteers" && segment !== "parents") redirect("/push?error=1");
   if (!title || !body) redirect("/push?error=1");
-  await withStore((store) => store.sendPush(token, { title, body, segment }));
-  redirect("/push?saved=1");
+  const confirm = formData.get("confirm") === "yes";
+  const result = await desk(token, (store) => store.sendPush(token, { title, body, segment, confirm }));
+  if (result.needsConfirm) {
+    await setFlash({
+      desk: "push",
+      tone: "confirm",
+      title,
+      body,
+      segment,
+      count: String(result.count),
+    });
+    redirect("/push");
+  }
+  redirect(`/push?saved=1&sent=${result.sent ? "1" : "0"}`);
 }
 
 function isFollowUpStatus(value: unknown): value is FollowUpStatus {
@@ -121,7 +136,7 @@ export async function saveSocialAction(formData: FormData) {
     .map((id, index) => ({ id, name: names[index] ?? "", url: urls[index] ?? "" }))
     .filter((link) => link.url.trim());
   try {
-    await withStore((store) => store.setSocialLinks(token, links));
+    await desk(token, (store) => store.setSocialLinks(token, links));
   } catch {
     redirect("/overview?error=1");
   }
@@ -135,12 +150,20 @@ export async function addPersonAction(formData: FormData) {
   const displayName = String(formData.get("displayName") ?? "");
   const email = String(formData.get("email") ?? "");
   const phone = String(formData.get("phone") ?? "");
+  let person: { id: string; displayName: string; inviteToken: string; expires: number };
   try {
-    const person = await withStore((store) => store.addPerson(token, { displayName, email, phone }));
-    redirect(`/people?added=${encodeURIComponent(person.inviteToken)}`);
+    person = await desk(token, (store) => store.addPerson(token, { displayName, email, phone }));
   } catch {
     redirect("/people?error=1");
   }
+  await rememberIssued({
+    code: person.inviteToken,
+    name: person.displayName,
+    expires: person.expires,
+    personId: person.id,
+    desk: "people",
+  });
+  redirect("/people");
 }
 
 export async function editPersonAction(formData: FormData) {
@@ -150,7 +173,7 @@ export async function editPersonAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const displayName = String(formData.get("displayName") ?? "");
   const phone = String(formData.get("phone") ?? "");
-  await withStore((store) => store.editPerson(token, id, { displayName, phone }));
+  await desk(token, (store) => store.editPerson(token, id, { displayName, phone }));
   redirect("/people");
 }
 
@@ -160,28 +183,15 @@ export async function moderatePrayerAction(formData: FormData) {
   if (!token) redirect("/login");
   const id = String(formData.get("id") ?? "");
   const approved = formData.get("approved") === "yes";
-  await withStore((store) => store.moderatePrayer(token, id, approved));
+  await desk(token, (store) => store.moderatePrayer(token, id, approved));
   redirect("/care");
 }
 
-export async function createOutreachAction(formData: FormData) {
-  const jar = await cookies();
-  const token = jar.get("onehope_session")?.value;
-  if (!token) redirect("/login");
-  const title = String(formData.get("title") ?? "");
-  const location = String(formData.get("location") ?? "");
-  const detail = String(formData.get("detail") ?? "");
-  const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  await withStore((store) =>
-    store.createOutreach(token, { title, location, detail, start, end: start + 2 * 60 * 60 * 1000 }),
-  );
-  redirect("/events");
-}
 
 export async function neighborhoodPrayerAction(formData: FormData) {
   const body = String(formData.get("body") ?? "");
   try {
-    await withStore((store) => store.submitNeighborhoodPrayer(body, "web-neighborhood"));
+    await withChurch((store) => store.submitNeighborhoodPrayer(body, "web-neighborhood"));
   } catch {
     redirect("/neighborhood?error=1");
   }
@@ -195,11 +205,22 @@ export async function updateFollowUpAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = formData.get("status");
   if (!id || !isFollowUpStatus(status)) redirect("/care?error=1");
+  const dueRaw = String(formData.get("dueAt") ?? "").trim();
+  const dueAt = dueRaw ? parseChicagoLocal(dueRaw) : null;
+  if (dueRaw && dueAt === null) redirect("/care?error=time");
+  const assigneeRaw = String(formData.get("assigneeId") ?? "");
   try {
-    await withStore((store) => store.updateFollowUp(token, id, status));
+    await desk(token, (store) =>
+      store.updateFollowUp(token, id, {
+        status,
+        assigneeId: formData.has("assigneeId") ? (assigneeRaw ? assigneeRaw : null) : undefined,
+        dueAt: formData.has("dueAt") ? dueAt : undefined,
+        staffNote: formData.has("staffNote") ? String(formData.get("staffNote") ?? "") : undefined,
+      }),
+    );
   } catch (error) {
-    if (error instanceof AccessError) redirect("/care?error=1");
+    if (isAccessError(error)) redirect("/care?error=1");
     throw error;
   }
-  redirect("/care");
+  redirect("/care?saved=1");
 }

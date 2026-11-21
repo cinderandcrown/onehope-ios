@@ -12,8 +12,18 @@ final class TabUITests: XCTestCase {
             if name == "Home" {
                 XCTAssertTrue(app.buttons["home-plan-visit"].waitForExistence(timeout: 10))
                 XCTAssertTrue(app.descendants(matching: .any)["church-photo-revival"].waitForExistence(timeout: 10))
+                settle()
+                capture(app, name: "Guest Home top")
+                for part in 2 ... 4 {
+                    app.swipeUp()
+                    settle()
+                    capture(app, name: "Guest Home \(part)")
+                }
+                for _ in 0 ..< 4 {
+                    app.swipeDown()
+                }
                 app.buttons["home-coffee"].tap()
-                XCTAssertTrue(app.staticTexts["Order ahead coming soon."].waitForExistence(timeout: 10))
+                XCTAssertTrue(app.staticTexts["Order at the counter."].waitForExistence(timeout: 10))
                 app.navigationBars.buttons.element(boundBy: 0).tap()
                 app.buttons["home-know-jesus"].tap()
                 XCTAssertTrue(app.buttons["decision-salvation"].waitForExistence(timeout: 10))
@@ -25,6 +35,7 @@ final class TabUITests: XCTestCase {
             if name == "Give" {
                 XCTAssertTrue(app.staticTexts["Text to give"].waitForExistence(timeout: 10))
             }
+            settle()
             capture(app, name: "Guest \(name)")
         }
         XCTAssertFalse(app.tabBars.buttons["Know Jesus"].exists)
@@ -67,6 +78,8 @@ final class TabUITests: XCTestCase {
         app.launch()
         openTab("More", app: app)
         XCTAssertFalse(app.buttons["more-staff"].exists)
+        settle()
+        capture(app, name: "More menu")
         let routes: [(String, String)] = [
             ("more-revival", "Revival Coffee"),
             ("more-know-jesus", "Know Jesus"),
@@ -80,22 +93,27 @@ final class TabUITests: XCTestCase {
             ("more-sermons", "Watch"),
             ("more-visit", "Plan a Visit"),
             ("more-about", "About"),
+            ("more-credits", "About & Credits"),
+            ("more-privacy", "Privacy Policy"),
+            ("more-terms", "Terms of Use"),
             ("more-social", "Social media"),
             ("more-profile", "Sign in"),
             ("more-settings", "Settings"),
             ("more-sign-in", "Sign in"),
         ]
         for route in routes {
+            XCTAssertTrue(scrollTo(route.0, app: app), "Could not scroll to \(route.0)")
             tapMarked(route.0, app: app)
             let bar = app.navigationBars[route.1]
             XCTAssertTrue(bar.waitForExistence(timeout: 10), route.0)
+            settle()
+            capture(app, name: "More \(route.0)")
             bar.buttons["BackButton"].tap()
+            XCTAssertTrue(app.navigationBars["More"].waitForExistence(timeout: 10), "back to More from \(route.0)")
+            settle()
         }
-        for soon in ["more-household", "more-live"] {
-            reveal(soon, app: app)
-            XCTAssertTrue(marked("\(soon)-badge", app: app).waitForExistence(timeout: 5), soon)
-            tapMarked(soon, app: app)
-            XCTAssertTrue(app.navigationBars["More"].waitForExistence(timeout: 3), soon)
+        for hidden in ["more-household", "more-live", "more-staff"] {
+            XCTAssertFalse(marked(hidden, app: app).exists, "\(hidden) is unfinished and must stay hidden")
         }
     }
 
@@ -103,14 +121,36 @@ final class TabUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    private func reveal(_ identifier: String, app: XCUIApplication) {
+    /// Scrolls the More list until the row can be tapped, and says whether it got there.
+    /// Slow swipes (no fling, so a swipe cannot land as a tap on another row), checked after every swipe,
+    /// and a nudge when the row is hidden behind the tab bar.
+    @discardableResult
+    private func scrollTo(_ identifier: String, app: XCUIApplication) -> Bool {
         let row = marked(identifier, app: app)
-        for _ in 0 ..< 5 where !row.exists {
-            app.swipeDown()
+        let tabTop = app.buttons["tab-home"].frame.minY
+        func ready() -> Bool {
+            guard row.exists, row.isHittable else { return false }
+            if row.frame.maxY > tabTop - 4 {
+                app.swipeUp(velocity: .slow)
+            }
+            return row.exists && row.isHittable
         }
-        for _ in 0 ..< 8 where !row.exists {
-            app.swipeUp()
+        if ready() {
+            return true
         }
+        for _ in 0 ..< 12 {
+            app.swipeUp(velocity: .slow)
+            if ready() {
+                return true
+            }
+        }
+        for _ in 0 ..< 16 {
+            app.swipeDown(velocity: .slow)
+            if ready() {
+                return true
+            }
+        }
+        return false
     }
 
     private func tapMarked(_ identifier: String, app: XCUIApplication) {
@@ -128,6 +168,11 @@ final class TabUITests: XCTestCase {
         let button = app.buttons["tab-\(name.lowercased())"]
         XCTAssertTrue(button.waitForExistence(timeout: 8), "Missing \(name) tab")
         button.tap()
+    }
+
+    /// Gives photos a moment to arrive and fade in before a screenshot.
+    private func settle() {
+        Thread.sleep(forTimeInterval: 1.5)
     }
 
     private func capture(_ app: XCUIApplication, name: String) {

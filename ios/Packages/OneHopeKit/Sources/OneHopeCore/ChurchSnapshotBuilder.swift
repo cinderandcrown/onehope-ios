@@ -25,7 +25,6 @@ struct MemberParts {
 
 func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     let home = parts.home
-    let messages = parts.sermons.videos.filter { $0.kind != "short" }
     var snapshot = ChurchSnapshot.bundled()
     snapshot.fromAPI = true
     snapshot.offlineNote = ""
@@ -45,24 +44,30 @@ func guestSnapshot(_ parts: PublicParts) -> ChurchSnapshot {
     snapshot.serviceISO = home.countdown.service
     snapshot.announcements = home.announcements.map { SampleChurch.Announcement(id: $0.id, title: $0.title, body: $0.body, sample: $0.sample) }
     snapshot.events = home.events.map { eventItem($0, registered: false) }
-    snapshot.sermonTitle = messages.first?.title ?? ""
-    snapshot.sermonSample = messages.isEmpty
-    snapshot.sermonNote = messages.isEmpty ? "Sunday messages will appear here." : "From the church YouTube channel."
-    snapshot.sermons = parts.sermons.videos.map(sermonLine)
+    let ordered = SermonOrder.featuring(
+        parts.sermons.videos.map(sermonLine),
+        featured: featuredLine(home.sampleSermon)
+    )
+    let lead = ordered.first { !$0.isShort }
+    snapshot.sermonTitle = lead?.title ?? ""
+    snapshot.sermonSample = lead == nil
+    snapshot.sermonNote = lead == nil ? "Sunday messages will appear here." : "From the church YouTube channel."
+    snapshot.sermons = ordered
     snapshot.groups = parts.groups.groups.map(groupLine)
-    snapshot.images = churchImages(home.images)
+    snapshot.images = ChurchImages(slots: home.images ?? [:])
+    snapshot.media = churchMedia(home.media)
     return snapshot
 }
 
 private let staffRoles: Set<String> = ["master_admin", "pastor", "care_team", "finance", "kids_director", "team_leader"]
 
-private func churchImages(_ reply: ChurchImagesReply?) -> ChurchImages {
-    ChurchImages(
-        hero: reply?.hero ?? "",
-        about: reply?.about ?? "",
-        video: reply?.video ?? "",
-        revival: reply?.revival ?? "",
-        og: reply?.og ?? ""
+private func churchMedia(_ reply: MediaReply?) -> ChurchMedia {
+    ChurchMedia(
+        team: reply?.team ?? [],
+        ministries: reply?.ministries ?? [],
+        revivalGallery: reply?.revival?.gallery ?? [],
+        credits: reply?.credits ?? [],
+        contactEmail: reply?.contactEmail ?? ""
     )
 }
 
@@ -99,6 +104,8 @@ func memberSnapshot(_ parts: MemberParts) -> ChurchSnapshot {
     snapshot.phonePublic = parts.me.person.phonePublic ?? false
     snapshot.listedInDirectory = parts.me.person.listedInDirectory ?? false
     snapshot.isStaff = staffRoles.contains(parts.me.person.role ?? "")
+    snapshot.kidsCanClockIn = parts.kids.duty?.canClockIn ?? false
+    snapshot.kidsOnDuty = parts.kids.duty?.onDuty ?? false
     return snapshot
 }
 
@@ -115,11 +122,30 @@ private func eventItem(_ event: HomeReply.Event, registered: Bool) -> SampleChur
     )
 }
 
+private func featuredLine(_ featured: HomeReply.FeaturedMessage?) -> SermonLine? {
+    guard let featured else { return nil }
+    let title = featured.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let videoId = featured.videoId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !title.isEmpty, !videoId.isEmpty else { return nil }
+    return SermonLine(
+        id: videoId,
+        title: title,
+        thumbnail: featured.thumbnail,
+        thumbnailHD: nil,
+        published: nil,
+        kind: "message",
+        link: featured.link.flatMap(URL.init(string:)),
+        speaker: featured.speaker ?? "",
+        passage: featured.passage ?? ""
+    )
+}
+
 private func sermonLine(_ video: SermonsReply.Video) -> SermonLine {
     SermonLine(
         id: video.id,
         title: video.title,
         thumbnail: video.thumbnail,
+        thumbnailHD: video.thumbnailHd,
         published: video.published.flatMap(parseISODate),
         kind: video.kind ?? "message",
         link: video.link.flatMap(URL.init(string:))

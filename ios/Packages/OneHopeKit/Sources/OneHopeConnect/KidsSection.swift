@@ -1,28 +1,47 @@
 import OneHopeCore
+import OneHopeDesign
 import SwiftUI
 
 /// Household check-in. Each child shows whether they are checked in; pickup needs
 /// the code from check-in, a verified guardian, and two adults at the station.
 public struct KidsSection: View {
     let kids: [KidLine]
+    let canClockIn: Bool
+    let onDuty: Bool
     let perform: (MemberAction) async -> String
     @Binding var notice: String
     @State private var childName = ""
     @State private var classroom = "Preschool"
     @State private var codes: [String: String] = [:]
 
-    public init(kids: [KidLine], perform: @escaping (MemberAction) async -> String, notice: Binding<String>) {
+    public init(
+        kids: [KidLine],
+        canClockIn: Bool = false,
+        onDuty: Bool = false,
+        perform: @escaping (MemberAction) async -> String,
+        notice: Binding<String>
+    ) {
         self.kids = kids
+        self.canClockIn = canClockIn
+        self.onDuty = onDuty
         self.perform = perform
         self._notice = notice
     }
 
     public var body: some View {
         Section {
+            if canClockIn {
+                Button(onDuty ? "Clock out" : "Clock in") {
+                    Task { notice = await perform(onDuty ? .clockOut : .clockIn) }
+                }
+                .accessibilityIdentifier(onDuty ? "kids-clock-out" : "kids-clock-in")
+            }
             ForEach(kids) { child in
                 row(child)
             }
-            TextField("Child's name", text: $childName)
+            LabeledField("Child's name") {
+                TextField("Child's name", text: $childName)
+            }
             Picker("Classroom", selection: $classroom) {
                 Text("Nursery").tag("Nursery")
                 Text("Preschool").tag("Preschool")
@@ -44,6 +63,7 @@ public struct KidsSection: View {
         } footer: {
             Text("Keep the security code from check-in. Pickup works once, for a guardian with that code, when two adults are at the station.")
         }
+        .announce(notice)
     }
 
     private func row(_ child: KidLine) -> some View {
@@ -53,13 +73,15 @@ public struct KidsSection: View {
                 Spacer()
                 Text(child.checkedIn ? "Checked in" : "Not checked in")
                     .font(.footnote)
-                    .foregroundStyle(child.checkedIn ? Color.green : Color.secondary)
+                    .foregroundStyle(child.checkedIn ? BrandColor.olive : BrandColor.ink.opacity(0.8))
             }
             Text(child.classroom).font(.footnote)
             if child.checkedIn {
-                TextField("Security code", text: binding(for: child.id))
-                    .keyboardType(.numberPad)
-                    .accessibilityIdentifier("pickup-code-\(child.id)")
+                LabeledField("Security code", hint: "The 4 digits you got at check-in") {
+                    TextField("Security code", text: binding(for: child.id))
+                        .keyboardType(.numberPad)
+                        .accessibilityIdentifier("pickup-code-\(child.id)")
+                }
                 Button("Pick up \(child.displayName)") {
                     let code = (codes[child.id] ?? "").trimmingCharacters(in: .whitespaces)
                     guard code.count == 4, code.allSatisfy(\.isNumber) else {

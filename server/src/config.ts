@@ -1,5 +1,6 @@
 import { scryptSync } from "node:crypto";
 
+import { churchMedia, mediaTenant, type ChurchImages, type ChurchMedia } from "./media";
 import { publicBaseUrl } from "./public-url";
 
 export type AppConfig = {
@@ -33,36 +34,12 @@ export type AppConfig = {
   squareWebhookSignatureKey: string;
   squareWebhookNotificationUrl: string;
   images: ChurchImages;
+  media: ChurchMedia;
+  mediaTenant: string;
 };
 
-export type ChurchImages = {
-  hero: string;
-  about: string;
-  video: string;
-  revival: string;
-  og: string;
-};
-
-function httpsURL(value: string | undefined): string {
-  const raw = (value ?? "").trim();
-  if (!raw.startsWith("https://")) return "";
-  try {
-    const url = new URL(raw);
-    return url.protocol === "https:" ? url.toString() : "";
-  } catch {
-    return "";
-  }
-}
-
-export function churchImages(env: NodeJS.ProcessEnv): ChurchImages {
-  return {
-    hero: httpsURL(env.ONEHOPE_IMAGE_HERO),
-    about: httpsURL(env.ONEHOPE_IMAGE_ABOUT),
-    video: httpsURL(env.ONEHOPE_IMAGE_VIDEO),
-    revival: httpsURL(env.ONEHOPE_IMAGE_REVIVAL),
-    og: httpsURL(env.ONEHOPE_IMAGE_OG),
-  };
-}
+export { churchImages } from "./media";
+export type { ChurchImages, ChurchMedia } from "./media";
 
 /** Only for reading snapshots written before a configured key. New writes use FIELD_ENCRYPTION_KEY. */
 export function demoFieldKey(): Buffer {
@@ -70,7 +47,13 @@ export function demoFieldKey(): Buffer {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const mode = env.ONEHOPE_ENV === "production" ? "production" : "demo";
+  const requested = env.ONEHOPE_ENV;
+  const mode =
+    requested === "production" || requested === "demo"
+      ? requested
+      : env.VERCEL_ENV === "production"
+        ? "production"
+        : "demo";
   const rawKey = env.FIELD_ENCRYPTION_KEY ?? "";
   if (mode === "production" && rawKey.length === 0) {
     throw new Error("FIELD_ENCRYPTION_KEY is required when ONEHOPE_ENV=production.");
@@ -117,6 +100,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     squareEnvironment: env.SQUARE_ENVIRONMENT || "sandbox",
     squareWebhookSignatureKey: env.SQUARE_WEBHOOK_SIGNATURE_KEY || "",
     squareWebhookNotificationUrl: env.SQUARE_WEBHOOK_NOTIFICATION_URL || "",
-    images: churchImages(env),
+    ...mediaConfig(env),
   };
+}
+
+function mediaConfig(env: NodeJS.ProcessEnv) {
+  const { images, media } = churchMedia(env);
+  return { images, media, mediaTenant: mediaTenant(env) };
 }

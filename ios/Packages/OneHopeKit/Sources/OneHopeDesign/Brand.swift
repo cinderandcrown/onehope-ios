@@ -7,13 +7,17 @@ public enum BrandColor {
     public static let olive = Color(uiColor: dynamic(light: 0x3F4903, dark: 0xC6CC8E))
     /// weareonehope.com --orange
     public static let terracotta = Color(uiColor: dynamic(light: 0xDF8052, dark: 0xE79A74))
+    /// The orange, darkened so text and icons on paper or cards reach 4.5:1. Use this for anything readable.
+    public static let terracottaDeep = Color(uiColor: dynamic(light: 0x9A3F14, dark: 0xE79A74))
+    /// Text and icons that sit on `terracottaDeep` (6.8:1 in light, 8.1:1 in dark).
+    public static let onAccent = Color(uiColor: dynamic(light: 0xFFFFFF, dark: 0x14140F))
     /// weareonehope.com --dove
     public static let paper = Color(uiColor: dynamic(light: 0xE5E4D0, dark: 0x14140F))
     /// weareonehope.com --black-2
     public static let ink = Color(uiColor: dynamic(light: 0x1C1B1B, dark: 0xE5E4D0))
     public static let card = Color(uiColor: dynamic(light: 0xF7F4EA, dark: 0x222218))
     /// weareonehope.com --blue
-    public static let sky = Color(uiColor: dynamic(light: 0xCADDF6, dark: 0x8AA4C4))
+    public static let sky = Color(uiColor: dynamic(light: 0xCADDF6, dark: 0x33465F))
 
     private static func dynamic(light: UInt32, dark: UInt32) -> UIColor {
         UIColor { traits in
@@ -47,37 +51,45 @@ public struct SampleBadge: View {
 public struct PhotoCard: View {
     private let resource: String
     private let height: CGFloat
+    private let direct: URL?
     @Environment(\.churchImages) private var images
 
     public init(_ resource: String, height: CGFloat = 180) {
         self.resource = resource
         self.height = height
+        direct = nil
+    }
+
+    /// A photo at a known URL, such as a ministry or team picture.
+    public init(url: URL?, height: CGFloat = 180) {
+        resource = "url"
+        self.height = height
+        direct = url
     }
 
     public var body: some View {
-        photo
+        RemoteImage(direct ?? images.url(named: resource))
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.altText[resource] ?? "")
+            .accessibilityAddTraits(.isImage)
+            .accessibilityHidden(direct != nil || Self.altText[resource] == nil)
             .accessibilityIdentifier("church-photo-\(resource)")
     }
 
-    @ViewBuilder private var photo: some View {
-        if let url = images.url(named: resource) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().scaledToFill()
-                case .empty, .failure:
-                    BrandTexture()
-                @unknown default:
-                    BrandTexture()
-                }
-            }
-        } else {
-            BrandTexture()
-        }
-    }
+    /// What a screen reader says for each named photo. Photos shown by URL sit beside their own text and stay silent.
+    private static let altText: [String: String] = [
+        "hero": "Photo of the church family",
+        "revival": "Inside Revival Coffee",
+        "kids": "Children at church",
+        "about": "The church family",
+        "video": "Message artwork",
+        "visit": "Welcome to the church",
+        "groups": "People in a small group",
+        "growth": "Growing in faith together",
+    ]
 }
 
 /// Neutral stand-in when a church photo URL is unset or the phone is offline.
@@ -96,7 +108,7 @@ public struct BrandTexture: View {
                 .frame(width: 180, height: 180)
                 .offset(x: 80, y: -40)
         )
-        .accessibilityLabel("Church photo")
+        .accessibilityHidden(true)
     }
 }
 
@@ -104,10 +116,19 @@ private struct ChurchImagesKey: EnvironmentKey {
     static let defaultValue = ChurchImages.empty
 }
 
+private struct ChurchMediaKey: EnvironmentKey {
+    static let defaultValue = ChurchMedia.empty
+}
+
 public extension EnvironmentValues {
     var churchImages: ChurchImages {
         get { self[ChurchImagesKey.self] }
         set { self[ChurchImagesKey.self] = newValue }
+    }
+
+    var churchMedia: ChurchMedia {
+        get { self[ChurchMediaKey.self] }
+        set { self[ChurchMediaKey.self] = newValue }
     }
 }
 
@@ -153,21 +174,21 @@ public enum Haptics {
 }
 
 public extension View {
-    /// A card with the site's ink edge, lifted off the dove background.
+    /// A warm card on the dove background: soft edge, gentle lift.
     func churchCard() -> some View {
-        padding()
+        padding(Space.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(BrandColor.card)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(BrandColor.ink.opacity(0.85), lineWidth: 1))
-            .shadow(color: BrandColor.olive.opacity(0.18), radius: 0, x: 4, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).stroke(BrandColor.ink.opacity(0.12), lineWidth: 1))
+            .shadow(color: BrandColor.ink.opacity(0.08), radius: 14, x: 0, y: 6)
     }
 }
 
 public extension Font {
     /// Large headlines in the site's scale. Articulat CF is not licensed for the app, so this is SF.
     static var hopeDisplay: Font {
-        .system(size: 40, weight: .semibold, design: .default)
+        .system(.largeTitle, design: .default).weight(.bold)
     }
 
     static var hopeTitle: Font {
@@ -206,20 +227,14 @@ public struct HeroPhoto: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            PhotoCard(resource, height: 260)
-            LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .accessibilityHidden(true)
+        PhotoOverlay(resource, minHeight: 260) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.largeTitle.bold()).foregroundStyle(.white)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(.headline).foregroundStyle(.white)
                 }
             }
-            .padding()
         }
-        .accessibilityElement(children: .combine)
     }
 }
 

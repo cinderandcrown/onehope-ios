@@ -11,6 +11,7 @@ public struct PrayerView: View {
     @State private var prayer = ""
     @State private var contact = false
     @State private var notice = ""
+    @State private var reporting: String?
 
     public init(
         snapshot: ChurchSnapshot,
@@ -24,7 +25,7 @@ public struct PrayerView: View {
 
     public var body: some View {
         NavigationStack {
-            List {
+            HopeList {
                 Section {
                     Text("Prayer requests")
                         .font(.headline)
@@ -44,6 +45,13 @@ public struct PrayerView: View {
                             if item.mine, !item.approved {
                                 Text("Waiting for pastor approval").font(.footnote)
                             }
+                            if !item.mine, item.approved, snapshot.signedIn {
+                                Button("Report this request", role: .destructive) { reporting = item.id }
+                                    .font(.footnote)
+                                    .frame(minHeight: 44)
+                                    .accessibilityHint("Takes it off the wall until a pastor reviews it")
+                                    .accessibilityIdentifier("prayer-report-\(item.id)")
+                            }
                         }
                     }
                 }
@@ -59,6 +67,21 @@ public struct PrayerView: View {
                 }
             }
             .refreshable { await onRefresh() }
+            .announce(notice)
+            .confirmationDialog("Report this prayer request?", isPresented: Binding(get: { reporting != nil }, set: {
+                if !$0 {
+                    reporting = nil
+                }
+            }), titleVisibility: .visible) {
+                Button("Report and take it down", role: .destructive) {
+                    guard let id = reporting else { return }
+                    reporting = nil
+                    Task { notice = await perform(.reportPrayer(id)) }
+                }
+                Button("Cancel", role: .cancel) { reporting = nil }
+            } message: {
+                Text("It is removed from the wall right away. A pastor will review it.")
+            }
             .navigationTitle(L10n.text(.prayer))
         }
     }
@@ -66,14 +89,18 @@ public struct PrayerView: View {
     /// The same fields as the church's Prayer Request form on Church Center.
     private var requestForm: some View {
         Section("Prayer request") {
-            TextField("How can we serve you?", text: $serve)
-                .accessibilityIdentifier("prayer-serve")
+            LabeledField("How can we serve you?") {
+                TextField("How can we serve you?", text: $serve)
+                    .accessibilityIdentifier("prayer-serve")
+            }
             Picker("Please check a box below", selection: $contact) {
                 Text("Just pray for me").tag(false)
                 Text("Please contact me").tag(true)
             }
-            TextField("Please describe your prayer need", text: $prayer, axis: .vertical)
-                .accessibilityIdentifier("prayer-need")
+            LabeledField("Please describe your prayer need", hint: "Pastors and the care team will read this.") {
+                TextField("Please describe your prayer need", text: $prayer, axis: .vertical)
+                    .accessibilityIdentifier("prayer-need")
+            }
             Button("Send prayer request") {
                 let serveText = serve.trimmingCharacters(in: .whitespacesAndNewlines)
                 let body = prayer.trimmingCharacters(in: .whitespacesAndNewlines)

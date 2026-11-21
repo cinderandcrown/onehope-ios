@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { ChurchImage } from "@/components/church-image";
+import { respondServingAction } from "@/app/member/actions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -51,6 +52,7 @@ export type ChurchView = {
   greeting: string;
   journeyMonth: KnowJesus["journey"];
   images: { hero: string; about: string; video: string; revival: string; og: string };
+  featured: { title: string; speaker: string; passage: string; videoId: string } | null;
 };
 
 export type ChurchGroup = {
@@ -439,7 +441,10 @@ function Home({
   onGo: (view: View) => void;
   onWatch: (id: string) => void;
 }) {
-  const latest = church.videos.find((video) => video.kind === "message");
+  const featuredVideo = church.featured
+    ? church.videos.find((video) => video.id === church.featured?.videoId)
+    : undefined;
+  const latest = featuredVideo ?? church.videos.find((video) => video.kind === "message");
   return (
     <>
       <section className="member-hero">
@@ -472,8 +477,16 @@ function Home({
           {latest.thumbnail ? (
             <Image src={latest.thumbnail} alt="" width={640} height={360} className="sermon-art" />
           ) : null}
-          <span className="muted">Latest message · {formatDate(latest.published)}</span>
-          <strong>{latest.title}</strong>
+          <span className="muted">
+            {church.featured ? "This Sunday" : `Latest message · ${formatDate(latest.published)}`}
+          </span>
+          <strong>{church.featured?.title || latest.title}</strong>
+          {church.featured ? (
+            <span>
+              {church.featured.speaker}
+              {church.featured.passage ? ` · ${church.featured.passage}` : ""}
+            </span>
+          ) : null}
         </button>
       ) : null}
       <article className="card">
@@ -1114,7 +1127,25 @@ function Connect({ church, member, onNotice }: { church: ChurchView; member: Mem
         {member.serving.map((item) => (
           <article className="card" key={item.id}>
             <h3>{item.position}</h3>
-            <p>{item.status}</p>
+            <p>{item.status === "pending" ? "Waiting for your answer" : item.status}</p>
+            {item.status === "pending" ? (
+              <div className="template-row">
+                <form action={respondServingAction}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="accept" value="yes" />
+                  <button className="button" type="submit">
+                    Yes, I will serve
+                  </button>
+                </form>
+                <form action={respondServingAction}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="accept" value="no" />
+                  <button className="button secondary" type="submit">
+                    I cannot this time
+                  </button>
+                </form>
+              </div>
+            ) : null}
           </article>
         ))}
       </section>

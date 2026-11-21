@@ -1,4 +1,6 @@
-import { Pool, type PoolClient, neonConfig } from "@neondatabase/serverless";
+import { Pool as NeonPool, type PoolClient as NeonClient, neonConfig } from "@neondatabase/serverless";
+import { Pool as PgPool, type PoolClient as PgClient } from "pg";
+import { WebSocket as NeonSocket } from "ws";
 
 import { ChurchStore } from "./store";
 import {
@@ -18,15 +20,44 @@ export { UnknownTenantError };
 
 if (typeof WebSocket !== "undefined") neonConfig.webSocketConstructor = WebSocket;
 
-let pool: Pool | null = null;
+type SqlPool = {
+  connect: () => Promise<NeonClient | PgClient>;
+};
+
+let pool: SqlPool | null = null;
 
 export function databaseUrl(): string | null {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
   return url.length > 0 ? url : null;
 }
 
-function sharedPool(url: string): Pool {
-  if (!pool) pool = new Pool({ connectionString: url, max: 5 });
+/** Neon hosts use the Neon driver. A local Postgres URL uses node-postgres unless ONEHOPE_PG_DRIVER=neon. */
+export function isLocalPostgres(url: string): boolean {
+  return /localhost|127\.0\.0\.1/.test(url);
+}
+
+function useNeonDriver(url: string): boolean {
+  return process.env.ONEHOPE_PG_DRIVER === "neon" || !isLocalPostgres(url);
+}
+
+/** Point the Neon driver at a local websocket proxy that tunnels to Postgres. */
+function configureLocalNeonProxy(): void {
+  neonConfig.webSocketConstructor = NeonSocket as unknown as typeof WebSocket;
+  neonConfig.useSecureWebSocket = false;
+  neonConfig.forceDisablePgSSL = true;
+  // The pipelined handshake sends a cleartext password. Local Postgres 16 only accepts SCRAM.
+  neonConfig.pipelineConnect = false;
+  const proxy = process.env.ONEHOPE_PG_WS_PROXY ?? "127.0.0.1:4444";
+  neonConfig.wsProxy = `${proxy}/v2`;
+}
+
+function sharedPool(url: string): SqlPool {
+  if (!pool) {
+    if (useNeonDriver(url) && isLocalPostgres(url)) configureLocalNeonProxy();
+    pool = useNeonDriver(url)
+      ? new NeonPool({ connectionString: url, max: 5 })
+      : new PgPool({ connectionString: url, max: 5 });
+  }
   return pool;
 }
 
@@ -191,7 +222,7 @@ function getMemoryStore(): ChurchStore {
   return globalStore.__onehope;
 }
 
-function clientSql(client: PoolClient): SqlClient {
+function clientSql(client: NeonClient | PgClient): SqlClient {
   return {
     async exec(sqlText) {
       await client.query(sqlText);

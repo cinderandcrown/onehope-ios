@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 
 import { signOut } from "@/app/actions";
 import { HeaderTools } from "@/components/header-tools";
+import { canOpenSection } from "@/lib/desk-access";
 import { copy, isSectionId, navGroups } from "@/lib/i18n";
 import { staffSession } from "@/lib/session";
 
@@ -25,15 +26,19 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
             <p>{text.product}</p>
           </div>
           <nav aria-label={text.product}>
-            {navGroups.map((group) => (
-              <div className="nav-group" key={group.id}>
-                {group.items.map((item) => (
-                  <a key={item} href={`/${item}`} aria-current={path === `/${item}` ? "page" : undefined}>
-                    {text[item]}
-                  </a>
-                ))}
-              </div>
-            ))}
+            {navGroups.map((group) => {
+              const items = group.items.filter((item) => canOpenSection(person.role, item));
+              if (items.length === 0) return null;
+              return (
+                <div className="nav-group" key={group.id}>
+                  {items.map((item) => (
+                    <a key={item} href={`/${item}`} aria-current={path === `/${item}` ? "page" : undefined}>
+                      {text[item]}
+                    </a>
+                  ))}
+                </div>
+              );
+            })}
           </nav>
           <form action={signOut}>
             <button className="text-button" type="submit">

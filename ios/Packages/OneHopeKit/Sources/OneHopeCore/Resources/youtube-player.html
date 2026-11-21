@@ -23,7 +23,7 @@ function onYouTubeIframeAPIReady() {
     videoId: "__VIDEO_ID__",
     width: "100%",
     height: "100%",
-    playerVars: { playsinline: 1, rel: 0, origin: "__ORIGIN__", widget_referrer: "__ORIGIN__" },
+    playerVars: { playsinline: 1, rel: 0, cc_load_policy: 1, hl: "en", cc_lang_pref: "en", origin: "__ORIGIN__", widget_referrer: "__ORIGIN__" },
     events: {
       onReady: function () { ready = true; send("ready"); },
       onError: function (event) { send("error:" + event.data); }

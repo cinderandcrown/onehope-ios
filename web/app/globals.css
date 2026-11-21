@@ -80,8 +80,9 @@ a {
 
 .shell {
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 250px minmax(0, 1fr);
   min-height: 100vh;
+  max-width: 100%;
 }
 .rail {
   background: #3f4903;
@@ -150,6 +151,8 @@ button,
 }
 .main {
   padding: 1.25rem 1.5rem 3rem;
+  min-width: 0;
+  max-width: 100%;
 }
 .topbar {
   display: flex;
@@ -420,6 +423,9 @@ pre {
     flex-direction: row;
     align-items: center;
     overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 0.55rem 0.7rem;
     gap: 0.35rem;
   }
@@ -441,6 +447,7 @@ pre {
   }
   .main {
     padding: 0.8rem 0.85rem 2rem;
+    width: 100%;
   }
   .login-photo {
     min-height: 240px;
@@ -719,4 +726,83 @@ pre {
 .help {
   font-size: 0.92rem;
   color: var(--olive);
+}
+.notice {
+  background: var(--sky);
+  color: #1c1b1b;
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+}
+.template-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0.8rem 0 1rem;
+}
+.template-row .button {
+  width: auto;
+}
+.table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.form input,
+.form select,
+.form textarea {
+  width: 100%;
+}
+.phone-preview {
+  max-width: 24rem;
+  background: var(--dove);
+  border-radius: 28px;
+  padding: 0.8rem;
+}
+.phone-preview .card {
+  margin-bottom: 0.6rem;
+}
+.duty-wait {
+  background: #f3d7c8;
+}
+.nametag {
+  background: var(--paper);
+  border-radius: 16px;
+  padding: 0.8rem 1rem;
+  max-width: 16rem;
+}
+.qr svg {
+  width: 220px;
+  height: 220px;
+  background: #fff;
+  border-radius: 12px;
+}
+.setup-key {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+.nametag .code {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0.2rem 0;
+}
+@media print {
+  .rail,
+  .topbar,
+  .no-print,
+  form,
+  .help,
+  .notice,
+  .template-row {
+    display: none !important;
+  }
+  .nametag {
+    border: 1px solid #000;
+  }
+}
+.care-card {
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+  margin-top: 0.8rem;
+  max-width: 36rem;
 }

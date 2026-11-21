@@ -1,26 +1,104 @@
 import Foundation
 
-/// Remote church photos. Empty strings mean the app draws a brand-colored fallback.
+/// Remote church photos by slot name ("hero", "kids", "revival"...). The server sends them from the
+/// church's own tenant config. An empty or missing slot means the app draws its brand-colored fallback.
 public struct ChurchImages: Equatable, Sendable {
-    public var hero: String
-    public var about: String
-    public var video: String
-    public var revival: String
-    public var og: String
+    public var slots: [String: String]
 
-    public static let empty = ChurchImages(hero: "", about: "", video: "", revival: "", og: "")
+    public init(slots: [String: String] = [:]) {
+        self.slots = slots
+    }
+
+    public static let empty = ChurchImages()
 
     public func url(named name: String) -> URL? {
-        let raw = switch name {
-        case "hero": hero
-        case "about": about
-        case "video": video
-        case "revival": revival
-        case "og": og
-        default: ""
-        }
+        ChurchImages.httpsURL(slots[name] ?? "")
+    }
+
+    /// Every usable photo URL, for warming the image cache once the church has loaded.
+    public var allURLs: [URL] {
+        slots.keys.sorted().compactMap(url(named:))
+    }
+
+    public static func httpsURL(_ raw: String) -> URL? {
         guard raw.hasPrefix("https://"), let url = URL(string: raw), url.scheme == "https" else { return nil }
         return url
+    }
+}
+
+public struct TeamMember: Equatable, Sendable, Identifiable, Decodable {
+    public let id: String
+    public let name: String
+    public let role: String
+    public let photo: String
+
+    public var photoURL: URL? {
+        ChurchImages.httpsURL(photo)
+    }
+}
+
+public struct MinistryCard: Equatable, Sendable, Identifiable, Decodable {
+    public let id: String
+    public let title: String
+    public let blurb: String
+    public let photo: String
+    public let url: String
+
+    public var photoURL: URL? {
+        ChurchImages.httpsURL(photo)
+    }
+
+    public var link: URL? {
+        ChurchImages.httpsURL(url)
+    }
+}
+
+public struct GalleryPhoto: Equatable, Sendable, Identifiable, Decodable {
+    public let id: String
+    public let caption: String
+    public let url: String
+
+    public var photoURL: URL? {
+        ChurchImages.httpsURL(url)
+    }
+}
+
+/// Who made or owns a picture or piece of content shown in the app, for the About & Credits screen.
+public struct CreditLine: Equatable, Sendable, Identifiable, Decodable {
+    public let title: String
+    public let detail: String
+    public let url: String
+
+    public var id: String {
+        title + url
+    }
+
+    public var link: URL? {
+        ChurchImages.httpsURL(url)
+    }
+}
+
+/// People, ministries and the Revival gallery from the church's own sites. Empty until the server sends them.
+public struct ChurchMedia: Equatable, Sendable {
+    public var team: [TeamMember]
+    public var ministries: [MinistryCard]
+    public var revivalGallery: [GalleryPhoto]
+    public var credits: [CreditLine]
+    /// Where to reach the church about the app. Empty until the church sets it.
+    public var contactEmail: String
+
+    public init(team: [TeamMember] = [], ministries: [MinistryCard] = [], revivalGallery: [GalleryPhoto] = [], credits: [CreditLine] = [], contactEmail: String = "") {
+        self.contactEmail = contactEmail
+        self.team = team
+        self.ministries = ministries
+        self.revivalGallery = revivalGallery
+        self.credits = credits
+    }
+
+    public static let empty = ChurchMedia()
+
+    public var allURLs: [URL] {
+        ministries.compactMap(\.photoURL) + revivalGallery.compactMap(\.photoURL) + team.compactMap(\.photoURL)
     }
 }
 

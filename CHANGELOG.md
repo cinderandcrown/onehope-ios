@@ -1,5 +1,28 @@
 # Changelog
 
+## Build 10 - 2026-11-20
+
+### Added
+
+- The church's own photos, from its public websites, replace the colored placeholders on Home, Plan a Visit, Revival Coffee, About, and Watch. Photos, the team, ministry cards, and the Revival gallery arrive at runtime from tenant config (`ONEHOPE_MEDIA_JSON`). None are stored in git, and a missing photo falls back to the brand colors.
+- Home is warmer: a hero photo, quick shortcuts, a Revival Coffee feature, the latest messages with sharp thumbnails, ministries, and a team teaser.
+- Revival Coffee is first in More and on Home, with its menu, hours, gallery, and directions.
+- Our Team screen, a redesigned More menu with icons and one-line descriptions, and friendlier empty states.
+- Images are cached in memory and on disk, warmed after the church loads, and fade in.
+
+- Accessibility: text and icon colors reach 4.5:1 (a darker orange for anything readable, dark-mode safe), 44 pt tap targets, Dynamic Type layouts that reflow instead of clipping, Reduce Motion respected, labeled photos and silent decorative ones, visible form labels, VoiceOver announcements for form results, YouTube captions on by default, and an automated accessibility audit in UI tests.
+- Legal drafts in More: Privacy Policy and Terms of Use (marked DRAFT pending church and attorney review, also reachable from signup), and an About & Credits screen with photo credits and open-source licenses. `LICENSE` (MIT) and `THIRD_PARTY_NOTICES.md` added. Giving statements say no goods or services were provided. App Store privacy answers are in `docs/app-store-privacy.md`.
+
+- App Review fixes: members can report a prayer request (it leaves the wall at once and returns to the pastors' queue, `POST /api/prayers/{id}/report`); unfinished "Coming soon" rows and labels are gone; the unused camera permission is removed; a church contact email (`contactEmail` in tenant config) shows in About, Privacy, and Terms.
+- A branded launch screen, Home ordered for the first 30 seconds (next service, Give / Pray / Revival / Know Jesus, today's encouragement, latest message), and the last photo set is remembered for an instant second launch.
+
+- Fixes from the screenshot review: service, event and sermon dates always show in Richardson (America/Chicago) time, whatever zone the phone is on (Home said 4:30 PM on a UTC device), with unit tests that run on UTC. The privacy manifest now declares the data the app collects, matching the App Store answers. Home's Plan a Visit and Directions grow with text size and stack at large sizes. Lists share the paper background. Events show their date and a details link. At accessibility text sizes the tab bar shows icons with the Large Content Viewer instead of cut-off labels. The More-menu UI test scrolls slowly and waits to return to More, so it no longer flakes.
+
+### Changed
+
+- Smoother tab changes, a haptic tap, and filled icons for the selected tab.
+- Public GET endpoints send cache headers and ETags; sermons and the directory accept paging; the sermon feed keeps a short cache and serves stale if YouTube is slow; the app loads its sections at the same time.
+
 ## Build 8 - 2026-11-19
 
 ### Added

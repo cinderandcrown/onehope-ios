@@ -2,8 +2,10 @@ import { ChurchStore } from "./store";
 
 export { createApi, API_ROUTES } from "./api";
 export { loadSermons } from "./adapters";
+export { cachedSermons, clearSermonCache, pageOf } from "./http-cache";
 export { CAPABILITIES, PUBLIC_KJV } from "./capabilities";
-export { churchImages, loadConfig } from "./config";
+export { loadConfig } from "./config";
+export { churchImages, churchMedia, loadMedia, httpsURL, type ChurchImages, type ChurchMedia } from "./media";
 export * from "./contracts";
 export * from "./domain";
 export * from "./faith";
@@ -28,6 +30,7 @@ export {
   storeErrorResponse,
   withStore,
   UnknownTenantError,
+  type StoreScope,
 } from "./persist";
 export { ADAPTERS, assertTruthful, projectCapabilities } from "./adapter-registry";
 export { tablesFor } from "./request-tables";
@@ -41,7 +44,23 @@ export { exportTenant, restoreTenant } from "./tenant-bundle";
 export { resolveTenant, tenantProfile } from "./tenancy";
 export { withServiceRole } from "./service-role";
 export { memorySyncStore, runSync } from "./sync";
-export { totpCode, decodeBase32 } from "./totp";
+export { totpCode, decodeBase32, encodeBase32 } from "./totp";
+export { qrSvg } from "./qr-svg";
+export {
+  ANNOUNCEMENT_TEMPLATES,
+  announcementIsLive,
+  announcementTemplate,
+  EVENT_TEMPLATES,
+  eventTemplate,
+  nextChurchMoment,
+  PUSH_TEMPLATES,
+  pushTemplate,
+  SERVE_TEMPLATES,
+  serveTemplate,
+  chicagoInputValue,
+  formatChicago,
+  parseChicagoLocal,
+} from "./staff-desk";
 export { VERSION } from "./version";
 
 const globalStore = globalThis as typeof globalThis & { __onehope?: ChurchStore };
