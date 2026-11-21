@@ -62,8 +62,26 @@ import {
 } from "./domain";
 import { coffeeGuide } from "./coffee";
 import {
+  CHANNEL_LABELS,
+  DEFAULT_PLAYBOOKS,
+  MAX_ATTEMPTS,
+  PRAYER_ONLY_STEP,
+  bucketFor,
+  dueAtFor,
+  fillScript,
+  firstName,
+  isTaskOutcome,
+  pickCareSeat,
+  triggerFor,
+  type CareTaskRow,
+  type PlaybookDefinition,
+  type PlaybookRow,
+  type PlaybookStep,
+} from "./care-engine";
+import {
   NOTE_LIMIT,
   OUTCOME_LABELS,
+  TOUCH_PAGE,
   STAGE_LABELS,
   STAGES,
   TAG_KINDS,
@@ -392,6 +410,9 @@ export type StoreDocument = {
   tags?: TagRow[];
   personTags?: PersonTagRow[];
   touches?: TouchRow[];
+  /** Phase 2b. Older snapshots load as empty: every playbook off, no tasks. */
+  playbooks?: PlaybookRow[];
+  careTasks?: CareTaskRow[];
   /** The message staff chose for Home and Watch. Older snapshots omit it. */
   featuredMessage?: {
     videoId: string;
@@ -535,6 +556,8 @@ export class ChurchStore {
   private readonly tags: TagRow[] = [];
   private readonly personTags: PersonTagRow[] = [];
   private readonly touches: TouchRow[] = [];
+  private readonly playbookRows: PlaybookRow[] = [];
+  private readonly careTasks: CareTaskRow[] = [];
   private featured: {
     videoId: string;
     title: string;
@@ -2467,6 +2490,10 @@ export class ChurchStore {
       person.role === "kids_director";
     authorize(actor, staffMove ? "grant_staff_roles" : "assign_team_roles", this.now());
     person.role = input.role;
+    // Care tasks go only to care team seats; leaving the seat hands their open tasks back to the team.
+    if (person.role !== "care_team") {
+      for (const task of this.careTasks) if (task.status === "open" && task.assigneeId === person.id) task.assigneeId = null;
+    }
     this.refreshSessions(person);
     this.record(actor, "write", "role", person.id, 2);
     return this.toPerson(person);
@@ -3065,17 +3092,20 @@ export class ChurchStore {
   }
 
   /** One person's care page: stage, tags, touches and their follow-ups. */
-  personCare(token: string, personId: string) {
+  personCare(token: string, personId: string, page: { before?: number | null } = {}) {
     const actor = this.actor(token);
     const person = this.carePerson(actor, personId, "view_people");
     const profile = this.careProfile(person);
     this.record(actor, "read", "person_care", person.id, 2);
+    const before = typeof page.before === "number" && page.before > 0 ? page.before : null;
     // Newest first. Reversing before the stable sort keeps same-millisecond touches newest-first too.
-    const touches = this.touches
-      .filter((row) => row.personId === person.id)
+    const matching = this.touches
+      .filter((row) => row.personId === person.id && (before === null || row.at < before))
       .reverse()
-      .sort((left, right) => right.at - left.at)
-      .slice(0, 100)
+      .sort((left, right) => right.at - left.at);
+    const hasMoreTouches = matching.length > TOUCH_PAGE;
+    const touches = matching
+      .slice(0, TOUCH_PAGE)
       .map((row) => ({
         id: row.id,
         kind: row.kind,
@@ -3111,8 +3141,17 @@ export class ChurchStore {
       doNotContact: profile.doNotContact,
       tags: this.tagChips(person.id),
       touches,
+      olderTouchesBefore: hasMoreTouches ? (touches[touches.length - 1]?.at ?? null) : null,
+      newerPage: before !== null,
       followUps,
+      openTasks: allows(actor.role, "work_care_tasks")
+        ? this.careTasks
+            .filter((task) => task.personId === person.id && task.status === "open")
+            .sort((left, right) => left.dueAt - right.dueAt)
+            .map((task) => this.taskView(actor, task))
+        : [],
       mayEdit,
+      mayRemove: allows(actor.role, "remove_people") && !isStaff(person.role) && person.id !== actor.personId,
       removableTagIds: mayEdit ? appliable.filter((tag) => applied.has(tag.id)).map((tag) => tag.id) : [],
       addableTags: mayEdit
         ? appliable.filter((tag) => !applied.has(tag.id)).map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind }))
@@ -3284,6 +3323,308 @@ export class ChurchStore {
       }
     }
     return unique;
+  }
+
+  // ---- Phase 2b: care engine -----------------------------------------------------------------
+
+  private careSeatIds(): string[] {
+    return [...this.people.values()]
+      .filter((person) => !person.deleted && person.role === "care_team")
+      .map((person) => person.id);
+  }
+
+  private playbookActive(definition: PlaybookDefinition): boolean {
+    return this.playbookRows.find((row) => row.id === definition.id)?.active ?? false;
+  }
+
+  /** Called when a next step comes in. Does nothing unless a pastor turned the matching playbook on. */
+  private startPlaybook(row: FollowUpRow) {
+    const trigger = triggerFor(row.kind);
+    if (!trigger) return;
+    const definition = DEFAULT_PLAYBOOKS.find((item) => item.trigger === trigger);
+    if (!definition || !this.playbookActive(definition)) return;
+    const person = row.personId ? this.people.get(row.personId) : undefined;
+    const doNotContact = person ? (this.profiles.get(person.id)?.doNotContact ?? false) : false;
+    const steps = row.contactConsent && !doNotContact ? definition.steps : [PRAYER_ONLY_STEP];
+    const seats = this.careSeatIds();
+    const open = new Map<string, number>();
+    for (const task of this.careTasks) {
+      if (task.status === "open" && task.assigneeId) open.set(task.assigneeId, (open.get(task.assigneeId) ?? 0) + 1);
+    }
+    // One seat owns the whole playbook for this person, so they hear from one friendly voice.
+    const assigneeId = pickCareSeat(seats, open);
+    steps.forEach((step, index) => {
+      this.careTasks.push({
+        id: newId("task"),
+        personId: row.personId,
+        followUpId: row.id,
+        playbookId: definition.id,
+        step: index,
+        title: step.title,
+        channel: step.channel,
+        assigneeId,
+        dueAt: dueAtFor(row.createdAt, step),
+        status: "open",
+        attempts: 0,
+        createdAt: row.createdAt,
+        completedAt: null,
+        completedBy: null,
+        noteCiphertext: "",
+      });
+    });
+  }
+
+  private playbookStep(task: CareTaskRow): PlaybookStep | null {
+    const definition = DEFAULT_PLAYBOOKS.find((item) => item.id === task.playbookId);
+    if (!definition) return null;
+    if (task.channel === "prayer" && task.title === PRAYER_ONLY_STEP.title) return PRAYER_ONLY_STEP;
+    return definition.steps[task.step] ?? null;
+  }
+
+  private taskView(actor: Actor, task: CareTaskRow) {
+    const now = this.now();
+    const followUp = task.followUpId ? this.followUps.find((row) => row.id === task.followUpId) : undefined;
+    const person = task.personId ? this.people.get(task.personId) : undefined;
+    const contact = followUp ? this.readJson(followUp.ciphertext) : null;
+    const name = person && !person.deleted ? person.displayName : textField(contact, "name") || "Guest";
+    const definition = DEFAULT_PLAYBOOKS.find((item) => item.id === task.playbookId);
+    const step = this.playbookStep(task);
+    const me = this.people.get(actor.personId);
+    this.record(actor, "read", "care_task", task.id, 3);
+    return {
+      id: task.id,
+      name,
+      personId: person && !person.deleted ? person.id : null,
+      why: definition ? `${definition.name}, ${step?.withinHours ? "within 24 hours" : `day ${step?.day ?? 0}`}` : "Care",
+      title: task.title,
+      channel: task.channel,
+      channelLabel: CHANNEL_LABELS[task.channel],
+      script: step
+        ? fillScript(step.script, { firstName: firstName(name), yourName: firstName(me?.displayName ?? "") })
+        : "",
+      consent: followUp?.contactConsent ?? Boolean(person),
+      // Contact details are care records: they open only after "confirm it's you", like the Care desk.
+      contactLocked: !this.unlocked(actor, "view_care_notes"),
+      email: followUp?.contactConsent && this.unlocked(actor, "view_care_notes") ? textField(contact, "email") : "",
+      phone: followUp?.contactConsent && this.unlocked(actor, "view_care_notes") ? textField(contact, "phone") : "",
+      dueAt: task.dueAt,
+      // The first salvation call is always a today job until it is late.
+      bucket: step?.withinHours && task.dueAt >= now ? ("today" as const) : bucketFor(task.dueAt, now),
+      overdue: task.status === "open" && task.dueAt < now,
+      status: task.status,
+      attempts: task.attempts,
+      assigneeId: task.assigneeId,
+      assigneeName: task.assigneeId ? (this.people.get(task.assigneeId)?.displayName ?? "") : "Nobody yet",
+      salvation: definition?.trigger === "salvation",
+    };
+  }
+
+  private mayWorkTask(actor: Actor, task: CareTaskRow): boolean {
+    if (actor.role === "pastor" || actor.role === "master_admin") return true;
+    return task.assigneeId === actor.personId;
+  }
+
+  /** Playbooks with their on/off state. Pastors and Master Admin can see them; only a pastor turns one on or off. */
+  playbooks(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_playbooks", this.now());
+    return {
+      mayToggle: actor.role === "pastor",
+      careSeats: this.careSeatIds().length,
+      playbooks: DEFAULT_PLAYBOOKS.map((definition) => {
+        const row = this.playbookRows.find((item) => item.id === definition.id);
+        return {
+          id: definition.id,
+          name: definition.name,
+          summary: definition.summary,
+          active: row?.active ?? false,
+          updatedAt: row?.updatedAt ?? null,
+          updatedBy: row ? (this.people.get(row.updatedBy)?.displayName ?? "") : "",
+          steps: definition.steps.map((step) => ({
+            when: step.withinHours ? `Within ${step.withinHours} hours` : step.day === 0 ? "Same day" : `Day ${step.day}`,
+            title: step.title,
+            channel: CHANNEL_LABELS[step.channel],
+            script: step.script,
+          })),
+        };
+      }),
+    };
+  }
+
+  setPlaybookActive(token: string, playbookId: string, active: boolean) {
+    const actor = this.actor(token);
+    authorize(actor, "manage_playbooks", this.now());
+    if (actor.role !== "pastor") throw new AccessError("forbidden", "Only a pastor turns playbooks on or off.");
+    const definition = DEFAULT_PLAYBOOKS.find((item) => item.id === playbookId);
+    if (!definition) throw new AccessError("not_found", "That playbook isn't here.");
+    const existing = this.playbookRows.find((row) => row.id === definition.id);
+    if (existing) {
+      existing.active = active;
+      existing.updatedBy = actor.personId;
+      existing.updatedAt = this.now();
+    } else {
+      this.playbookRows.push({
+        id: definition.id,
+        trigger: definition.trigger,
+        active,
+        updatedBy: actor.personId,
+        updatedAt: this.now(),
+      });
+    }
+    this.record(actor, "write", "playbook", definition.id, 1);
+    return { id: definition.id, active };
+  }
+
+  /** My tasks, or the whole team for pastors and Master Admin. Open tasks only, soonest first. */
+  careTasksFor(token: string, options: { team?: boolean } = {}) {
+    const actor = this.actor(token);
+    authorize(actor, "work_care_tasks", this.now());
+    const seesTeam = actor.role === "pastor" || actor.role === "master_admin";
+    const team = Boolean(options.team) && seesTeam;
+    const rows = this.careTasks
+      .filter((task) => task.status === "open" && (team || task.assigneeId === actor.personId))
+      .sort((left, right) => left.dueAt - right.dueAt);
+    return {
+      team,
+      mayViewTeam: seesTeam,
+      careSeats: this.careSeatIds().map((id) => ({ id, displayName: this.people.get(id)?.displayName ?? "" })),
+      tasks: rows.map((task) => this.taskView(actor, task)),
+    };
+  }
+
+  /** Numbers for the Overview "Today" card. */
+  careToday(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "work_care_tasks", this.now());
+    const now = this.now();
+    const seesTeam = actor.role === "pastor" || actor.role === "master_admin";
+    const mine = this.careTasks.filter((task) => task.status === "open" && task.assigneeId === actor.personId);
+    const team = this.careTasks.filter((task) => task.status === "open");
+    const count = (rows: CareTaskRow[], bucket: "overdue" | "today") =>
+      rows.filter((task) => bucketFor(task.dueAt, now) === bucket).length;
+    const weekStart = now - 7 * 24 * 60 * 60 * 1000;
+    const decisions = this.followUps.filter((row) => row.kind === "salvation" && row.createdAt >= weekStart);
+    const salvationTasks = this.careTasks.filter(
+      (task) => task.playbookId === "playbook-salvation" && task.step === 0 && task.channel !== "prayer",
+    );
+    const reachedIn24 = salvationTasks.filter(
+      (task) =>
+        task.status === "done" &&
+        task.completedAt !== null &&
+        task.completedAt <= task.dueAt &&
+        task.createdAt >= weekStart,
+    ).length;
+    this.record(actor, "read", "care_tasks", "today", 1);
+    return {
+      overdue: count(mine, "overdue"),
+      today: count(mine, "today"),
+      teamOverdue: seesTeam ? count(team, "overdue") : null,
+      teamOpen: seesTeam ? team.length : null,
+      unassigned: seesTeam ? team.filter((task) => !task.assigneeId).length : null,
+      decisionsThisWeek: decisions.length,
+      decisionsWaiting: decisions.filter((row) => row.status === "new").length,
+      reachedIn24,
+      salvationLate: team.filter(
+        (task) => task.playbookId === "playbook-salvation" && task.step === 0 && task.dueAt < now,
+      ).length,
+      activePlaybooks: DEFAULT_PLAYBOOKS.filter((item) => this.playbookActive(item)).map((item) => item.name),
+    };
+  }
+
+  /** Done, Couldn't reach (try again tomorrow, up to 3 tries), or Skip. Done on a person's task logs a touch. */
+  completeTask(token: string, taskId: string, input: { outcome: string; note?: string }) {
+    const actor = this.actor(token);
+    authorize(actor, "work_care_tasks", this.now());
+    const task = this.careTasks.find((row) => row.id === taskId);
+    if (!task || task.status !== "open") throw new AccessError("not_found", "That task isn't open.");
+    if (!this.mayWorkTask(actor, task)) throw new AccessError("forbidden", "That task belongs to someone else.");
+    if (!isTaskOutcome(input.outcome)) throw new AccessError("invalid", "Choose Done, Couldn't reach, or Skip.");
+    const note = (input.note ?? "").trim();
+    if (note.length > NOTE_LIMIT) throw new AccessError("invalid", `Keep the note under ${NOTE_LIMIT} characters.`);
+    const now = this.now();
+    if (note) task.noteCiphertext = encryptString(JSON.stringify({ note }), this.key);
+    if (input.outcome === "unreached") {
+      task.attempts += 1;
+      if (task.attempts >= MAX_ATTEMPTS) {
+        task.status = "unreached";
+        task.completedAt = now;
+        task.completedBy = actor.personId;
+      } else {
+        task.dueAt = now + 24 * 60 * 60 * 1000;
+      }
+    } else {
+      task.status = input.outcome;
+      task.completedAt = now;
+      task.completedBy = actor.personId;
+    }
+    const followUp = task.followUpId ? this.followUps.find((row) => row.id === task.followUpId) : undefined;
+    if (followUp && followUp.status === "new" && input.outcome === "done" && task.channel !== "prayer") {
+      followUp.status = "contacted";
+    }
+    // The person's timeline gets the touch too, so People and My tasks agree.
+    const person = task.personId ? this.people.get(task.personId) : undefined;
+    if (person && !person.deleted && input.outcome !== "skipped") {
+      const kind: TouchKind = task.channel === "prayer" ? "prayer" : task.channel;
+      const outcome: TouchOutcome =
+        input.outcome === "unreached" ? "no_answer" : task.channel === "prayer" ? "prayed" : "reached";
+      const profile = this.writableProfile(person, actor);
+      const touch: TouchRow = {
+        id: newId("touch"),
+        personId: person.id,
+        kind,
+        outcome,
+        noteCiphertext: note ? encryptString(JSON.stringify({ note }), this.key) : "",
+        byId: actor.personId,
+        at: now,
+      };
+      this.touches.push(touch);
+      if (countsAsContact(kind) && outcome !== "no_answer") profile.lastContactAt = now;
+    }
+    this.record(actor, "write", "care_task", task.id, 2);
+    return { id: task.id, status: task.status, attempts: task.attempts, dueAt: task.dueAt };
+  }
+
+  /**
+   * A pastor or Master Admin removes someone who is not on staff (a duplicate, a test entry, someone who asked).
+   * Needs "confirm it's you". Their care records, touches and tasks are erased; the audit log keeps the removal.
+   */
+  removePerson(token: string, personId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "remove_people", this.now());
+    const person = this.people.get(personId);
+    if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    if (person.id === actor.personId) throw new AccessError("invalid", "Use Delete my account in the app for yourself.");
+    if (isStaff(person.role) || !isChurchRole(person.role)) {
+      throw new AccessError("forbidden", "Staff seats are changed on Roles first. Only members and volunteers are removed here.");
+    }
+    this.eraseOwnedData(person.id, person.householdId);
+    person.deleted = true;
+    person.email = "";
+    person.phone = "";
+    person.passwordHash = null;
+    person.totpSecret = null;
+    person.displayName = "Former member";
+    person.listedInDirectory = false;
+    for (const [tokenKey, session] of this.sessions) if (session.personId === person.id) this.sessions.delete(tokenKey);
+    this.record(actor, "write", "person_delete", person.id, 3);
+    return { id: person.id, removed: true as const };
+  }
+
+  /** Pastors and Master Admin move a task to another care team seat. */
+  reassignTask(token: string, taskId: string, assigneeId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "work_care_tasks", this.now());
+    if (actor.role !== "pastor" && actor.role !== "master_admin") {
+      throw new AccessError("forbidden", "Ask a pastor to move this task.");
+    }
+    const task = this.careTasks.find((row) => row.id === taskId && row.status === "open");
+    if (!task) throw new AccessError("not_found", "That task isn't open.");
+    if (!this.careSeatIds().includes(assigneeId)) {
+      throw new AccessError("invalid", "Tasks go only to care team seats.");
+    }
+    task.assigneeId = assigneeId;
+    this.record(actor, "write", "care_task", task.id, 2);
+    return { id: task.id, assigneeId };
   }
 
   updateFollowUp(
@@ -3490,6 +3831,7 @@ export class ChurchStore {
       sample: false,
     };
     this.followUps.push(row);
+    this.startPlaybook(row);
     return row;
   }
 
@@ -4570,6 +4912,8 @@ export class ChurchStore {
       tags: this.tags.map((row) => ({ ...row, leaderIds: [...row.leaderIds] })),
       personTags: this.personTags.map((row) => ({ ...row })),
       touches: this.touches.map((row) => ({ ...row })),
+      playbooks: this.playbookRows.map((row) => ({ ...row })),
+      careTasks: this.careTasks.map((row) => ({ ...row })),
     };
   }
 
@@ -4654,6 +4998,8 @@ export class ChurchStore {
     this.tags.splice(0, this.tags.length, ...(document.tags ?? []).map((row) => ({ ...row, leaderIds: [...(row.leaderIds ?? [])] })));
     this.personTags.splice(0, this.personTags.length, ...(document.personTags ?? []).map((row) => ({ ...row })));
     this.touches.splice(0, this.touches.length, ...(document.touches ?? []).map((row) => ({ ...row })));
+    this.playbookRows.splice(0, this.playbookRows.length, ...(document.playbooks ?? []).map((row) => ({ ...row })));
+    this.careTasks.splice(0, this.careTasks.length, ...(document.careTasks ?? []).map((row) => ({ ...row })));
   }
 
   installDocument(document: StoreDocument): void {
@@ -4737,6 +5083,16 @@ export class ChurchStore {
     for (let i = this.touches.length - 1; i >= 0; i -= 1)
       if (this.touches[i]?.personId === personId) this.touches.splice(i, 1);
     for (const tag of this.tags) tag.leaderIds = tag.leaderIds.filter((id) => id !== personId);
+    const liveFollowUps = new Set(this.followUps.map((row) => row.id));
+    for (let i = this.careTasks.length - 1; i >= 0; i -= 1) {
+      const task = this.careTasks[i];
+      if (!task) continue;
+      if (task.personId === personId || (task.followUpId !== null && !liveFollowUps.has(task.followUpId))) {
+        this.careTasks.splice(i, 1);
+      } else if (task.assigneeId === personId) {
+        task.assigneeId = null;
+      }
+    }
     for (let i = this.amens.length - 1; i >= 0; i -= 1)
       if (this.amens[i]?.personId === personId) this.amens.splice(i, 1);
     for (let i = this.testimonies.length - 1; i >= 0; i -= 1)

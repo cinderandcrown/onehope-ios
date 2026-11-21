@@ -19,6 +19,7 @@ export {
   type TouchKind,
   type TouchOutcome,
 } from "./people-care";
+export { CHANNEL_LABELS, DEFAULT_PLAYBOOKS, MAX_ATTEMPTS, type TaskChannel, type TaskOutcome } from "./care-engine";
 export { churchImages, churchMedia, loadMedia, httpsURL, type ChurchImages, type ChurchMedia } from "./media";
 export * from "./contracts";
 export * from "./domain";

@@ -69,6 +69,8 @@ export type StoreScope = {
   profile?: RequestProfile;
   /** Omit to load every table. An empty list loads nothing. */
   tables?: readonly string[];
+  /** Load this page of one person's timeline from Postgres (person page). */
+  touchPage?: { personId: string; before?: number | null } | null;
 };
 
 /**
@@ -88,6 +90,7 @@ export async function withStore<T>(
       profile: scope.profile ?? "request",
       sessionToken: scope.token ?? null,
       tables: scope.tables,
+      touchPage: scope.touchPage ?? null,
     });
   } finally {
     client.release();
@@ -150,12 +153,19 @@ export function storeErrorResponse(error: unknown): { status: number; body: Reco
   return null;
 }
 
+type RequestOptions = {
+  profile?: RequestProfile;
+  sessionToken?: string | null;
+  tables?: readonly string[];
+  touchPage?: { personId: string; before?: number | null } | null;
+};
+
 export async function runRequest<T>(
   sql: SqlClient,
   fn: (store: ChurchStore) => Promise<T> | T,
   host: string | null,
   env: NodeJS.ProcessEnv = process.env,
-  options: { profile?: RequestProfile; sessionToken?: string | null; tables?: readonly string[] } = {},
+  options: RequestOptions = {},
 ): Promise<T> {
   return retryWrite(() => runRequestOnce(sql, fn, host, env, options));
 }
@@ -165,7 +175,7 @@ async function runRequestOnce<T>(
   fn: (store: ChurchStore) => Promise<T> | T,
   host: string | null,
   env: NodeJS.ProcessEnv,
-  options: { profile?: RequestProfile; sessionToken?: string | null; tables?: readonly string[] },
+  options: RequestOptions,
 ): Promise<T> {
   const mode = env.TENANT_MODE ?? "pooled";
   await sql.query("BEGIN");
@@ -198,6 +208,7 @@ async function runRequestOnce<T>(
       sessionToken: options.sessionToken ?? null,
       platformKey: loadConfig(env).fieldEncryptionKey,
       tables: options.tables,
+      touchPage: options.touchPage ?? null,
     };
     const loaded = await loadDocument(sql, tenantId, loadOptions);
     store.replaceDocument(structuredClone(loaded));

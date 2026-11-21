@@ -52,6 +52,7 @@ export async function importLegacySnapshot(
     const current = await loadDocument(sql, "onehope", {
       includeAudit: true,
       allSessions: true,
+      allTouches: true,
       platformKey: key,
     });
     await saveDocumentDiff(sql, "onehope", current, parsed, {
@@ -63,6 +64,7 @@ export async function importLegacySnapshot(
     const loaded = await loadDocument(sql, "onehope", {
       includeAudit: true,
       allSessions: true,
+      allTouches: true,
       platformKey: key,
     });
     const expected = await documentCounts(parsed);

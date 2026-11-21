@@ -83,6 +83,18 @@ Who sees whom:
 
 Nothing on People sends a message. Salvation and first-visit playbooks are not part of this slice; they will arrive switched off until a pastor turns them on.
 
+### Care tasks and playbooks (Phase 2b)
+
+- **Playbooks** (pastors): "Said yes to Jesus" and "First visit". **Both start off.** Only a pastor can turn one on or off. Turning one on affects new next steps only; turning it off stops new tasks and leaves open ones on the list.
+- When a playbook is on, a next step from the app (Know Jesus "I said yes", Plan a Visit, "New to One Hope") becomes a short list of tasks. **Tasks go only to care team seats**, shared fairly (whoever has fewer open tasks). If there is no care team seat yet, tasks wait with "Nobody yet" and a pastor moves them.
+- The first salvation call is due within 24 hours and turns red on Overview after that.
+- If someone did not ask to be contacted (or asked us to stop), the only task is to pray for them.
+- **My tasks**: grouped Overdue, Today, This week, Later. Open **Suggested words**, tap **Copy the words**, and call or text from your own phone. Nothing is sent for you. Then tap **Done**, **Couldn't reach** (back tomorrow, up to three tries), or **Skip**. Done and Couldn't reach also go on the person's timeline.
+- Pastors see **Whole team** and can **Move task** to another care team seat. Phone and email on tasks open after "confirm it's you", like Care.
+- **Overview → Today** shows your overdue and due-today counts, decisions this week (how many reached within 24 hours), and for pastors the whole team.
+- A person's timeline shows 50 touches at a time with **Older** and **Newest**.
+- **Remove from One Hope** (pastors and Master Admin, after confirming it's you) is on a member's or volunteer's page, for duplicates, test entries, or someone who asked. Staff seats are changed on Roles first.
+
 ## 7. Serving
 
 Open **Serving**. Choose a person and a spot such as Door or Kids. Tap **Ask them to serve**. **Undo** works while it still says they are waiting. Nothing is texted.
