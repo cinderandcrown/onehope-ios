@@ -235,6 +235,29 @@ test("kids clock-in state is loaded with the kids request", async () => {
   assert.equal(duty.onDuty, true);
 });
 
+test("signing out keeps the shared sample session, and a missing one is recreated", async () => {
+  const db = new PGlite();
+  const sql = client(db);
+  await migrate(sql);
+  await seedTenantIfEmpty(sql, "onehope", { ...process.env, ONEHOPE_SAMPLE_DATA: "true" });
+  await runRequest(sql, (store) => store.logout("session-staff-demo"), "localhost", process.env, {
+    sessionToken: "session-staff-demo",
+  });
+  const kept = await sql.query<{ token: string }>("SELECT token FROM sessions WHERE token = $1", [
+    "session-staff-demo",
+  ]);
+  assert.equal(kept.rows.length, 1);
+  await sql.query("DELETE FROM sessions WHERE token = $1", ["session-member-demo"]);
+  const role = await runRequest(sql, (store) => store.me("session-member-demo").role, "localhost", process.env, {
+    sessionToken: "session-member-demo",
+  });
+  assert.equal(role, "member");
+  const restored = await sql.query<{ token: string }>("SELECT token FROM sessions WHERE token = $1", [
+    "session-member-demo",
+  ]);
+  assert.equal(restored.rows.length, 1);
+});
+
 test("home still loads when the new staff tables are not migrated yet", async () => {
   assert.equal(isMissingRelation({ code: "42P01", message: 'relation "featured_messages" does not exist' }), true);
   const db = new PGlite();

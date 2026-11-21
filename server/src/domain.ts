@@ -158,6 +158,7 @@ const ROLE_PRIVILEGE: Record<Role, number> = {
 
 export function mayIssueInvite(issuerRole: Role, targetRole: Role): boolean {
   if (targetRole === "master_admin" || targetRole === "pastor") return issuerRole === "master_admin";
+  if (issuerRole === "team_leader") return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader;
   return ROLE_PRIVILEGE[targetRole] <= ROLE_PRIVILEGE[issuerRole];
 }
 

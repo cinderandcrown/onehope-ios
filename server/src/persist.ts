@@ -1,5 +1,6 @@
 import { Pool as NeonPool, type PoolClient as NeonClient, neonConfig } from "@neondatabase/serverless";
 import { Pool as PgPool, type PoolClient as PgClient } from "pg";
+import { WebSocket as NeonSocket } from "ws";
 
 import { ChurchStore } from "./store";
 import {
@@ -30,16 +31,30 @@ export function databaseUrl(): string | null {
   return url.length > 0 ? url : null;
 }
 
-/** Neon hosts use the Neon driver. A local Postgres URL uses node-postgres. */
+/** Neon hosts use the Neon driver. A local Postgres URL uses node-postgres unless ONEHOPE_PG_DRIVER=neon. */
 export function isLocalPostgres(url: string): boolean {
   return /localhost|127\.0\.0\.1/.test(url);
 }
 
+function useNeonDriver(url: string): boolean {
+  return process.env.ONEHOPE_PG_DRIVER === "neon" || !isLocalPostgres(url);
+}
+
+/** Point the Neon driver at a local websocket proxy that tunnels to Postgres. */
+function configureLocalNeonProxy(): void {
+  neonConfig.webSocketConstructor = NeonSocket as unknown as typeof WebSocket;
+  neonConfig.useSecureWebSocket = false;
+  neonConfig.forceDisablePgSSL = true;
+  const proxy = process.env.ONEHOPE_PG_WS_PROXY ?? "127.0.0.1:4444";
+  neonConfig.wsProxy = `${proxy}/v2`;
+}
+
 function sharedPool(url: string): SqlPool {
   if (!pool) {
-    pool = isLocalPostgres(url)
-      ? new PgPool({ connectionString: url, max: 5 })
-      : new NeonPool({ connectionString: url, max: 5 });
+    if (useNeonDriver(url) && isLocalPostgres(url)) configureLocalNeonProxy();
+    pool = useNeonDriver(url)
+      ? new NeonPool({ connectionString: url, max: 5 })
+      : new PgPool({ connectionString: url, max: 5 });
   }
   return pool;
 }

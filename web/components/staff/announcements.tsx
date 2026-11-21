@@ -2,6 +2,7 @@ import {
   ANNOUNCEMENT_TEMPLATES,
   chicagoInputValue,
   formatChicago,
+  isAccessError,
   type ChurchStore,
 } from "@onehope/server";
 
@@ -30,7 +31,20 @@ export function AnnouncementsDesk({
   token: string;
   query: Record<string, string | string[] | undefined>;
 }) {
-  const cards = store.staffAnnouncements(token);
+  let cards: ReturnType<ChurchStore["staffAnnouncements"]>;
+  try {
+    cards = store.staffAnnouncements(token);
+  } catch (error) {
+    if (isAccessError(error) && error.code === "forbidden") {
+      return (
+        <section>
+          <h1>Home cards</h1>
+          <p>Posting home cards is for pastors and team leaders.</p>
+        </section>
+      );
+    }
+    throw error;
+  }
   const live = cards.filter((card) => card.live && !card.sample);
   const notice = one(query, "saved")
     ? "Saved. Home updates the next time someone opens the app."

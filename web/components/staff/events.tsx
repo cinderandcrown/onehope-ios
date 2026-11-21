@@ -3,6 +3,7 @@ import {
   SERVE_TEMPLATES,
   chicagoInputValue,
   formatChicago,
+  isAccessError,
   type ChurchStore,
 } from "@onehope/server";
 
@@ -37,8 +38,22 @@ export function EventsDesk({
   token: string;
   query: Record<string, string | string[] | undefined>;
 }) {
-  const events = store.staffEvents(token);
-  const serveDays = store.staffServeDays(token);
+  let events: ReturnType<ChurchStore["staffEvents"]>;
+  let serveDays: ReturnType<ChurchStore["staffServeDays"]>;
+  try {
+    events = store.staffEvents(token);
+    serveDays = store.staffServeDays(token);
+  } catch (error) {
+    if (isAccessError(error) && error.code === "forbidden") {
+      return (
+        <section>
+          <h1>Events</h1>
+          <p>Posting events is for pastors and team leaders.</p>
+        </section>
+      );
+    }
+    throw error;
+  }
   const notice = noticeFor(query);
   return (
     <section>

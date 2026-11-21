@@ -34,7 +34,7 @@ export async function PushDesk({
     return (
       <section>
         <h1>Push</h1>
-        <p>Writing a notification is for pastors.</p>
+        <p>Writing a notification is for pastors and team leaders.</p>
       </section>
     );
   }

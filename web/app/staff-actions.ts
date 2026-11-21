@@ -48,6 +48,9 @@ function windowFrom(formData: FormData): { startsAt: number | null; endsAt: numb
   if ((startsRaw && startsAt === null) || (endsRaw && endsAt === null)) {
     redirect("/communications?error=time");
   }
+  if (startsAt != null && endsAt != null && endsAt <= startsAt) {
+    redirect("/communications?error=time");
+  }
   return { startsAt, endsAt };
 }
 

@@ -86,9 +86,20 @@ jobs:
       - name: Staff desk on Postgres
         working-directory: web
         env:
-          DATABASE_URL: postgres://onehope:onehope@localhost:5432/onehope
+          DATABASE_URL: postgres://onehope:onehope@127.0.0.1:5432/onehope
           ONEHOPE_SAMPLE_DATA: "true"
-        run: npx playwright install --with-deps chromium && npx playwright test --config playwright.postgres.config.ts
+          ONEHOPE_PG_DRIVER: neon
+          ONEHOPE_PG_WS_PROXY: 127.0.0.1:4444
+          ONEHOPE_PG_WS_PORT: "4444"
+        run: |
+          node ../server/scripts/pg-ws-proxy.mjs &
+          for _ in $(seq 1 25); do
+            if (echo >/dev/tcp/127.0.0.1/4444) >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.2
+          done
+          npx playwright install --with-deps chromium && npx playwright test --config playwright.postgres.config.ts
 
       - uses: actions/upload-artifact@v4
         if: always()

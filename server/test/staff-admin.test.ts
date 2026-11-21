@@ -589,6 +589,14 @@ test("serving can be assigned and undone only while it is still waiting", async 
     () => store.undoServing(lead, kept.id),
     (error: AccessError) => error.code === "invalid",
   );
+  assert.throws(
+    () => store.respond(harper, kept.id, false),
+    (error: AccessError) => error.code === "invalid" && /already answered/.test(error.message),
+  );
+  assert.throws(
+    () => store.assignServing(lead, { personId: "person-harper", position: "Kids" }),
+    (error: AccessError) => error.code === "invalid" && /already has this spot/.test(error.message),
+  );
 });
 
 test("a pastor can feature a YouTube message and a member cannot", async () => {
@@ -911,9 +919,13 @@ test("a team leader can add, code a peer, and edit Home cards, but not a pastor 
 
   const peer = store.addPerson(lead, { displayName: "Pat Leader", email: "pat.leader@example.com" });
   store.changeRole(lead, { personId: peer.id, role: "team_leader" });
-  const coded = store.issueInvite(leader, "pat.leader@example.com");
-  assert.ok(coded.inviteToken.length >= 8);
-  assert.equal(store.staffPeople(leader).find((person) => person.id === peer.id)?.canInvite, true);
+  const memberCode = store.issueInvite(leader, "sam.peer@example.com");
+  assert.ok(memberCode.inviteToken.length >= 8);
+  assert.throws(
+    () => store.issueInvite(leader, "pat.leader@example.com"),
+    (error: AccessError) => error.code === "forbidden" && /below your own level/.test(error.message),
+  );
+  assert.equal(store.staffPeople(leader).find((person) => person.id === peer.id)?.canInvite, false);
 
   assert.throws(
     () => store.issueInvite(leader, "reese@sample.onehope"),
@@ -923,7 +935,7 @@ test("a team leader can add, code a peer, and edit Home cards, but not a pastor 
   assert.equal(store.me(leader).role, "team_leader");
   assert.throws(
     () => store.changeRole(leader, { personId: peer.id, role: "volunteer" }),
-    (error: AccessError) => error.code === "forbidden",
+    (error: AccessError) => error.code === "forbidden" && /below your own level/.test(error.message),
   );
   assert.throws(
     () => store.changeRole(leader, { personId: "person-gray", role: "team_leader" }),
@@ -973,4 +985,29 @@ test("the shared sample sessions do not idle out", () => {
   );
   now += 13 * 60 * 60 * 1000;
   assert.equal(store.me("session-member-demo").role, "member");
+  store.logout("session-staff-demo");
+  store.logout("session-member-demo");
+  assert.equal(store.me("session-staff-demo").role, "pastor");
+  assert.equal(store.me("session-member-demo").role, "member");
+});
+
+test("a production sign-in still times out even with the sample user agent", () => {
+  let now = Date.parse("2026-11-17T18:00:00.000Z");
+  const key = Buffer.alloc(32, 7).toString("base64");
+  const store = new ChurchStore(
+    loadConfig({ ONEHOPE_ENV: "production", FIELD_ENCRYPTION_KEY: key }),
+    { now: () => now, memoryForTests: true },
+  );
+  const session = store.login({
+    email: "reese@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "staff-demo",
+  });
+  store.verifyMfa(session.token, totpCode(decodeBase32(SAMPLE_TOTP_BASE32), now));
+  now += 16 * 60 * 1000;
+  assert.throws(
+    () => store.me(session.token),
+    (error: AccessError) => error.code === "session_expired",
+  );
 });

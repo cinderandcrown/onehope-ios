@@ -829,6 +829,7 @@ export class ChurchStore {
   }
 
   logout(token: string) {
+    if (this.config.env === "demo" && (token === "session-staff-demo" || token === "session-member-demo")) return;
     this.sessions.delete(token);
   }
 
@@ -1297,6 +1298,7 @@ export class ChurchStore {
     if (!item) throw new AccessError("not_found", "That assignment isn't here.");
     if (item.personId !== actor.personId)
       throw new AccessError("forbidden", "You can answer your own assignment.");
+    if (item.status !== "pending") throw new AccessError("invalid", "You already answered that ask.");
     item.status = accept ? "accepted" : "declined";
     return { ...item };
   }
@@ -2064,6 +2066,13 @@ export class ChurchStore {
       SERVING_SPOTS.find((spot) => spot.label.toLowerCase() === position.toLowerCase());
     const label = known?.label ?? position;
     if (!label) throw new AccessError("invalid", "Name the spot, like Door or Kids.");
+    const duplicate = this.schedule.some(
+      (row) =>
+        row.personId === person.id &&
+        row.status !== "declined" &&
+        row.position.toLowerCase() === label.toLowerCase(),
+    );
+    if (duplicate) throw new AccessError("invalid", "That person already has this spot.");
     const row = {
       id: newId("serve"),
       personId: person.id,
@@ -2386,7 +2395,9 @@ export class ChurchStore {
     if (!mayChangeRole(actor.role, person.role, input.role)) {
       throw new AccessError(
         "forbidden",
-        "You can only give a role at or below your own, never a pastor or Master Admin seat.",
+        actor.role === "team_leader"
+          ? "You can only change a role below your own level."
+          : "You can only give a role at or below your own, never a pastor or Master Admin seat.",
       );
     }
     if (actor.role === "team_leader") {
@@ -3206,7 +3217,9 @@ export class ChurchStore {
     }
     const now = this.now();
     const refreshAfter = 60_000;
-    const sampleSession = session.userAgent === "staff-demo" || session.userAgent === "member-demo";
+    const sampleSession =
+      this.config.env === "demo" &&
+      (session.userAgent === "staff-demo" || session.userAgent === "member-demo");
     if (
       sampleSession &&
       session.userAgent === "staff-demo" &&
@@ -3231,6 +3244,13 @@ export class ChurchStore {
   }
 
   private session(token: string) {
+    if (
+      this.config.env === "demo" &&
+      (token === "session-staff-demo" || token === "session-member-demo") &&
+      !this.sessions.has(token)
+    ) {
+      this.ensureDemoSession(token);
+    }
     const session = this.sessions.get(token);
     if (!session) throw new AccessError("unauthenticated", "Sign in again.");
     return session;
@@ -3510,7 +3530,9 @@ export class ChurchStore {
         ? "Only a Master Admin can make a code for a Master Admin seat."
         : targetRole === "pastor"
           ? "Only a Master Admin can make a code for a pastor seat."
-          : "You can't make a code for someone above your level.",
+          : issuerRole === "team_leader"
+            ? "You can only make a code for a role below your own level."
+            : "You can't make a code for someone above your level.",
     );
   }
 
@@ -4323,10 +4345,15 @@ export class ChurchStore {
   }
 
   private ensureDemoSessions() {
-    if (this.config.env !== "demo") return;
-    if (!this.sessions.has("session-member-demo")) {
-      this.sessions.set("session-member-demo", {
-        token: "session-member-demo",
+    this.ensureDemoSession("session-member-demo");
+    this.ensureDemoSession("session-staff-demo");
+  }
+
+  private ensureDemoSession(token: string) {
+    if (this.config.env !== "demo" || this.sessions.has(token)) return;
+    if (token === "session-member-demo") {
+      this.sessions.set(token, {
+        token,
         personId: "person-avery",
         createdAt: this.now(),
         lastActivity: this.now(),
@@ -4337,9 +4364,9 @@ export class ChurchStore {
         sample: true,
       });
     }
-    if (!this.sessions.has("session-staff-demo")) {
-      this.sessions.set("session-staff-demo", {
-        token: "session-staff-demo",
+    if (token === "session-staff-demo") {
+      this.sessions.set(token, {
+        token,
         personId: "person-reese",
         createdAt: this.now(),
         lastActivity: this.now(),
