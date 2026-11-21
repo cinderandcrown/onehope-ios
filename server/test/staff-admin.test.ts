@@ -968,6 +968,16 @@ test("a team leader can add, code a peer, and edit Home cards, but not a pastor 
   assert.equal(fromMaster.email, "future.pastor@example.com");
 });
 
+test("a member session cannot open the staff desk", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const guest = member(store);
+  assert.throws(
+    () => store.staffMe(guest),
+    (error: AccessError) => error.code === "forbidden" && /church staff/.test(error.message),
+  );
+  assert.equal(store.staffMe(pastor(store)).role, "pastor");
+});
+
 test("the shared sample sessions do not idle out", () => {
   let now = Date.parse("2026-11-17T18:00:00.000Z");
   const store = new ChurchStore(loadConfig({}), { now: () => now });

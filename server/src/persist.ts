@@ -45,6 +45,8 @@ function configureLocalNeonProxy(): void {
   neonConfig.webSocketConstructor = NeonSocket as unknown as typeof WebSocket;
   neonConfig.useSecureWebSocket = false;
   neonConfig.forceDisablePgSSL = true;
+  // The pipelined handshake sends a cleartext password. Local Postgres 16 only accepts SCRAM.
+  neonConfig.pipelineConnect = false;
   const proxy = process.env.ONEHOPE_PG_WS_PROXY ?? "127.0.0.1:4444";
   neonConfig.wsProxy = `${proxy}/v2`;
 }

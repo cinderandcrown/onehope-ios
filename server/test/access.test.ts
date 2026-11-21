@@ -253,6 +253,12 @@ test("sample shortcut is labeled and refused in production", () => {
     (error: AccessError) => error.code === "forbidden",
   );
   assert.throws(() => loadConfig({ ONEHOPE_ENV: "production" }));
+  assert.equal(loadConfig({}).env, "demo");
+  assert.equal(loadConfig({ VERCEL_ENV: "preview" }).env, "demo");
+  assert.equal(loadConfig({ ONEHOPE_ENV: "demo", VERCEL_ENV: "production" }).env, "demo");
+  const productionKey = Buffer.alloc(32, 9).toString("base64");
+  assert.equal(loadConfig({ VERCEL_ENV: "production", FIELD_ENCRYPTION_KEY: productionKey }).env, "production");
+  assert.throws(() => loadConfig({ VERCEL_ENV: "production" }));
 });
 
 test("deletion removes a member's private rows and leaves the other household intact", () => {

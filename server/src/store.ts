@@ -838,6 +838,15 @@ export class ChurchStore {
     return this.toPerson(this.requirePerson(actor.personId));
   }
 
+  /** The staff web desk. A member session is not enough. */
+  staffMe(token: string) {
+    const person = this.me(token);
+    if (!isStaff(person.role)) {
+      throw new AccessError("forbidden", "This desk is for church staff.");
+    }
+    return person;
+  }
+
   alertsFor(token: string) {
     const actor = this.actor(token);
     return this.alerts.filter((alert) => alert.personId === actor.personId).map((alert) => ({ ...alert }));

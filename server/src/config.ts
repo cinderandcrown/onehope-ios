@@ -47,7 +47,13 @@ export function demoFieldKey(): Buffer {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const mode = env.ONEHOPE_ENV === "production" ? "production" : "demo";
+  const requested = env.ONEHOPE_ENV;
+  const mode =
+    requested === "production" || requested === "demo"
+      ? requested
+      : env.VERCEL_ENV === "production"
+        ? "production"
+        : "demo";
   const rawKey = env.FIELD_ENCRYPTION_KEY ?? "";
   if (mode === "production" && rawKey.length === 0) {
     throw new Error("FIELD_ENCRYPTION_KEY is required when ONEHOPE_ENV=production.");

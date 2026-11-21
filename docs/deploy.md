@@ -9,7 +9,7 @@ Set these in the Vercel project (Production and Preview). Names only; values sta
 | Name                           | Required                    | Notes                                                                                                                |
 | ------------------------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`                 | Yes, for a shared live demo | Neon pooled connection string, or the Supabase transaction pooler URI. `POSTGRES_URL` is accepted as the same thing. |
-| `ONEHOPE_ENV`                  | Yes                         | `demo` or `production`. Production requires `FIELD_ENCRYPTION_KEY`.                                                  |
+| `ONEHOPE_ENV`                  | Yes                         | Production hosts must set `production`. Unset means demo, except a Vercel production deployment, which is treated as production and will not boot without `FIELD_ENCRYPTION_KEY`. |
 | `MASTER_ADMIN_PRIMARY_EMAIL`   | No                          | Defaults to `nicholas.will@cinderandcrown.com`.                                                                      |
 | `MASTER_ADMIN_PRIMARY_NAME`    | No                          | Defaults to `Nicholas Will`.                                                                                         |
 | `MASTER_ADMIN_SECONDARY_NAME`  | No                          | Defaults to `Lead Pastor`.                                                                                           |
@@ -26,7 +26,7 @@ Leave Stripe, Planning Center, Resend, Twilio, Facebook, and Apple Pay flags uns
 
 1. Create a Vercel project from `cinderandcrown/onehope-ios`. Root directory is `web`. The install still uses the workspace lockfile at the repository root.
 2. Provision Postgres. On this Vercel team the preferred path is the Neon marketplace integration (`vercel integration add neon`), which writes `DATABASE_URL` for you. Supabase is the other preferred host: create a project, run nothing in the Data API for these tables, and paste the pooler URI into `DATABASE_URL`.
-3. Set `ONEHOPE_ENV`. Do not set `MASTER_ADMIN_SECONDARY_EMAIL` until the Lead Pastor seat is real. Leave `CONTENT_SALVATION_BAPTISM_APPROVED` unset.
+3. Set `ONEHOPE_ENV=production` on the production host and `ONEHOPE_ENV=demo` on preview. Do not leave it unset on production. Do not set `MASTER_ADMIN_SECONDARY_EMAIL` until the Lead Pastor seat is real. Leave `CONTENT_SALVATION_BAPTISM_APPROVED` unset.
 4. From a machine that has the database URL in its environment, apply migrations and import the existing blob. Read `docs/runbooks/phase-1-migration.md` before production.
 
    ```bash
