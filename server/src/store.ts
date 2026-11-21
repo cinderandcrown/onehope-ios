@@ -183,6 +183,9 @@ type EventRow = {
   sample: boolean;
   /** Registration that lives on Church Center. */
   url?: string;
+  cancelled?: boolean;
+  /** A person changed this row, so the catalog must not replace it. */
+  staffEdited?: boolean;
 };
 
 type PrayerRow = {
@@ -229,6 +232,7 @@ type OutreachRow = {
   start: number;
   end: number;
   sample: boolean;
+  cancelled?: boolean;
 };
 type CoffeeOrderRow = {
   id: string;
@@ -913,21 +917,72 @@ export class ChurchStore {
     }));
   }
 
-  createEvent(token: string, input: { title: string; location: string; start: number; end: number }) {
+  createEvent(
+    token: string,
+    input: {
+      title: string;
+      location: string;
+      start: number;
+      end: number;
+      description?: string;
+      capacity?: number | null;
+    },
+  ) {
     const actor = this.requireEditor(token);
-    const event = {
-      id: newId("event"),
-      title: input.title.trim(),
-      start: input.start,
-      end: input.end,
-      location: input.location.trim(),
-      description: "",
-      capacity: null,
-      sample: false,
-    };
+    const event = this.eventFrom(input);
     this.events.push(event);
     this.record(actor, "write", "event", event.id, 0);
-    return event;
+    return { ...event };
+  }
+
+  updateEvent(
+    token: string,
+    id: string,
+    input: {
+      title: string;
+      location: string;
+      start: number;
+      end: number;
+      description?: string;
+      capacity?: number | null;
+    },
+  ) {
+    const actor = this.requireEditor(token);
+    const current = this.events.find((event) => event.id === id);
+    if (!current) throw new AccessError("not_found", "That event isn't here.");
+    const next = this.eventFrom(input, id);
+    current.title = next.title;
+    current.location = next.location;
+    current.start = next.start;
+    current.end = next.end;
+    current.description = next.description;
+    current.capacity = next.capacity;
+    current.staffEdited = true;
+    this.record(actor, "write", "event", current.id, 0);
+    return { ...current };
+  }
+
+  cancelEvent(token: string, id: string, cancelled: boolean) {
+    const actor = this.requireEditor(token);
+    const current = this.events.find((event) => event.id === id);
+    if (!current) throw new AccessError("not_found", "That event isn't here.");
+    current.cancelled = cancelled;
+    current.staffEdited = true;
+    this.record(actor, "write", "event", current.id, 0);
+    return { id: current.id, cancelled: current.cancelled === true };
+  }
+
+  staffEvents(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "event", "list", 0);
+    const now = this.now();
+    return this.events
+      .filter((event) => event.cancelled === true || event.end >= now - 24 * 60 * 60 * 1000)
+      .sort((left, right) => left.start - right.start)
+      .map((event) => ({
+        ...this.eventView(event),
+        cancelled: event.cancelled === true,
+      }));
   }
 
   createGroup(token: string, input: { name: string; summary: string }) {
@@ -1390,10 +1445,7 @@ export class ChurchStore {
 
   listOutreach() {
     return this.outreach
-      .map((row) => ({
-        ...row,
-        signedUp: 0,
-      }))
+      .filter((row) => row.cancelled !== true)
       .map((row) => ({
         id: row.id,
         title: row.title,
@@ -1411,21 +1463,56 @@ export class ChurchStore {
     input: { title: string; detail: string; location: string; start: number; end: number },
   ) {
     const actor = this.requireEditor(token);
-    const title = input.title.trim();
-    const location = input.location.trim();
-    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
-    const row: OutreachRow = {
-      id: newId("outreach"),
-      title,
-      detail: input.detail.trim(),
-      location,
-      start: input.start,
-      end: input.end,
-      sample: false,
-    };
+    const row = this.outreachFrom(input);
     this.outreach.push(row);
     this.record(actor, "write", "outreach", row.id, 0);
-    return { id: row.id, title: row.title };
+    return { id: row.id, title: row.title, start: row.start, end: row.end };
+  }
+
+  updateOutreach(
+    token: string,
+    id: string,
+    input: { title: string; detail: string; location: string; start: number; end: number },
+  ) {
+    const actor = this.requireEditor(token);
+    const current = this.outreach.find((row) => row.id === id);
+    if (!current) throw new AccessError("not_found", "That serve day isn't here.");
+    const next = this.outreachFrom(input, id);
+    current.title = next.title;
+    current.detail = next.detail;
+    current.location = next.location;
+    current.start = next.start;
+    current.end = next.end;
+    this.record(actor, "write", "outreach", current.id, 0);
+    return { id: current.id, title: current.title };
+  }
+
+  cancelOutreach(token: string, id: string, cancelled: boolean) {
+    const actor = this.requireEditor(token);
+    const current = this.outreach.find((row) => row.id === id);
+    if (!current) throw new AccessError("not_found", "That serve day isn't here.");
+    current.cancelled = cancelled;
+    this.record(actor, "write", "outreach", current.id, 0);
+    return { id: current.id, cancelled: current.cancelled === true };
+  }
+
+  staffServeDays(token: string) {
+    const actor = this.requireEditor(token);
+    this.record(actor, "read", "outreach", "list", 0);
+    return this.outreach
+      .slice()
+      .sort((left, right) => left.start - right.start)
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        detail: row.detail,
+        location: row.location,
+        start: row.start,
+        end: row.end,
+        sample: row.sample,
+        cancelled: row.cancelled === true,
+        signedUp: this.outreachRsvps.filter((rsvp) => rsvp.outreachId === row.id).length,
+      }));
   }
 
   undoOutreach(token: string, id: string) {
@@ -1443,7 +1530,7 @@ export class ChurchStore {
   rsvpOutreach(token: string, id: string) {
     const actor = this.actor(token);
     const row = this.outreach.find((item) => item.id === id);
-    if (!row) throw new AccessError("not_found", "That serve opportunity isn't here.");
+    if (!row || row.cancelled) throw new AccessError("not_found", "That serve day isn't open.");
     if (!this.outreachRsvps.some((rsvp) => rsvp.outreachId === id && rsvp.personId === actor.personId)) {
       this.outreachRsvps.push({ id: newId("rsvp"), outreachId: id, personId: actor.personId });
     }
@@ -2652,10 +2739,69 @@ export class ChurchStore {
     };
   }
 
-  /** Events that have not ended, soonest first. */
+  /** Events that have not ended and were not canceled, soonest first. */
   private upcomingEvents() {
     const now = this.now();
-    return this.events.filter((event) => event.end >= now).sort((left, right) => left.start - right.start);
+    return this.events
+      .filter((event) => event.cancelled !== true && event.end >= now)
+      .sort((left, right) => left.start - right.start);
+  }
+
+  private eventFrom(
+    input: {
+      title: string;
+      location: string;
+      start: number;
+      end: number;
+      description?: string;
+      capacity?: number | null;
+    },
+    id = newId("event"),
+  ): EventRow {
+    const title = input.title.trim();
+    const location = input.location.trim();
+    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
+    if (!Number.isFinite(input.start) || !Number.isFinite(input.end) || input.end <= input.start) {
+      throw new AccessError("invalid", "The end has to be after the start.");
+    }
+    const capacity = input.capacity ?? null;
+    if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1)) {
+      throw new AccessError("invalid", "Capacity has to be a whole number, or leave it open.");
+    }
+    return {
+      id,
+      title,
+      start: input.start,
+      end: input.end,
+      location,
+      description: (input.description ?? "").trim(),
+      capacity,
+      sample: false,
+      cancelled: false,
+      staffEdited: true,
+    };
+  }
+
+  private outreachFrom(
+    input: { title: string; detail: string; location: string; start: number; end: number },
+    id = newId("outreach"),
+  ): OutreachRow {
+    const title = input.title.trim();
+    const location = input.location.trim();
+    if (!title || !location) throw new AccessError("invalid", "Add a name and a place.");
+    if (!Number.isFinite(input.start) || !Number.isFinite(input.end) || input.end <= input.start) {
+      throw new AccessError("invalid", "The end has to be after the start.");
+    }
+    return {
+      id,
+      title,
+      detail: input.detail.trim(),
+      location,
+      start: input.start,
+      end: input.end,
+      sample: false,
+      cancelled: false,
+    };
   }
 
   private requireGroup(groupId: string, personId: string) {
@@ -2896,20 +3042,32 @@ export class ChurchStore {
       staffEdited: false,
     });
     const sunday = this.events.find((event) => event.id === "event-sunday");
-    if (!sunday || sunday.end < this.now()) {
+    if (!sunday?.cancelled && (!sunday || sunday.end < this.now())) {
       const service = nextSundayService(new Date(this.now())).service.getTime();
-      upsert(this.events, {
-        id: "event-sunday",
-        title: "Sunday gathering",
-        start: service,
-        end: service + 90 * 60 * 1000,
-        location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
-        description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
-        capacity: null,
-        sample: false,
-      });
+      if (sunday?.staffEdited) {
+        const length = Math.max(sunday.end - sunday.start, 60 * 60 * 1000);
+        sunday.start = service;
+        sunday.end = service + length;
+      } else {
+        upsert(this.events, {
+          id: "event-sunday",
+          title: "Sunday gathering",
+          start: service,
+          end: service + 90 * 60 * 1000,
+          location: `${CHURCH.addressLine}, ${CHURCH.city}, ${CHURCH.region} ${CHURCH.postalCode}`,
+          description: "Worship at 10:30 a.m. Come early for donuts and coffee.",
+          capacity: null,
+          sample: false,
+          cancelled: false,
+          staffEdited: false,
+        });
+      }
     }
-    for (const event of CHURCH_EVENTS) upsert(this.events, { ...event, capacity: null, sample: false });
+    for (const event of CHURCH_EVENTS) {
+      const existing = this.events.find((item) => item.id === event.id);
+      if (existing?.staffEdited || existing?.cancelled) continue;
+      upsert(this.events, { ...event, capacity: null, sample: false, cancelled: false, staffEdited: false });
+    }
     const retired = new Set(RETIRED_GROUP_IDS);
     this.groups.splice(0, this.groups.length, ...this.groups.filter((group) => !retired.has(group.id)));
     this.messages.splice(

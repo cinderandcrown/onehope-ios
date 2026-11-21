@@ -1,12 +1,11 @@
 import { ChurchImage } from "@/components/church-image";
 import { AnnouncementsDesk } from "@/components/staff/announcements";
+import { EventsDesk } from "@/components/staff/events";
 
 import {
   addPersonAction,
   editPersonAction,
-  createEventAction,
   createGroupAction,
-  createOutreachAction,
   moderatePrayerAction,
   savePush,
   saveSocialAction,
@@ -384,41 +383,8 @@ function renderSection(
         </section>
       );
     }
-    case "events": {
-      return (
-        <section>
-          <h1>Events</h1>
-          <p className="help">How do I post an event? Type a name and a place. People see it in the app.</p>
-          <form className="form" action={createEventAction}>
-            <input name="title" placeholder="Event title" required />
-            <input name="location" placeholder="Location" required />
-            <button className="button" type="submit">
-              Add event
-            </button>
-          </form>
-          <h2>Serve the neighborhood</h2>
-          <p className="help">
-            How do I ask for help in the neighborhood? Add a serve day. People can sign up in the app. Leave
-            it blank until you have a real one.
-          </p>
-          <form className="form" action={createOutreachAction}>
-            <input name="title" placeholder="Serve day name" required />
-            <input name="location" placeholder="Where" required />
-            <input name="detail" placeholder="What people will do" />
-            <button className="button" type="submit">
-              Post serve day
-            </button>
-          </form>
-          {store.publicHome().events.map((event) => (
-            <article className="card" key={event.id}>
-              <h2>{event.title}</h2>
-              <p>{event.location}</p>
-              <p>{event.capacity === null ? "Open" : `Capacity ${event.capacity}`}</p>
-            </article>
-          ))}
-        </section>
-      );
-    }
+    case "events":
+      return <EventsDesk store={store} token={token} query={query} />;
     case "checkin": {
       const roster = store.roster(token);
       const label = roster[0] ? store.label(token, roster[0].id) : null;

@@ -79,19 +79,6 @@ export async function createGroupAction(formData: FormData) {
   redirect("/groups");
 }
 
-export async function createEventAction(formData: FormData) {
-  const jar = await cookies();
-  const token = jar.get("onehope_session")?.value;
-  if (!token) redirect("/login");
-  const title = String(formData.get("title") ?? "").trim();
-  const location = String(formData.get("location") ?? "").trim();
-  if (!title || !location) redirect("/events?error=1");
-  const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  await withStore((store) =>
-    store.createEvent(token, { title, location, start, end: start + 90 * 60 * 1000 }),
-  );
-  redirect("/events");
-}
 
 export async function savePush(formData: FormData) {
   const jar = await cookies();
@@ -164,19 +151,6 @@ export async function moderatePrayerAction(formData: FormData) {
   redirect("/care");
 }
 
-export async function createOutreachAction(formData: FormData) {
-  const jar = await cookies();
-  const token = jar.get("onehope_session")?.value;
-  if (!token) redirect("/login");
-  const title = String(formData.get("title") ?? "");
-  const location = String(formData.get("location") ?? "");
-  const detail = String(formData.get("detail") ?? "");
-  const start = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  await withStore((store) =>
-    store.createOutreach(token, { title, location, detail, start, end: start + 2 * 60 * 60 * 1000 }),
-  );
-  redirect("/events");
-}
 
 export async function neighborhoodPrayerAction(formData: FormData) {
   const body = String(formData.get("body") ?? "");

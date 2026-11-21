@@ -12,6 +12,7 @@ import {
   integrationBodySchema,
   announcementBodySchema,
   archiveBodySchema,
+  cancelBodySchema,
   claimBodySchema,
   inviteBodySchema,
   checkInBodySchema,
@@ -93,6 +94,12 @@ export const API_ROUTES = [
   ["POST", "/api/announcements/{id}/archive"],
   ["GET", "/api/staff/announcements"],
   ["POST", "/api/events"],
+  ["POST", "/api/events/{id}"],
+  ["POST", "/api/events/{id}/cancel"],
+  ["GET", "/api/staff/events"],
+  ["GET", "/api/staff/outreach"],
+  ["POST", "/api/outreach/{id}"],
+  ["POST", "/api/outreach/{id}/cancel"],
   ["POST", "/api/groups"],
   ["GET", "/api/giving/quickbooks"],
   ["GET", "/api/audit"],
@@ -390,6 +397,36 @@ async function route(
   if (method === "GET" && path === "/api/events/mine") return { events: store.listEvents(need()) };
   if (method === "POST" && path === "/api/events")
     return { event: store.createEvent(need(), parse(eventBodySchema, body)) };
+  const cancelEvent = path.match(/^\/api\/events\/([^/]+)\/cancel$/);
+  if (method === "POST" && cancelEvent?.[1]) {
+    return store.cancelEvent(need(), decodeURIComponent(cancelEvent[1]), parse(cancelBodySchema, body).cancelled);
+  }
+  const editEvent = path.match(/^\/api\/events\/([^/]+)$/);
+  if (method === "POST" && editEvent?.[1] && editEvent[1] !== "mine") {
+    return {
+      event: store.updateEvent(need(), decodeURIComponent(editEvent[1]), parse(eventBodySchema, body)),
+    };
+  }
+  if (method === "GET" && path === "/api/staff/events") return { events: store.staffEvents(need()) };
+  if (method === "GET" && path === "/api/staff/outreach") return { serveDays: store.staffServeDays(need()) };
+  const cancelServe = path.match(/^\/api\/outreach\/([^/]+)\/cancel$/);
+  if (method === "POST" && cancelServe?.[1]) {
+    return store.cancelOutreach(
+      need(),
+      decodeURIComponent(cancelServe[1]),
+      parse(cancelBodySchema, body).cancelled,
+    );
+  }
+  const editServe = path.match(/^\/api\/outreach\/([^/]+)$/);
+  if (method === "POST" && editServe?.[1]) {
+    const input = parse(outreachBodySchema, body);
+    return {
+      outreach: store.updateOutreach(need(), decodeURIComponent(editServe[1]), {
+        ...input,
+        detail: input.detail ?? "",
+      }),
+    };
+  }
   if (method === "POST" && path === "/api/groups" && method === "POST")
     return { group: store.createGroup(need(), parse(groupBodySchema, body)) };
   if (method === "GET" && path === "/api/giving/quickbooks") return { csv: store.quickbooksCsv(need()) };

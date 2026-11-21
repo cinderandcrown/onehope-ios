@@ -304,7 +304,7 @@ type ZonedParts = {
   weekday: string;
 };
 
-function zonedParts(date: Date, timeZone: string): ZonedParts {
+export function zonedParts(date: Date, timeZone: string): ZonedParts {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "short",

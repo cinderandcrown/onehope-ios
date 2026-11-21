@@ -1,4 +1,5 @@
-import { CHURCH, zonedTimeToUtc } from "./domain";
+import { CHURCH, zonedParts, zonedTimeToUtc } from "./domain";
+import { CHURCH_ADDRESS } from "./church-copy";
 
 /** Home cards the church can post. Times are optional and interpreted in America/Chicago. */
 export type AnnouncementCard = {
@@ -35,6 +36,77 @@ export type AnnouncementTemplateId = (typeof ANNOUNCEMENT_TEMPLATES)[number]["id
 
 export function announcementTemplate(id: string): (typeof ANNOUNCEMENT_TEMPLATES)[number] | null {
   return ANNOUNCEMENT_TEMPLATES.find((item) => item.id === id) ?? null;
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+export const EVENT_TEMPLATES = [
+  {
+    id: "sunday",
+    title: "Sunday gathering",
+    location: CHURCH_ADDRESS,
+    detail: "Worship at 10:30 a.m. Come early for donuts and coffee.",
+    weekday: "Sun",
+    hour: 10,
+    minute: 30,
+    durationMin: 90,
+  },
+  {
+    id: "prayer",
+    title: "Prayer night",
+    location: CHURCH_ADDRESS,
+    detail: "Come as you are. We will pray together.",
+    weekday: "Wed",
+    hour: 18,
+    minute: 30,
+    durationMin: 90,
+  },
+] as const;
+
+export const SERVE_TEMPLATES = [
+  {
+    id: "neighborhood",
+    title: "Serve the neighborhood",
+    location: "Church lobby",
+    detail: "Meet at the church and go out together.",
+    weekday: "Sat",
+    hour: 9,
+    minute: 0,
+    durationMin: 120,
+  },
+] as const;
+
+export function eventTemplate(id: string): (typeof EVENT_TEMPLATES)[number] | null {
+  return EVENT_TEMPLATES.find((item) => item.id === id) ?? null;
+}
+
+export function serveTemplate(id: string): (typeof SERVE_TEMPLATES)[number] | null {
+  return SERVE_TEMPLATES.find((item) => item.id === id) ?? null;
+}
+
+/** The next Central-time occurrence of a weekday and clock time, at least a minute from now. */
+export function nextChurchMoment(
+  now: number,
+  input: { weekday: "Sun" | "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat"; hour: number; minute: number; durationMin: number },
+): { start: number; end: number } {
+  const parts = zonedParts(new Date(now), CHURCH.timeZone);
+  const idx = WEEKDAYS.indexOf(parts.weekday as (typeof WEEKDAYS)[number]);
+  const want = WEEKDAYS.indexOf(input.weekday);
+  let add = (want - (idx < 0 ? 0 : idx) + 7) % 7;
+  const civilOn = (days: number) => {
+    const civil = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+    return zonedTimeToUtc(
+      civil.getUTCFullYear(),
+      civil.getUTCMonth() + 1,
+      civil.getUTCDate(),
+      input.hour,
+      input.minute,
+      CHURCH.timeZone,
+    ).getTime();
+  };
+  if (add === 0 && now >= civilOn(0)) add = 7;
+  const start = civilOn(add);
+  return { start, end: start + input.durationMin * 60 * 1000 };
 }
 
 /** A card is on Home when it is not archived and now falls inside its Central window. Blank times mean "show it". */

@@ -61,6 +61,14 @@ export const eventBodySchema = z
     location: z.string().trim().min(1).max(160),
     start: z.number().int(),
     end: z.number().int(),
+    description: z.string().trim().max(1000).optional(),
+    capacity: z.number().int().positive().max(100_000).nullable().optional(),
+  })
+  .strict();
+
+export const cancelBodySchema = z
+  .object({
+    cancelled: z.boolean(),
   })
   .strict();
 

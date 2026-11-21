@@ -1,6 +1,14 @@
 "use server";
 
-import { AccessError, announcementTemplate, parseChicagoLocal, withStore } from "@onehope/server";
+import {
+  AccessError,
+  announcementTemplate,
+  eventTemplate,
+  nextChurchMoment,
+  parseChicagoLocal,
+  serveTemplate,
+  withStore,
+} from "@onehope/server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -53,6 +61,125 @@ export async function updateAnnouncementAction(formData: FormData) {
     fail("/communications", error);
   }
   redirect("/communications?saved=1");
+}
+
+function scheduleFrom(formData: FormData, errorPath: string): { start: number; end: number } {
+  const start = parseChicagoLocal(String(formData.get("start") ?? ""));
+  const end = parseChicagoLocal(String(formData.get("end") ?? ""));
+  if (start === null || end === null || end <= start) redirect(`${errorPath}?error=time`);
+  return { start, end };
+}
+
+function capacityFrom(formData: FormData): number | null {
+  const raw = String(formData.get("capacity") ?? "").trim();
+  if (!raw) return null;
+  const capacity = Number(raw);
+  if (!Number.isInteger(capacity) || capacity < 1) redirect("/events?error=capacity");
+  return capacity;
+}
+
+export async function postEventAction(formData: FormData) {
+  const token = await staffToken();
+  const template = eventTemplate(String(formData.get("template") ?? ""));
+  const timing = template
+    ? nextChurchMoment(Date.now(), template)
+    : scheduleFrom(formData, "/events");
+  const title = template?.title ?? String(formData.get("title") ?? "");
+  const location = template?.location ?? String(formData.get("location") ?? "");
+  const description = template?.detail ?? String(formData.get("description") ?? "");
+  const capacity = template ? null : capacityFrom(formData);
+  try {
+    await withStore((store) =>
+      store.createEvent(token, { title, location, description, capacity, ...timing }),
+    );
+  } catch (error) {
+    fail("/events", error);
+  }
+  redirect("/events?saved=1");
+}
+
+export async function updateEventAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  const timing = scheduleFrom(formData, "/events");
+  try {
+    await withStore((store) =>
+      store.updateEvent(token, id, {
+        title: String(formData.get("title") ?? ""),
+        location: String(formData.get("location") ?? ""),
+        description: String(formData.get("description") ?? ""),
+        capacity: capacityFrom(formData),
+        ...timing,
+      }),
+    );
+  } catch (error) {
+    fail("/events", error);
+  }
+  redirect("/events?saved=1");
+}
+
+export async function cancelEventAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  const cancelled = formData.get("cancelled") !== "no";
+  try {
+    await withStore((store) => store.cancelEvent(token, id, cancelled));
+  } catch (error) {
+    fail("/events", error);
+  }
+  redirect("/events?saved=1");
+}
+
+export async function postServeAction(formData: FormData) {
+  const token = await staffToken();
+  const template = serveTemplate(String(formData.get("template") ?? ""));
+  const timing = template
+    ? nextChurchMoment(Date.now(), template)
+    : scheduleFrom(formData, "/events");
+  try {
+    await withStore((store) =>
+      store.createOutreach(token, {
+        title: template?.title ?? String(formData.get("title") ?? ""),
+        location: template?.location ?? String(formData.get("location") ?? ""),
+        detail: template?.detail ?? String(formData.get("detail") ?? ""),
+        ...timing,
+      }),
+    );
+  } catch (error) {
+    fail("/events", error);
+  }
+  redirect("/events?saved=1");
+}
+
+export async function updateServeAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  const timing = scheduleFrom(formData, "/events");
+  try {
+    await withStore((store) =>
+      store.updateOutreach(token, id, {
+        title: String(formData.get("title") ?? ""),
+        location: String(formData.get("location") ?? ""),
+        detail: String(formData.get("detail") ?? ""),
+        ...timing,
+      }),
+    );
+  } catch (error) {
+    fail("/events", error);
+  }
+  redirect("/events?saved=1");
+}
+
+export async function cancelServeAction(formData: FormData) {
+  const token = await staffToken();
+  const id = String(formData.get("id") ?? "");
+  const cancelled = formData.get("cancelled") !== "no";
+  try {
+    await withStore((store) => store.cancelOutreach(token, id, cancelled));
+  } catch (error) {
+    fail("/events", error);
+  }
+  redirect("/events?saved=1");
 }
 
 export async function archiveAnnouncementAction(formData: FormData) {

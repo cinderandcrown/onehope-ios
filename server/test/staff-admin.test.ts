@@ -5,7 +5,7 @@ import { createApi } from "../src/api.ts";
 import { loadConfig } from "../src/config.ts";
 import { AccessError } from "../src/domain.ts";
 import { SAMPLE_PASSWORD, SAMPLE_TOTP_BASE32 } from "../src/sample-accounts.ts";
-import { parseChicagoLocal } from "../src/staff-desk.ts";
+import { nextChurchMoment, parseChicagoLocal } from "../src/staff-desk.ts";
 import { ChurchStore } from "../src/store.ts";
 import { decodeBase32, totpCode } from "../src/totp.ts";
 
@@ -124,6 +124,121 @@ test("pastors post, schedule, edit, and archive home cards; members cannot", asy
     }),
   );
   assert.equal(list.status, 200);
+});
+
+test("events and serve days keep the date staff chose, and a cancel stays canceled", async () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  const guest = member(store);
+  const start = parseChicagoLocal("2026-12-02T18:30");
+  const end = parseChicagoLocal("2026-12-02T20:00");
+  assert.ok(start && end);
+  assert.throws(
+    () => store.createEvent(guest, { title: "Nope", location: "Lobby", start, end }),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.throws(
+    () => store.createEvent(lead, { title: "Backwards", location: "Lobby", start: end, end: start }),
+    (error: AccessError) => error.code === "invalid",
+  );
+  const created = store.createEvent(lead, {
+    title: "Prayer night",
+    location: "Lobby",
+    description: "Come as you are.",
+    capacity: 40,
+    start,
+    end,
+  });
+  assert.equal(created.start, start);
+  assert.notEqual(created.start, Date.now() + 7 * 24 * 60 * 60 * 1000);
+  assert.equal(store.publicHome().events.some((event) => event.id === created.id), true);
+  assert.equal(store.cancelEvent(lead, created.id, true).cancelled, true);
+  assert.equal(store.publicHome().events.some((event) => event.id === created.id), false);
+
+  const serve = store.createOutreach(lead, {
+    title: "Serve the neighborhood",
+    location: "Church lobby",
+    detail: "Meet and go out together.",
+    start,
+    end,
+  });
+  assert.equal(store.listOutreach().some((row) => row.id === serve.id), true);
+  store.cancelOutreach(lead, serve.id, true);
+  assert.equal(store.listOutreach().some((row) => row.id === serve.id), false);
+  assert.throws(
+    () => store.rsvpOutreach(guest, serve.id),
+    (error: AccessError) => error.code === "not_found",
+  );
+
+  const handle = createApi({ store });
+  const posted = await handle(
+    new Request("http://localhost/api/events", {
+      method: "POST",
+      headers: { authorization: `Bearer ${lead}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Christmas choir",
+        location: "Auditorium",
+        description: "One rehearsal.",
+        capacity: 30,
+        start,
+        end,
+      }),
+    }),
+  );
+  assert.equal(posted.status, 200);
+  const body = (await posted.json()) as { event: { id: string } };
+  const canceled = await handle(
+    new Request(`http://localhost/api/events/${body.event.id}/cancel`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${lead}`, "content-type": "application/json" },
+      body: JSON.stringify({ cancelled: true }),
+    }),
+  );
+  assert.equal(canceled.status, 200);
+  const care = store.login({
+    email: "eden@sample.onehope",
+    password: SAMPLE_PASSWORD,
+    ip: "203.0.113.8",
+    userAgent: "test",
+  });
+  store.verifyMfa(care.token, code());
+  const denied = await handle(
+    new Request("http://localhost/api/staff/events", { headers: { authorization: `Bearer ${care.token}` } }),
+  );
+  assert.equal(denied.status, 403);
+});
+
+test("a canceled church event is not put back by the catalog", () => {
+  const config = loadConfig({});
+  const store = new ChurchStore(config, {
+    fixture: false,
+    passwordOverrides: { [config.masterAdminPrimaryEmail]: "seat-password" },
+    totpOverrides: { [config.masterAdminPrimaryEmail]: SAMPLE_TOTP_BASE32 },
+  });
+  const { token } = store.login({
+    email: config.masterAdminPrimaryEmail,
+    password: "seat-password",
+    ip: "203.0.113.9",
+    userAgent: "test",
+  });
+  store.verifyMfa(token, code());
+  const target = store.staffEvents(token).find((event) => event.id === "cc-3990859");
+  assert.ok(target);
+  store.cancelEvent(token, "cc-3990859", true);
+  const restored = new ChurchStore(config, { fixture: false });
+  restored.installDocument(store.toDocument());
+  assert.equal(
+    restored.publicHome().events.some((event) => event.id === "cc-3990859"),
+    false,
+  );
+  const moment = nextChurchMoment(Date.parse("2026-11-18T18:00:00.000Z"), {
+    weekday: "Sun",
+    hour: 10,
+    minute: 30,
+    durationMin: 90,
+  });
+  assert.equal(new Date(moment.start).toISOString(), "2026-11-22T16:30:00.000Z");
+  assert.equal(moment.end - moment.start, 90 * 60 * 1000);
 });
 
 test("built-in Sunday and Kids cards are not written back over a staff edit", () => {

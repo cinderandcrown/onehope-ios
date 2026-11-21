@@ -1537,6 +1537,66 @@
         }
       }
     },
+    "/api/events/{id}": {
+      "post": {
+        "operationId": "post__api_events_id",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/events/{id}/cancel": {
+      "post": {
+        "operationId": "post__api_events_id_cancel",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/staff/events": {
+      "get": {
+        "operationId": "get__api_staff_events",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/staff/outreach": {
+      "get": {
+        "operationId": "get__api_staff_outreach",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/outreach/{id}": {
+      "post": {
+        "operationId": "post__api_outreach_id",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/api/outreach/{id}/cancel": {
+      "post": {
+        "operationId": "post__api_outreach_id_cancel",
+        "responses": {
+          "200": { "description": "OK" },
+          "401": { "description": "Sign in or step up" },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
     "/api/staff/announcements": {
       "get": {
         "operationId": "get__api_staff_announcements",
