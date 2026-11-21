@@ -37,7 +37,10 @@ jobs:
         run: |
           mkdir -p server/coverage
           cd server
-          node --import tsx --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/lcov.info test/*.test.ts
+          node --import tsx --test --experimental-test-coverage \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \
+            test/*.test.ts
         continue-on-error: false
 
       - name: Build
