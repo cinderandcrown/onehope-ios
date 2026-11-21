@@ -1,5 +1,20 @@
 # Changelog
 
+## Build 12 - unreleased
+
+### Fixed
+
+- The staff sign-in page and Home no longer fail with a 500 when a church photo is configured (as on Vercel). The photo component passed a function to next/image across the server/client boundary. End-to-end tests now run with a photo set.
+- A member who signs in on the staff desk's sign-in form now sees "This sign-in is for church staff" with a link to the member app, instead of landing back on a blank sign-in page. Their session is ended. A member session that reaches a desk page is sent to the same message.
+- The kids API no longer reports someone as on duty after they are taken off the kids team. Removing them also clocks them out, the station count and names drop them, and putting them back on the team does not silently clock them back in.
+- Invites and role changes follow the approved policy everywhere: every role below Master Admin reaches only roles strictly below its own level (no peer seats, so care team cannot seat finance and a pastor cannot seat a pastor). Only a Master Admin seats pastors or Master Admins.
+- An unknown or mistyped `ONEHOPE_ENV` (for example `prod`) now refuses to start with a clear log line instead of quietly running in demo mode with sample data. Exact values are case-insensitive. On Vercel production a typo still resolves to production and logs loudly. Sample people are refused on Vercel production even when `ONEHOPE_ENV` is unset.
+
+### Added
+
+- A small-iPhone check: CI scrolls every tab to the bottom on an iPhone SE (3rd generation) simulator, saves a screenshot of each, and fails if the last row sits under the tab bar.
+- The staff walkthrough notes that kids volunteers clock in from the app, not the web check-in desk.
+
 ## Build 10 - 2026-11-20
 
 ### Added

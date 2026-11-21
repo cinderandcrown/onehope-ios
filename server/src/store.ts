@@ -2133,7 +2133,7 @@ export class ChurchStore {
   kidsDuty(token: string) {
     const actor = this.actor(token);
     const person = this.requirePerson(actor.personId);
-    return { canClockIn: this.onKidsTeam(person), onDuty: this.station.has(person.id) };
+    return { canClockIn: this.onKidsTeam(person), onDuty: this.isOnDuty(person) };
   }
 
   kidsTeamRoster(token: string) {
@@ -2163,6 +2163,10 @@ export class ChurchStore {
     const actor = this.actor(token);
     authorize(actor, "manage_checkin", this.now());
     this.kidsTeam.delete(personId);
+    // Taking someone off the team also takes them off duty, unless their role or an
+    // accepted kids spot still puts them on the team.
+    const removed = this.people.get(personId);
+    if (!removed || !this.onKidsTeam(removed)) this.station.delete(personId);
     this.record(actor, "write", "kids_team", personId, 1);
     return { removed: true as const };
   }
@@ -2238,7 +2242,7 @@ export class ChurchStore {
       canOperate,
       canManageTeam: canOperate,
       adultsOnDuty: this.kidsOnDuty(),
-      onDuty: this.station.has(actor.personId),
+      onDuty: this.isOnDuty(person),
       canClockIn: this.onKidsTeam(person),
       namesOnDuty: [...this.station]
         .filter((id) => {
@@ -2404,9 +2408,7 @@ export class ChurchStore {
     if (!mayChangeRole(actor.role, person.role, input.role)) {
       throw new AccessError(
         "forbidden",
-        actor.role === "team_leader"
-          ? "You can only change a role below your own level."
-          : "You can only give a role at or below your own, never a pastor or Master Admin seat.",
+        "You can only change roles below your own level, never a pastor or Master Admin seat.",
       );
     }
     if (actor.role === "team_leader") {
@@ -2808,6 +2810,11 @@ export class ChurchStore {
           row.personId === person.id && row.status === "accepted" && row.positionId === KIDS_POSITION_ID,
       );
     return acceptedKidsSpot;
+  }
+
+  /** On duty only while clocked in AND still on the kids team. */
+  private isOnDuty(person: Person): boolean {
+    return this.station.has(person.id) && this.onKidsTeam(person);
   }
 
   private kidsOnDuty(): number {
@@ -3539,9 +3546,7 @@ export class ChurchStore {
         ? "Only a Master Admin can make a code for a Master Admin seat."
         : targetRole === "pastor"
           ? "Only a Master Admin can make a code for a pastor seat."
-          : issuerRole === "team_leader"
-            ? "You can only make a code for a role below your own level."
-            : "You can't make a code for someone above your level.",
+          : "You can only make a code for a role below your own level.",
     );
   }
 

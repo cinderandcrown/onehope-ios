@@ -46,6 +46,7 @@ Open **Care**. If it asks, enter the 6-digit authenticator code and tap **Confir
 Open **Check-in**. This screen does not text families.
 
 - Tap **Clock in** if you are on the kids team (kids director, kids team leader, or kids volunteer). Pickup stays closed until a second adult from the kids team clocks in. A pastor, finance teammate, or care teammate cannot be that second adult.
+- **Volunteers clock in from the One Hope app, not this web desk.** Kids volunteers and team leaders do not have a staff sign-in, so they sign in to the app, open **More → Children's Church** (or the kids section on **Connect**), and tap **Clock in** (and **Clock out** when they leave). Staff on the kids team can use either place. Taking someone off the kids team also clocks them out.
 - Filter by room. Tap **Check in** on a child. Read the 4-digit code to the adult, or **Copy code** / **Print label**.
 - Pickup: choose an allowed adult and type the code. A person marked “Cannot pick up” is not in the list.
 - Allergies stay off this screen.
@@ -82,7 +83,7 @@ When Apple push is actually connected, the button asks you to confirm the group 
 
 ## 10. Security and the audit log
 
-Open **Security**. Create a code for someone at your level or below who has not set a password yet, or save a role. A team leader can still add people, make those codes, and edit Home cards. A team leader cannot make a code for a pastor or a Master Admin, or give someone a role above their own. Only a Master Admin can make a code for a pastor or Master Admin seat.
+Open **Security**. Create a code for someone below your level who has not set a password yet, or save a role. Codes and role changes only reach roles below your own: a care teammate cannot seat finance or another care teammate, and a pastor cannot seat another pastor. A team leader can still add people, make those codes, and edit Home cards. A team leader cannot make a code for a pastor or a Master Admin, or give someone a role above their own. Only a Master Admin can make a code for a pastor or Master Admin seat.
 
 Open **Admin**. Pick a from date and a to date, tap **Show**, then **Download spreadsheet**. The file is the same audit log, with times in Central. It does not contain passwords or codes.
 

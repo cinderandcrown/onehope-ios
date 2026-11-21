@@ -15,7 +15,7 @@ export async function staffSession() {
     const language: Language = isLanguage(rawLanguage) ? rawLanguage : "en";
     return { token, person, language };
   } catch (error) {
-    if (isAccessError(error)) redirect("/login");
+    if (isAccessError(error)) redirect(error.code === "forbidden" ? "/login?error=member" : "/login");
     throw error;
   }
 }
