@@ -12,6 +12,8 @@ import {
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { rememberIssued } from "@/lib/issued-code";
+
 import { isLanguage } from "@/lib/i18n";
 
 async function setSession(token: string) {
@@ -146,13 +148,14 @@ export async function addPersonAction(formData: FormData) {
   } catch {
     redirect("/people?error=1");
   }
-  const params = new URLSearchParams({
-    added: person.inviteToken,
-    id: person.id,
-    expires: String(person.expires),
+  await rememberIssued({
+    code: person.inviteToken,
     name: person.displayName,
+    expires: person.expires,
+    personId: person.id,
+    desk: "people",
   });
-  redirect(`/people?${params.toString()}`);
+  redirect("/people");
 }
 
 export async function editPersonAction(formData: FormData) {

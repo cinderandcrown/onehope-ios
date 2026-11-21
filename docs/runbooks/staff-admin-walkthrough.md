@@ -56,7 +56,7 @@ Open **People**. Add a name and email. The code appears on the screen with **Cop
 
 On a phone, open **/claim**, type the email, the code, and a password twice.
 
-**Undo add** works until they set that password.
+**Undo add** works for 10 minutes, only for the person who added them, and only until they set a password. It is not shown on staff or Master Admin seats.
 
 The role menu only lists roles you are allowed to give. Master Admin is not in that menu.
 
@@ -82,9 +82,9 @@ When Apple push is actually connected, the button asks you to confirm the group 
 
 ## 10. Security and the audit log
 
-Open **Security**. Create a code for someone who has not set a password yet, or save a role.
+Open **Security**. Create a code for someone below your role who has not set a password yet, or save a role. A team leader cannot make a code for a pastor or a Master Admin. Only a Master Admin can make a code for a Master Admin seat.
 
-Open **Admin**. Pick a from date and a to date, tap **Show**, then **Download spreadsheet**. The file is the same audit log. It does not contain passwords or codes.
+Open **Admin**. Pick a from date and a to date, tap **Show**, then **Download spreadsheet**. The file is the same audit log, with times in Central. It does not contain passwords or codes.
 
 ## Stop
 

@@ -50,6 +50,7 @@ import {
   eventToIcs,
   findRoomConflict,
   isStaff,
+  mayIssueInvite,
   nextSundayService,
   projectDirectory,
   sameHousehold,
@@ -60,6 +61,7 @@ import { coffeeGuide } from "./coffee";
 import {
   announcementIsLive,
   type AnnouncementCard,
+  formatChicago,
   windowError,
 } from "./staff-desk";
 import {
@@ -121,7 +123,20 @@ type Person = PersonView & {
   deleted: boolean;
   lastIp: string | null;
   lastUserAgent: string | null;
+  /** Who added this person from the desk, and when. Sample seats leave both empty. */
+  addedBy?: string | null;
+  addedAt?: number | null;
 };
+
+type IssuedInvite = {
+  email: string;
+  expires: number;
+  issuerRole: Role | null;
+  issuerId: string;
+};
+
+/** Undo an add only while the same person is still signed in. Staff sessions last 15 minutes. */
+const UNDO_ADD_MS = 10 * 60 * 1000;
 
 type Session = {
   token: string;
@@ -314,8 +329,14 @@ export type StoreDocument = {
   pathways: { personId: string; steps: { id: string; title: string; status: string }[] }[];
   visitors: { id: string; name: string; state: string; sample: boolean }[];
   requests: { id: string; kind: string; personId: string; ciphertext: string; sample: boolean }[];
-  drafts: { id: string; title: string; segment: string; sample: boolean }[];
-  invites?: { tokenHash: string; email: string; expires: number }[];
+  drafts: { id: string; title: string; body?: string; segment: string; sample: boolean }[];
+  invites?: {
+    tokenHash: string;
+    email: string;
+    expires: number;
+    issuerRole?: Role | null;
+    issuerId?: string;
+  }[];
   /** Added in build 6. Older snapshots do not have these and load as empty. */
   followUps?: FollowUpRow[];
   streaks?: StreakRow[];
@@ -389,7 +410,7 @@ export class ChurchStore {
   private readonly gifts = new Map<string, GiftRow>();
   private readonly children = new Map<string, ChildRow>();
   private readonly sessions = new Map<string, Session>();
-  private readonly invites = new Map<string, { email: string; expires: number }>();
+  private readonly invites = new Map<string, IssuedInvite>();
   private readonly auditLog: AuditEntry[] = [];
   private readonly alerts: { id: string; personId: string; at: number; kind: string; detail: string }[] = [];
   private readonly proposals = new Map<string, Proposal>();
@@ -456,7 +477,7 @@ export class ChurchStore {
     ciphertext: string;
     sample: boolean;
   }[];
-  private readonly drafts: { id: string; title: string; segment: string; sample: boolean }[] = [];
+  private readonly drafts: { id: string; title: string; body?: string; segment: string; sample: boolean }[] = [];
   private readonly followUps: FollowUpRow[] = [];
   private readonly streaks = new Map<string, StreakRow>();
   private readonly throttle = new Map<string, number[]>();
@@ -670,15 +691,21 @@ export class ChurchStore {
   }
 
   issueInvite(token: string, email: string) {
-    this.requireEditor(token);
+    const actor = this.requireEditor(token);
     const cleaned = email.trim().toLowerCase();
     const person = this.byEmail(cleaned);
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    this.assertMayInvite(actor.role, person.role);
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
-    this.invites.set(hashInvite(inviteToken), { email: cleaned, expires });
-    return { email: cleaned, inviteToken, expires };
+    this.invites.set(hashInvite(inviteToken), {
+      email: cleaned,
+      expires,
+      issuerRole: actor.role,
+      issuerId: actor.personId,
+    });
+    return { email: cleaned, displayName: person.displayName, inviteToken, expires };
   }
 
   claimInvite(input: {
@@ -695,6 +722,9 @@ export class ChurchStore {
     }
     const person = this.byEmail(email);
     if (!person || person.deleted) throw new AccessError("not_found", "That person isn't here.");
+    if (!invite.issuerRole || !mayIssueInvite(invite.issuerRole, person.role)) {
+      throw new AccessError("unauthenticated", "That invite is not valid.");
+    }
     if (person.passwordHash) throw new AccessError("invalid", "That account already has a password.");
     if (input.password.length < 8) throw new AccessError("invalid", "Use at least 8 characters.");
     person.passwordHash = localAuthProvider.hashPassword(input.password);
@@ -1939,6 +1969,8 @@ export class ChurchStore {
         role: person.role,
         claimed: Boolean(person.passwordHash),
         sample: person.sample,
+        canUndo: this.canUndoAdd(actor, person),
+        canInvite: !person.passwordHash && mayIssueInvite(actor.role, person.role),
       }));
   }
 
@@ -1961,11 +1993,18 @@ export class ChurchStore {
       listed: false,
     });
     if (input.phone?.trim()) person.phone = input.phone.trim();
+    person.addedBy = actor.personId;
+    person.addedAt = this.now();
     this.people.set(person.id, person);
     this.ensurePathway(person.id);
     const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
-    this.invites.set(hashInvite(inviteToken), { email, expires });
+    this.invites.set(hashInvite(inviteToken), {
+      email,
+      expires,
+      issuerRole: actor.role,
+      issuerId: actor.personId,
+    });
     this.record(actor, "write", "person", person.id, 1);
     return {
       id: person.id,
@@ -1993,8 +2032,11 @@ export class ChurchStore {
   undoAddPerson(token: string, personId: string) {
     const actor = this.requireEditor(token);
     const person = this.requirePerson(personId);
-    if (person.passwordHash || person.sample) {
-      throw new AccessError("invalid", "This person already has a password, so this can't be undone here.");
+    if (!this.canUndoAdd(actor, person)) {
+      throw new AccessError(
+        "forbidden",
+        "You can undo an add only for someone you added in the last 10 minutes, and never for a staff or Master Admin seat.",
+      );
     }
     this.eraseOwnedData(person.id, person.householdId);
     person.deleted = true;
@@ -2354,11 +2396,11 @@ export class ChurchStore {
 
   auditCsv(token: string, range?: { from?: number | null; to?: number | null }) {
     const rows = this.audit(token, range);
-    const lines = ["When,Who,Action,Record,Record id,Tier"];
+    const lines = ["When (Central),Who,Action,Record,Record id,Tier"];
     for (const row of rows) {
       lines.push(
         [
-          new Date(row.at).toISOString(),
+          formatChicago(row.at),
           row.actorName,
           row.action,
           row.resource,
@@ -2578,7 +2620,13 @@ export class ChurchStore {
       };
     }
     if (!live || !this.pushSender) {
-      const draft = { id: newId("draft"), title: input.title, segment: input.segment, sample: true };
+      const draft = {
+        id: newId("draft"),
+        title: input.title,
+        body: input.body,
+        segment: input.segment,
+        sample: true,
+      };
       this.drafts.push(draft);
       this.record(actor, "write", "push_draft", draft.id, 2);
       return {
@@ -2600,7 +2648,13 @@ export class ChurchStore {
       segment: input.segment,
       count,
     });
-    const draft = { id: newId("draft"), title: input.title, segment: input.segment, sample: false };
+    const draft = {
+      id: newId("draft"),
+      title: input.title,
+      body: input.body,
+      segment: input.segment,
+      sample: false,
+    };
     this.drafts.push(draft);
     this.record(actor, "write", "push_send", draft.id, 2);
     return {
@@ -2757,8 +2811,8 @@ export class ChurchStore {
       if (patch.assigneeId === null || patch.assigneeId === "") row.assigneeId = null;
       else {
         const person = this.requirePerson(patch.assigneeId);
-        if (person.deleted || !isStaff(person.role)) {
-          throw new AccessError("invalid", "Choose someone on staff.");
+        if (person.deleted || !allows(person.role, "view_care_notes")) {
+          throw new AccessError("invalid", "Choose someone who can open Care.");
         }
         row.assigneeId = person.id;
       }
@@ -2780,8 +2834,8 @@ export class ChurchStore {
     const actor = this.actor(token);
     authorize(actor, "view_care_notes", this.now());
     return [...this.people.values()]
-      .filter((person) => !person.deleted && isStaff(person.role))
-      .map((person) => ({ id: person.id, displayName: person.displayName }));
+      .filter((person) => !person.deleted && allows(person.role, "view_care_notes"))
+      .map((person) => ({ id: person.id, displayName: person.displayName, role: person.role }));
   }
 
   pendingTestimonies(token: string) {
@@ -3363,6 +3417,23 @@ export class ChurchStore {
   private placeDefaultAnnouncement(row: AnnouncementCard) {
     if (this.announcements.some((item) => item.id === row.id)) return;
     this.announcements.push(row);
+  }
+
+  private assertMayInvite(issuerRole: Role, targetRole: Role) {
+    if (mayIssueInvite(issuerRole, targetRole)) return;
+    throw new AccessError(
+      "forbidden",
+      targetRole === "master_admin"
+        ? "Only a Master Admin can make a code for a Master Admin seat."
+        : "You can't make a code for someone at your level or above.",
+    );
+  }
+
+  private canUndoAdd(actor: Actor, person: Person): boolean {
+    if (person.deleted || person.passwordHash || person.sample) return false;
+    if (isStaff(person.role)) return false;
+    if (!person.addedBy || person.addedBy !== actor.personId || person.addedAt == null) return false;
+    return this.now() - person.addedAt <= UNDO_ADD_MS;
   }
 
   private requireEditor(token: string): Actor {
@@ -4008,7 +4079,12 @@ export class ChurchStore {
     this.drafts.splice(0, this.drafts.length, ...document.drafts);
     this.invites.clear();
     for (const invite of document.invites ?? []) {
-      this.invites.set(invite.tokenHash, { email: invite.email, expires: invite.expires });
+      this.invites.set(invite.tokenHash, {
+        email: invite.email,
+        expires: invite.expires,
+        issuerRole: invite.issuerRole ?? null,
+        issuerId: invite.issuerId ?? "",
+      });
     }
     this.followUps.splice(0, this.followUps.length, ...(document.followUps ?? []));
     this.streaks.clear();

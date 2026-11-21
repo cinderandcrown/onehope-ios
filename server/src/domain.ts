@@ -135,6 +135,31 @@ export function isStaff(role: Role): boolean {
   return STAFF_ROLES.has(role);
 }
 
+/**
+ * Higher numbers outrank lower ones. Peers cannot invite each other.
+ * A Master Admin seat is the exception: only a Master Admin may invite one, including another Master Admin.
+ */
+const ROLE_PRIVILEGE: Record<Role, number> = {
+  master_admin: 70,
+  pastor: 60,
+  care_team: 50,
+  finance: 50,
+  kids_director: 50,
+  team_leader: 40,
+  volunteer: 30,
+  member: 20,
+  shop_owner: 15,
+  shop_manager: 14,
+  barista: 13,
+  customer: 10,
+  platform_operator: 5,
+};
+
+export function mayIssueInvite(issuerRole: Role, targetRole: Role): boolean {
+  if (targetRole === "master_admin") return issuerRole === "master_admin";
+  return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE[issuerRole];
+}
+
 export const TIER3_ACTIONS: ReadonlySet<Action> = new Set<Action>([
   "view_household_tier3",
   "view_all_giving",

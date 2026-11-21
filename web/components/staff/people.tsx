@@ -2,15 +2,16 @@ import Link from "next/link";
 import { formatChicago, labelRole, type ChurchStore } from "@onehope/server";
 
 import { addPersonAction, editPersonAction } from "@/app/actions";
-import { changeRoleAction, undoPersonAction } from "@/app/staff-actions";
+import { changeRoleAction, clearIssuedAction, undoPersonAction } from "@/app/staff-actions";
 import { CopyButton } from "@/components/staff/clipboard";
+import { readIssued } from "@/lib/issued-code";
 
 function one(query: Record<string, string | string[] | undefined>, key: string) {
   const value = query[key];
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-export function PeopleDesk({
+export async function PeopleDesk({
   store,
   token,
   query,
@@ -34,46 +35,51 @@ export function PeopleDesk({
       </section>
     );
   }
-  const added = one(query, "added");
-  const expires = Number(one(query, "expires"));
+  const issued = await readIssued("people");
   const notice = one(query, "saved")
     ? "Saved."
     : one(query, "error")
-      ? "That did not work. If they already set a password, the add can't be undone here."
+      ? "That did not work. Undo is only for someone you added in the last 10 minutes."
       : "";
   return (
     <section>
       <h1>People</h1>
       <p className="help">
         How do I add someone? Type their name and email. A code appears on this screen. Read it to them, or
-        they open the claim page on their phone and type it. Nothing is emailed. You can undo the add until
-        they set a password.
+        they open the claim page on their phone and type it. Nothing is emailed. You can undo the add for 10
+        minutes, until they set a password. Staff and Master Admin seats cannot be undone here.
       </p>
       {notice ? <p className="notice">{notice}</p> : null}
-      {added ? (
+      {issued ? (
         <article className="panel">
-          <h2>Give this code to {one(query, "name") || "them"}</h2>
-          <p className="setup-key">{added}</p>
+          <h2>Give this code to {issued.name || "them"}</h2>
+          <p className="setup-key">{issued.code}</p>
           <div className="template-row">
-            <CopyButton value={added} label="Copy code" />
+            <CopyButton value={issued.code} label="Copy code" />
             <Link className="button secondary" href="/claim">
               Open the claim page
             </Link>
           </div>
           <p className="muted">
-            {Number.isFinite(expires) && expires > 0
-              ? `This code expires ${formatChicago(expires)}.`
+            {issued.expires > 0
+              ? `This code expires ${formatChicago(issued.expires)}.`
               : "This code expires in 7 days."}{" "}
             Nothing was emailed.
           </p>
-          {one(query, "id") ? (
+          {issued.personId ? (
             <form action={undoPersonAction}>
-              <input type="hidden" name="id" value={one(query, "id")} />
+              <input type="hidden" name="id" value={issued.personId} />
               <button className="button secondary" type="submit">
                 Undo add
               </button>
             </form>
           ) : null}
+          <form action={clearIssuedAction}>
+            <input type="hidden" name="desk" value="people" />
+            <button className="button secondary" type="submit">
+              Hide this code
+            </button>
+          </form>
         </article>
       ) : null}
       <form className="form" action={addPersonAction}>
@@ -133,7 +139,7 @@ export function PeopleDesk({
               </button>
             </form>
           ) : null}
-          {!person.claimed && !person.sample ? (
+          {person.canUndo ? (
             <form action={undoPersonAction}>
               <input type="hidden" name="id" value={person.id} />
               <button className="button secondary" type="submit">

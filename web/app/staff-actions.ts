@@ -14,6 +14,8 @@ import {
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { clearIssued, rememberIssued } from "@/lib/issued-code";
+
 async function staffToken() {
   const jar = await cookies();
   const token = jar.get("onehope_session")?.value;
@@ -24,6 +26,12 @@ async function staffToken() {
 function fail(path: string, error: unknown): never {
   if (error instanceof AccessError) redirect(`${path}?error=1`);
   throw error;
+}
+
+function checkinFail(error: unknown): never {
+  const message =
+    error instanceof AccessError ? error.message : "That did not work. Check the code and try again.";
+  redirect(`/checkin?notice=${encodeURIComponent(message)}`);
 }
 
 function windowFrom(formData: FormData): { startsAt: number | null; endsAt: number | null } {
@@ -227,18 +235,25 @@ export async function confirmTotpAction(formData: FormData) {
 export async function issueInviteAction(formData: FormData) {
   const token = await staffToken();
   const email = String(formData.get("email") ?? "");
-  let invite: { inviteToken: string; expires: number };
+  let invite: { inviteToken: string; expires: number; displayName: string };
   try {
     invite = await withStore((store) => store.issueInvite(token, email));
   } catch (error) {
     fail("/security", error);
   }
-  const params = new URLSearchParams({
-    added: invite.inviteToken,
-    name: email,
-    expires: String(invite.expires),
+  await rememberIssued({
+    code: invite.inviteToken,
+    name: invite.displayName,
+    expires: invite.expires,
+    desk: "security",
   });
-  redirect(`/security?${params.toString()}`);
+  redirect("/security");
+}
+
+export async function clearIssuedAction(formData: FormData) {
+  await clearIssued();
+  const desk = formData.get("desk") === "security" ? "/security" : "/people";
+  redirect(desk);
 }
 
 export async function featureMessageAction(formData: FormData) {
@@ -298,7 +313,7 @@ export async function clockInAction() {
   try {
     await withStore((store) => store.clockIn(token));
   } catch (error) {
-    fail("/checkin", error);
+    checkinFail(error);
   }
   redirect("/checkin");
 }
@@ -308,7 +323,7 @@ export async function clockOutAction() {
   try {
     await withStore((store) => store.clockOut(token));
   } catch (error) {
-    fail("/checkin", error);
+    checkinFail(error);
   }
   redirect("/checkin");
 }
@@ -319,7 +334,7 @@ export async function staffCheckInAction(formData: FormData) {
   try {
     await withStore((store) => store.staffCheckIn(token, childId));
   } catch (error) {
-    fail("/checkin", error);
+    checkinFail(error);
   }
   redirect(`/checkin?label=${encodeURIComponent(childId)}`);
 }
@@ -333,9 +348,9 @@ export async function stationPickupAction(formData: FormData) {
   try {
     result = await withStore((store) => store.pickup(token, { childId, guardianPersonId, code }));
   } catch (error) {
-    fail("/checkin", error);
+    checkinFail(error);
   }
-  if (!result.allowed) redirect(`/checkin?pickup=${encodeURIComponent(result.reason)}`);
+  if (!result.allowed) redirect(`/checkin?notice=${encodeURIComponent(result.reason)}`);
   redirect("/checkin?saved=1");
 }
 

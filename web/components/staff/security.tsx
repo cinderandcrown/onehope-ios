@@ -1,7 +1,8 @@
 import { formatChicago, labelRole, permissionMatrix, type ChurchStore } from "@onehope/server";
 
-import { changeRoleAction, issueInviteAction } from "@/app/staff-actions";
+import { changeRoleAction, clearIssuedAction, issueInviteAction } from "@/app/staff-actions";
 import { CopyButton } from "@/components/staff/clipboard";
+import { readIssued } from "@/lib/issued-code";
 
 function one(query: Record<string, string | string[] | undefined>, key: string) {
   const value = query[key];
@@ -16,7 +17,7 @@ const columns = [
   "propose_master_admin",
 ] as const;
 
-export function SecurityDesk({
+export async function SecurityDesk({
   store,
   token,
   query,
@@ -27,7 +28,6 @@ export function SecurityDesk({
 }) {
   const seats = store.seats();
   const matrix = permissionMatrix();
-  const added = one(query, "added");
   let people: ReturnType<ChurchStore["staffPeople"]> = [];
   let roles: ReturnType<ChurchStore["assignableRoles"]> = [];
   try {
@@ -36,13 +36,16 @@ export function SecurityDesk({
   } catch {
     people = [];
   }
-  const waiting = people.filter((person) => !person.claimed && person.email);
+  const issued = await readIssued("security");
+  const waiting = people.filter((person) => person.canInvite && person.email);
   return (
     <section>
       <h1>Roles</h1>
       <p className="help">
         How do I give someone a code? Pick their name and tap Create a code. Read it to them. They open the
-        claim page on their phone. Nothing is emailed. Master Admin still takes both current Master Admins.
+        claim page on their phone. Nothing is emailed. You can make a code only for someone below your role.
+        A Master Admin seat needs a Master Admin. Changing Master Admin still takes both current Master
+        Admins.
       </p>
       {one(query, "error") ? (
         <p className="notice">
@@ -50,17 +53,20 @@ export function SecurityDesk({
         </p>
       ) : null}
       {one(query, "saved") ? <p className="notice">Saved.</p> : null}
-      {added ? (
+      {issued ? (
         <article className="panel">
-          <h2>Code for {one(query, "name")}</h2>
-          <p className="setup-key">{added}</p>
-          <CopyButton value={added} label="Copy code" />
+          <h2>Code for {issued.name}</h2>
+          <p className="setup-key">{issued.code}</p>
+          <CopyButton value={issued.code} label="Copy code" />
           <p className="muted">
-            {one(query, "expires")
-              ? `Expires ${formatChicago(Number(one(query, "expires")))}.`
-              : "Expires in 7 days."}{" "}
-            Nothing was emailed.
+            Expires {formatChicago(issued.expires)}. Nothing was emailed.
           </p>
+          <form action={clearIssuedAction}>
+            <input type="hidden" name="desk" value="security" />
+            <button className="button secondary" type="submit">
+              Hide this code
+            </button>
+          </form>
         </article>
       ) : null}
       {waiting.length > 0 ? (
@@ -122,6 +128,7 @@ export function SecurityDesk({
         </p>
         <p>Changing this role takes both current Master Admins. Sensitive records still ask for the code again.</p>
       </article>
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -144,6 +151,7 @@ export function SecurityDesk({
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

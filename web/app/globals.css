@@ -80,8 +80,9 @@ a {
 
 .shell {
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 250px minmax(0, 1fr);
   min-height: 100vh;
+  max-width: 100%;
 }
 .rail {
   background: #3f4903;
@@ -150,6 +151,8 @@ button,
 }
 .main {
   padding: 1.25rem 1.5rem 3rem;
+  min-width: 0;
+  max-width: 100%;
 }
 .topbar {
   display: flex;
@@ -420,6 +423,9 @@ pre {
     flex-direction: row;
     align-items: center;
     overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 0.55rem 0.7rem;
     gap: 0.35rem;
   }
@@ -441,6 +447,7 @@ pre {
   }
   .main {
     padding: 0.8rem 0.85rem 2rem;
+    width: 100%;
   }
   .login-photo {
     min-height: 240px;
@@ -737,6 +744,7 @@ pre {
 }
 .table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 .form input,
 .form select,

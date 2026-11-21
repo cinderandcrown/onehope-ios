@@ -496,7 +496,7 @@ test("an invite can be claimed, undone while unclaimed, and a new staff member e
   assert.equal(claimed.status, 200);
   assert.throws(
     () => store.undoAddPerson(lead, added.id),
-    (error: AccessError) => error.code === "invalid",
+    (error: AccessError) => error.code === "forbidden",
   );
   store.changeRole(lead, { personId: added.id, role: "team_leader" });
   assert.throws(
@@ -635,6 +635,9 @@ test("push saves a draft until Apple push is live, then asks before it sends", a
   assert.equal(draft.sent, false);
   assert.equal(draft.drafted, true);
   assert.match(draft.reason, /Nothing was sent/);
+  const savedDraft = store.ministry(lead).communications;
+  assert.equal(savedDraft.locked, false);
+  if (!savedDraft.locked) assert.equal(savedDraft.drafts.some((row) => row.body === "Come early."), true);
   assert.equal(store.pushDesk(lead).counts.members, 9);
   const signedUp = store.signup({
     email: "guest.neighbor@example.com",
@@ -685,7 +688,8 @@ test("the audit log filters by date and downloads as a spreadsheet", async () =>
     (error: AccessError) => error.code === "forbidden",
   );
   const csv = store.auditCsv(lead, { from: Date.now() - 60_000, to: Date.now() + 60_000 });
-  assert.match(csv, /^When,Who,Action,Record,Record id,Tier/);
+  assert.match(csv, /^When \(Central\),Who,Action,Record,Record id,Tier/);
+  assert.equal(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(csv), false);
   assert.equal(csv.includes("hope-sample"), false);
   const handle = createApi({ store });
   const file = await handle(
@@ -750,5 +754,131 @@ test("built-in Sunday and Kids cards are not written back over a staff edit", ()
   assert.equal(
     restored.publicHome().announcements.some((item) => item.id === "ann-kids"),
     false,
+  );
+});
+
+test("a lower role cannot invite, claim, or erase a Master Admin seat", () => {
+  const store = new ChurchStore(
+    loadConfig({
+      MASTER_ADMIN_SECONDARY_EMAIL: "second.master@example.com",
+      MASTER_ADMIN_SECONDARY_NAME: "Second Master",
+    }),
+    {
+      passwordOverrides: { "nicholas.will@cinderandcrown.com": "gathering-password" },
+      totpOverrides: { "nicholas.will@cinderandcrown.com": SAMPLE_TOTP_BASE32 },
+    },
+  );
+  const lead = pastor(store);
+  const leader = staffOf(store, "gray@sample.onehope");
+  assert.throws(
+    () => store.issueInvite(lead, "nicholas.will@cinderandcrown.com"),
+    (error: AccessError) => error.code === "forbidden" && /Master Admin/.test(error.message),
+  );
+  assert.throws(
+    () => store.issueInvite(leader, "second.master@example.com"),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.throws(
+    () => store.issueInvite(leader, "reese@sample.onehope"),
+    (error: AccessError) => error.code === "forbidden" && /your level/.test(error.message),
+  );
+  assert.throws(
+    () => store.undoAddPerson(leader, "person-nicholas"),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  assert.equal(store.staffPeople(leader).find((person) => person.id === "person-nicholas")?.canUndo, false);
+  assert.equal(
+    store.staffPeople(leader).some((person) => person.role === "master_admin" && person.canInvite),
+    false,
+  );
+
+  const signed = store.login({
+    email: "nicholas.will@cinderandcrown.com",
+    password: "gathering-password",
+    ip: "203.0.113.9",
+    userAgent: "test",
+  });
+  store.verifyMfa(signed.token, code());
+  const issued = store.issueInvite(signed.token, "second.master@example.com");
+  const stripped = store.toDocument();
+  for (const invite of stripped.invites ?? []) {
+    invite.issuerRole = null;
+    invite.issuerId = "";
+  }
+  const blocked = new ChurchStore(loadConfig({}), { fixture: true });
+  blocked.installDocument(stripped);
+  assert.throws(() =>
+    blocked.claimInvite({
+      email: issued.email,
+      inviteToken: issued.inviteToken,
+      password: "gathering-password",
+      ip: "203.0.113.9",
+      userAgent: "test",
+    }),
+  );
+  const claimed = store.claimInvite({
+    email: issued.email,
+    inviteToken: issued.inviteToken,
+    password: "gathering-password",
+    ip: "203.0.113.9",
+    userAgent: "test",
+  });
+  assert.equal(claimed.person.role, "master_admin");
+});
+
+test("undo add is only for the person who just added a non-staff seat", () => {
+  let now = Date.now();
+  const store = new ChurchStore(loadConfig({}), { now: () => now });
+  const lead = pastor(store);
+  const leader = staffOf(store, "gray@sample.onehope");
+  const added = store.addPerson(lead, { displayName: "Sam Neighbor", email: "sam.undo@example.com" });
+  assert.equal(store.staffPeople(lead).find((person) => person.id === added.id)?.canUndo, true);
+  assert.equal(store.staffPeople(leader).find((person) => person.id === added.id)?.canUndo, false);
+  assert.throws(
+    () => store.undoAddPerson(leader, added.id),
+    (error: AccessError) => error.code === "forbidden",
+  );
+  now += 11 * 60 * 1000;
+  assert.equal(store.staffPeople(lead).find((person) => person.id === added.id)?.canUndo, false);
+  assert.throws(
+    () => store.undoAddPerson(lead, added.id),
+    (error: AccessError) => error.code === "forbidden",
+  );
+});
+
+test("care assignment lists only people who can open Care", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const lead = pastor(store);
+  store.stepUp(lead, { code: code() });
+  const ids = store.careAssignees(lead).map((person) => person.id);
+  assert.ok(ids.includes("person-reese"));
+  assert.ok(ids.includes("person-eden"));
+  assert.equal(ids.includes("person-dana"), false);
+  assert.equal(ids.includes("person-frankie"), false);
+  assert.equal(ids.includes("person-gray"), false);
+});
+
+test("a wrong pickup code and a lockout say so in plain language", () => {
+  const store = new ChurchStore(loadConfig({}));
+  const frankie = staffOf(store, "frankie@sample.onehope");
+  store.stepUp(frankie, { code: code() });
+  const gray = staffOf(store, "gray@sample.onehope");
+  store.clockIn(frankie);
+  store.clockIn(gray);
+  const visit = store.staffCheckIn(frankie, "child-remy");
+  const bad = visit.code === "1111" ? "2222" : "1111";
+  const wrong = store.pickup(frankie, {
+    childId: "child-remy",
+    guardianPersonId: "person-avery",
+    code: bad,
+  });
+  assert.equal(wrong.allowed, false);
+  assert.match(wrong.reason, /Security code does not match/);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: bad });
+  }
+  assert.throws(
+    () => store.pickup(frankie, { childId: "child-remy", guardianPersonId: "person-avery", code: visit.code }),
+    (error: AccessError) => error.code === "rate_limited" && /locked/.test(error.message),
   );
 });

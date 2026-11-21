@@ -4,7 +4,7 @@
  */
 export function tablesFor(method: string, path: string): readonly string[] | null {
   if (method === "GET" && EMPTY_GET.has(path)) return [];
-  if (method === "GET" && path === "/api/home") return ["announcements", "events", "social_links"];
+  if (method === "GET" && path === "/api/home") return ["announcements", "events", "social_links", "featured_messages"];
   if (method === "GET" && path === "/api/social") return ["social_links"];
   if (method === "GET" && path === "/api/growth") return ["groups"];
   if (method === "GET" && path === "/api/modules") return ["tenant_modules"];

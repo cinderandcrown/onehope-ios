@@ -40,6 +40,7 @@ export function PushDesk({
   const confirming = one(query, "confirm") === "1";
   const saved = one(query, "saved");
   const sent = one(query, "sent") === "1";
+  const drafts = store.ministry(token).communications;
   return (
     <section>
       <h1>Push</h1>
@@ -111,6 +112,20 @@ export function PushDesk({
           </button>
         </form>
       )}
+      {!drafts.locked && drafts.drafts.length > 0 ? (
+        <article className="panel">
+          <h2>Drafts saved here</h2>
+          {drafts.drafts
+            .slice()
+            .reverse()
+            .map((draft) => (
+              <p key={draft.id}>
+                <strong>{draft.title}</strong>
+                {draft.body ? ` — ${draft.body}` : ""}
+              </p>
+            ))}
+        </article>
+      ) : null}
     </section>
   );
 }

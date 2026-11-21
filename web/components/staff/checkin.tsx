@@ -31,7 +31,7 @@ export function CheckInDesk({
   }
   const labelId = one(query, "label");
   const label = labelId ? safeLabel(store, token, labelId) : null;
-  const pickupNote = one(query, "pickup");
+  const failure = one(query, "notice") || one(query, "pickup");
   const saved = one(query, "saved");
   const ready = board.adultsOnDuty >= 2;
   return (
@@ -39,11 +39,15 @@ export function CheckInDesk({
       <h1>Kids check-in</h1>
       <p className="help">
         How do I check a child in? Clock in, find the child, and tap Check in. Read the 4-digit code to the
-        adult at the desk, or print the label.         We never text the family. Pickup needs the code, an allowed adult, and two adults from the kids
+        adult at the desk, or print the label. We never text the family. Pickup needs the code, an allowed adult, and two adults from the kids
         team. A pastor or finance teammate cannot be the second adult.
       </p>
       {saved ? <p className="notice">Saved. The child is with their adult.</p> : null}
-      {pickupNote ? <p className="notice">{pickupNote}</p> : null}
+      {failure ? (
+        <p className="notice" role="alert">
+          {failure}
+        </p>
+      ) : null}
       <article className={ready ? "panel" : "panel duty-wait"}>
         <h2>{ready ? "Two adults are on duty" : `${board.adultsOnDuty} of 2 adults on duty`}</h2>
         <p>
