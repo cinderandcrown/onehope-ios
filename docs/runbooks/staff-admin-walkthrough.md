@@ -46,6 +46,7 @@ Open **Care**. If it asks, enter the 6-digit authenticator code and tap **Confir
 Open **Check-in**. This screen does not text families.
 
 - Tap **Clock in** if you are on the kids team (kids director, kids team leader, or kids volunteer). Pickup stays closed until a second adult from the kids team clocks in. A pastor, finance teammate, or care teammate cannot be that second adult.
+- **Volunteers clock in from the One Hope app, not this web desk.** Kids volunteers and team leaders do not have a staff sign-in, so they sign in to the app, open **More → Children's Church** (or the kids section on **Connect**), and tap **Clock in** (and **Clock out** when they leave). Staff on the kids team can use either place. Taking someone off the kids team also clocks them out.
 - Filter by room. Tap **Check in** on a child. Read the 4-digit code to the adult, or **Copy code** / **Print label**.
 - Pickup: choose an allowed adult and type the code. A person marked “Cannot pick up” is not in the list.
 - Allergies stay off this screen.
@@ -61,6 +62,44 @@ On a phone, open **/claim**, type the email, the code, and a password twice.
 The role menu only lists roles you are allowed to give. Master Admin is not in that menu.
 
 The first time a staff person signs in, leave the authenticator code blank. The setup screen shows a QR code and a setup key. After they enter the 6-digit code, the desk opens.
+
+### Looking after people (Phase 2a)
+
+**People** opens with **Everyone**: search by name, email or phone, and filter by stage, tag, or **Only quiet** (nobody has called, texted, visited, emailed or prayed with them in 30 days). Tap a name to open their page.
+
+On a person's page:
+
+- **Log a touch**: pick what you did (Called, Texted, Visited, Emailed, Prayed with, Note), how it went, and an optional note. It goes on their **Timeline** with your name and the time. Notes are encrypted and only staff who can open People see them. A private Note does not count as contact.
+- If someone **asked us not to contact them**, pick that outcome. The page then shows a banner and blocks calls, texts, emails and visits. Praying and private notes still work. A pastor or care team member can tap **They said it is okay again**.
+- **Stage** is where they are on the path: Guest, Coming back, Connected, Member, Serving, Leading.
+- **Tags** group people. A **team** tag also names its leaders.
+
+Who sees whom:
+
+- Master Admin, pastors and the care team see everyone and manage tags.
+- Kids directors see kids households and the kids team.
+- Team leaders see people on teams they lead and people they added. They can only put people on their own teams.
+- Finance, volunteers and members do not open People.
+
+Nothing on People sends a message. Salvation and first-visit playbooks are not part of this slice; they will arrive switched off until a pastor turns them on.
+
+### Care tasks and playbooks (Phase 2b)
+
+- **Playbooks** (pastors and Master Admin): "Said yes to Jesus" and "First visit". **Both start off.** Only a pastor or Master Admin can turn one on or off. Editing the steps and wording in the app comes in a later update. Turning one on affects new next steps only; turning it off stops new tasks and leaves open ones on the list.
+- When a playbook is on, a next step from the app (Know Jesus "I said yes", Plan a Visit, "New to One Hope") becomes a short list of tasks. **Tasks go only to care team seats**, shared fairly (whoever has fewer open tasks). If there is no care team seat yet, tasks wait with "Nobody yet" and a pastor moves them.
+- The first salvation call is due within 24 hours and turns red on Overview after that.
+- If someone did not ask to be contacted (or asked us to stop), the only task is to pray for them.
+- **My tasks**: grouped Overdue, Today, This week, Later. Open **Suggested words**, tap **Copy the words**, and call or text from your own phone. Nothing is sent for you. Then tap **Done**, **Couldn't reach** (back tomorrow, up to three tries), or **Skip**. Done and Couldn't reach also go on the person's timeline.
+- Pastors see **Whole team** and can **Move task** to another care team seat. Phone and email on tasks open after "confirm it's you", like Care.
+- **Overview → Today** shows your overdue and due-today counts, decisions this week (how many reached within 24 hours), and for pastors the whole team.
+- A person's timeline shows 50 touches at a time with **Older** and **Newest**.
+- **Remove from One Hope** (pastors and Master Admin, after confirming it's you) is on a member's or volunteer's page, for duplicates, test entries, or someone who asked. Staff seats are changed on Roles first.
+
+### Import and clean-up (Phase 2c)
+
+- **Import** (pastor and Master Admin only): choose a spreadsheet or a one-time Planning Center people export, tap **Look at this file**, check the column matches, tap **Preview the first 10**, then **Import these people**. The summary says how many were added, updated, or skipped, and why. **Undo this import** works for 24 hours. If a large file stops partway, upload the same file again and it continues. This does not connect to Planning Center and does not keep syncing.
+- **Duplicates**: pairs that look like the same person. Tap **Keep** one of them, or **Not the same**. **Undo merge** works for 7 days.
+- **Saved lists** sit on People. Set a filter (stage, tag, faith step, last seen, last contact, how they found us, who looks after them, or an open task), name it, and tap **Save this list**. Opening the list runs the filter again, so it does not go stale. Tags are still how you group people by hand.
 
 ## 7. Serving
 
@@ -82,7 +121,7 @@ When Apple push is actually connected, the button asks you to confirm the group 
 
 ## 10. Security and the audit log
 
-Open **Security**. Create a code for someone at your level or below who has not set a password yet, or save a role. A team leader can still add people, make those codes, and edit Home cards. A team leader cannot make a code for a pastor or a Master Admin, or give someone a role above their own. Only a Master Admin can make a code for a pastor or Master Admin seat.
+Open **Security**. Create a code for someone below your level who has not set a password yet, or save a role. Codes and role changes only reach roles below your own: a care teammate cannot seat finance or another care teammate, and a pastor cannot seat another pastor. A team leader can still add people, make those codes, and edit Home cards. A team leader cannot make a code for a pastor or a Master Admin, or give someone a role above their own. Only a Master Admin can make a code for a pastor or Master Admin seat.
 
 Open **Admin**. Pick a from date and a to date, tap **Show**, then **Download spreadsheet**. The file is the same audit log, with times in Central. It does not contain passwords or codes.
 

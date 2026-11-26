@@ -107,3 +107,84 @@ jobs:
           name: ios-screenshots
           path: screenshots
           if-no-files-found: ignore
+
+  # The smallest supported screen. Scrolls every tab to the bottom and checks nothing sits under the tab bar.
+  small-iphone:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if ls /Applications/Xcode_*.app >/dev/null 2>&1; then
+            XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1 || true)
+            if [ -n "${XCODE}" ]; then sudo xcode-select -s "$XCODE"; fi
+          fi
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and start the API
+        run: |
+          npm ci
+          nohup node --import tsx server/src/main.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8787/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/api.log"
+          exit 1
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Create an iPhone SE (3rd generation) simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          TYPE=$(xcrun simctl list devicetypes | grep -E "^iPhone SE \(3rd generation\)" | sed -E 's/.*\((com\.apple[^)]+)\).*/\1/' | head -1)
+          RUNTIME=$(xcrun simctl list runtimes available | grep -E "^iOS " | tail -1 | sed -E 's/.* - (com\.apple[^ ]+).*/\1/')
+          if [ -z "$TYPE" ] || [ -z "$RUNTIME" ]; then
+            xcrun simctl list devicetypes
+            xcrun simctl list runtimes
+            echo "No iPhone SE (3rd generation) simulator on this runner."
+            exit 1
+          fi
+          UDID=$(xcrun simctl create "OneHope SE3" "$TYPE" "$RUNTIME")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Using $TYPE on $RUNTIME ($UDID)"
+
+      - name: Bottom of every tab on the small screen
+        run: |
+          set -euo pipefail
+          cd ios
+          xcodebuild test \
+            -project OneHope.xcodeproj \
+            -scheme OneHope \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:OneHopeUITests/SmallScreenUITests \
+            -resultBundlePath "$RUNNER_TEMP/SmallIPhone.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/SmallIPhone.xcresult" \
+            --output-path small-iphone || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-small-iphone-screenshots
+          path: small-iphone
+          if-no-files-found: ignore

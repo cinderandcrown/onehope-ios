@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { loadConfig } from "./config";
+import { loadConfig, resolveEnvMode } from "./config";
 import { documentCounts, loadDocument, saveDocumentDiff } from "./document-store";
 import { assumeService } from "./service-role";
 import type { SqlClient } from "./migrate";
@@ -52,6 +52,7 @@ export async function importLegacySnapshot(
     const current = await loadDocument(sql, "onehope", {
       includeAudit: true,
       allSessions: true,
+      allTouches: true,
       platformKey: key,
     });
     await saveDocumentDiff(sql, "onehope", current, parsed, {
@@ -63,6 +64,7 @@ export async function importLegacySnapshot(
     const loaded = await loadDocument(sql, "onehope", {
       includeAudit: true,
       allSessions: true,
+      allTouches: true,
       platformKey: key,
     });
     const expected = await documentCounts(parsed);
@@ -97,7 +99,7 @@ function isDocument(value: unknown): value is StoreDocument {
 }
 
 export function refuseSampleInProduction(doc: StoreDocument, env: NodeJS.ProcessEnv): void {
-  if (env.ONEHOPE_ENV !== "production") return;
+  if (resolveEnvMode(env) !== "production") return;
   for (const person of doc.people) {
     if (person.sample || person.email.endsWith("@sample.onehope")) {
       throw new Error("Refusing to import sample people into a production tenant.");

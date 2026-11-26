@@ -37,6 +37,14 @@ export const ACTIONS = [
   "assign_team_roles",
   "propose_master_admin",
   "view_audit_log",
+  "view_people",
+  "edit_people",
+  "manage_tags",
+  "work_care_tasks",
+  "manage_playbooks",
+  "remove_people",
+  "import_people",
+  "merge_people",
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -57,13 +65,31 @@ export function actionsFor(role: Role): readonly Action[] {
     case "volunteer":
       return MEMBER_ACTIONS;
     case "team_leader":
-      return [...MEMBER_ACTIONS, "manage_serving"];
+      // People on teams they lead, plus people they added.
+      return [...MEMBER_ACTIONS, "manage_serving", "view_people", "edit_people"];
     case "kids_director":
-      return [...MEMBER_ACTIONS, "manage_checkin", "view_kids_medical", "view_background_checks"];
+      // Kids households and the kids team only.
+      return [
+        ...MEMBER_ACTIONS,
+        "manage_checkin",
+        "view_kids_medical",
+        "view_background_checks",
+        "view_people",
+        "edit_people",
+      ];
     case "finance":
       return [...MEMBER_ACTIONS, "view_all_giving", "approve_expenses"];
     case "care_team":
-      return [...MEMBER_ACTIONS, "view_care_notes", "share_care_note"];
+      return [
+        ...MEMBER_ACTIONS,
+        "view_care_notes",
+        "share_care_note",
+        "view_people",
+        "edit_people",
+        "manage_tags",
+        "work_care_tasks",
+        "merge_people",
+      ];
     case "pastor":
       return [
         ...MEMBER_ACTIONS,
@@ -79,6 +105,14 @@ export function actionsFor(role: Role): readonly Action[] {
         "approve_expenses",
         "assign_team_roles",
         "view_audit_log",
+        "view_people",
+        "edit_people",
+        "manage_tags",
+        "work_care_tasks",
+        "manage_playbooks",
+        "remove_people",
+        "import_people",
+        "merge_people",
       ];
     case "master_admin":
       return ACTIONS;
@@ -137,8 +171,9 @@ export function isStaff(role: Role): boolean {
 
 /**
  * Higher numbers outrank lower ones.
- * An invite or role change may target someone at or below the issuer.
- * A pastor seat and a Master Admin seat are the exception: only a Master Admin may target those.
+ * A Master Admin may target any role. Every other role may invite or change roles only strictly below its own
+ * level (a care teammate cannot seat finance or another care teammate). Pastor and Master Admin seats are
+ * Master Admin only.
  */
 const ROLE_PRIVILEGE: Record<Role, number> = {
   master_admin: 70,
@@ -157,19 +192,14 @@ const ROLE_PRIVILEGE: Record<Role, number> = {
 };
 
 export function mayIssueInvite(issuerRole: Role, targetRole: Role): boolean {
-  if (targetRole === "master_admin" || targetRole === "pastor") return issuerRole === "master_admin";
-  if (issuerRole === "team_leader") return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader;
-  return ROLE_PRIVILEGE[targetRole] <= ROLE_PRIVILEGE[issuerRole];
+  if (issuerRole === "master_admin") return true;
+  if (targetRole === "master_admin" || targetRole === "pastor") return false;
+  // Everyone else reaches only roles strictly below their own: no peer seats.
+  return ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE[issuerRole];
 }
 
-/** A team leader may change only roles strictly below team leader, never another team leader. */
+/** Both the person's current role and the new role must be strictly below the actor (Master Admin excepted). */
 export function mayChangeRole(actorRole: Role, currentRole: Role, targetRole: Role): boolean {
-  if (actorRole === "team_leader") {
-    return (
-      ROLE_PRIVILEGE[currentRole] < ROLE_PRIVILEGE.team_leader &&
-      ROLE_PRIVILEGE[targetRole] < ROLE_PRIVILEGE.team_leader
-    );
-  }
   return mayIssueInvite(actorRole, currentRole) && mayIssueInvite(actorRole, targetRole);
 }
 
@@ -180,6 +210,8 @@ export const TIER3_ACTIONS: ReadonlySet<Action> = new Set<Action>([
   "share_care_note",
   "view_kids_medical",
   "view_background_checks",
+  "remove_people",
+  "import_people",
 ]);
 
 export const SENSITIVE_STAFF_ROLES: ReadonlySet<Role> = new Set<Role>([

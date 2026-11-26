@@ -29,7 +29,16 @@ export type LoadOptions = {
   platformKey?: Buffer | null;
   /** When set, only these tables are read. Omit it to read every table. */
   tables?: readonly string[];
+  /** Read every touch (snapshots and exports). Requests read the recent window plus one person's page. */
+  allTouches?: boolean;
+  /** One page of one person's timeline, newest first, older than `before` (ms) when set. */
+  touchPage?: { personId: string; before?: number | null } | null;
 };
+
+/** Touches a normal request reads across the whole church: the newest ones. */
+export const RECENT_TOUCHES = 500;
+/** Rows read for one person's timeline page. One extra tells the page there is more. */
+export const PERSON_TOUCH_ROWS = 51;
 
 export type SaveOptions = {
   syncModules: boolean;
@@ -106,6 +115,15 @@ export function emptyDocument(): StoreDocument {
     coffeeOrders: [],
     social: [],
     kidsTeam: [],
+    profiles: [],
+    tags: [],
+    personTags: [],
+    touches: [],
+    playbooks: [],
+    careTasks: [],
+    imports: [],
+    merges: [],
+    lists: [],
     featuredMessage: null,
   };
 }
@@ -115,7 +133,24 @@ export function isMissingRelation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === "42P01");
 }
 
-const OPTIONAL_TABLES = new Set(["featured_messages", "kids_team"]);
+const OPTIONAL_TABLES = new Set([
+  "featured_messages",
+  "kids_team",
+  "person_profiles",
+  "tags",
+  "person_tags",
+  "interactions",
+  "care_playbooks",
+  "care_tasks",
+  "people_imports",
+  "person_merges",
+  "saved_lists",
+]);
+
+function epoch(row: Row, key: string): string | null {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : null;
+}
 
 /** A missing new table must not abort the request transaction. */
 async function relationReady(sql: SqlClient, table: string): Promise<boolean> {
@@ -159,6 +194,12 @@ function required(row: Row, key: string): string {
 
 function bool(row: Row, key: string): boolean {
   return row[key] === true;
+}
+
+function faithColumn(row: Row): string {
+  const value = row.faithSteps;
+  if (!Array.isArray(value)) return "";
+  return value.filter((item): item is string => typeof item === "string").join(",");
 }
 
 function recordColumn(row: Row): string {
@@ -222,6 +263,7 @@ const SPECS: readonly SyncSpec[] = [
       "last_ip",
       "last_user_agent",
       "sample",
+      "import_id",
       "record",
     ],
     rows: (doc) => objects(doc.people),
@@ -243,6 +285,7 @@ const SPECS: readonly SyncSpec[] = [
       text(row, "lastIp"),
       text(row, "lastUserAgent"),
       bool(row, "sample"),
+      text(row, "importId"),
       secretFree(row),
     ],
     identity: idKey,
@@ -466,6 +509,77 @@ const SPECS: readonly SyncSpec[] = [
   ]),
   recordSpec("social_links", (doc) => doc.social, assignArray("social")),
   recordSpec(
+    "person_profiles",
+    (doc) => doc.profiles,
+    assignArray("profiles"),
+    ["person_id", "stage", "last_contact_at", "source", "owner_id", "last_seen_at", "faith_steps", "import_id"],
+    (row) => [
+      required(row, "personId"),
+      required(row, "stage"),
+      epoch(row, "lastContactAt"),
+      required(row, "source"),
+      text(row, "ownerId"),
+      epoch(row, "lastSeenAt"),
+      faithColumn(row),
+      text(row, "importId"),
+    ],
+  ),
+  recordSpec("tags", (doc) => doc.tags, assignArray("tags"), ["kind", "archived"], (row) => [
+    required(row, "kind"),
+    bool(row, "archived"),
+  ]),
+  recordSpec(
+    "person_tags",
+    (doc) => doc.personTags,
+    assignArray("personTags"),
+    ["person_id", "tag_id"],
+    (row) => [required(row, "personId"), required(row, "tagId")],
+  ),
+  recordSpec(
+    "interactions",
+    (doc) => doc.touches,
+    assignArray("touches"),
+    ["person_id", "kind", "outcome", "touched_at"],
+    (row) => [required(row, "personId"), required(row, "kind"), required(row, "outcome"), epoch(row, "at")],
+  ),
+  recordSpec("care_playbooks", (doc) => doc.playbooks, assignArray("playbooks"), ["trigger", "active"], (row) => [
+    required(row, "trigger"),
+    bool(row, "active"),
+  ]),
+  recordSpec(
+    "care_tasks",
+    (doc) => doc.careTasks,
+    assignArray("careTasks"),
+    ["person_id", "follow_up_id", "playbook_id", "assignee_id", "status", "due_at", "completed_at"],
+    (row) => [
+      text(row, "personId"),
+      text(row, "followUpId"),
+      text(row, "playbookId"),
+      text(row, "assigneeId"),
+      required(row, "status"),
+      epoch(row, "dueAt"),
+      epoch(row, "completedAt"),
+    ],
+  ),
+  recordSpec(
+    "people_imports",
+    (doc) => doc.imports,
+    assignArray("imports"),
+    ["status", "created_by", "undo_until"],
+    (row) => [required(row, "status"), text(row, "createdBy"), epoch(row, "undoUntil")],
+  ),
+  recordSpec(
+    "person_merges",
+    (doc) => doc.merges,
+    assignArray("merges"),
+    ["kept_id", "merged_id", "by_id", "kind"],
+    (row) => [required(row, "keptId"), required(row, "mergedId"), text(row, "byId"), required(row, "kind")],
+  ),
+  recordSpec("saved_lists", (doc) => doc.lists, assignArray("lists"), ["owner_id", "shared"], (row) => [
+    text(row, "ownerId"),
+    bool(row, "shared"),
+  ]),
+  recordSpec(
     "featured_messages",
     (doc) => (doc.featuredMessage ? [{ id: "current", ...doc.featuredMessage }] : []),
     (doc, rows) => {
@@ -605,6 +719,39 @@ async function loadRecords(
   });
 }
 
+/** The church's newest touches, plus one page of one person's timeline when asked. */
+async function loadTouches(
+  sql: SqlClient,
+  tenantId: string,
+  spec: SyncSpec,
+  doc: StoreDocument,
+  platformKey: Buffer | null,
+  page: { personId: string; before?: number | null } | null,
+): Promise<Row[]> {
+  const recent = await loadRecords(
+    sql,
+    tenantId,
+    spec,
+    doc,
+    platformKey,
+    ` ORDER BY touched_at DESC NULLS LAST, id DESC LIMIT ${RECENT_TOUCHES}`,
+  );
+  if (!page) return recent;
+  const before = typeof page.before === "number" && page.before > 0 ? new Date(page.before).toISOString() : null;
+  const personRows = await loadRecords(
+    sql,
+    tenantId,
+    spec,
+    doc,
+    platformKey,
+    ` AND person_id = $2 AND ($3::timestamptz IS NULL OR touched_at < $3::timestamptz)
+     ORDER BY touched_at DESC NULLS LAST, id DESC LIMIT ${PERSON_TOUCH_ROWS}`,
+    [page.personId, before],
+  );
+  const seen = new Set(recent.map((row) => String(row.id)));
+  return [...recent, ...personRows.filter((row) => !seen.has(String(row.id)))];
+}
+
 export async function loadDocument(
   sql: SqlClient,
   tenantId: string,
@@ -625,6 +772,16 @@ export async function loadDocument(
           ? " AND source = 'app'"
           : "";
     const params = spec.table === "sessions" && options.sessionToken ? [options.sessionToken] : [];
+    if (spec.table === "interactions" && !options.allTouches) {
+      spec.assign(doc, await loadTouches(sql, tenantId, spec, doc, platformKey, options.touchPage ?? null));
+      continue;
+    }
+    if (spec.table === "care_tasks" && !options.allTouches) {
+      // Open tasks, plus the last 30 days of finished ones for the Today numbers.
+      const recent = " AND (status = 'open' OR completed_at > now() - interval '30 days')";
+      spec.assign(doc, await loadRecords(sql, tenantId, spec, doc, platformKey, recent));
+      continue;
+    }
     spec.assign(doc, await loadRecords(sql, tenantId, spec, doc, platformKey, extra, params));
   }
   if (want("station_duty")) {
@@ -699,6 +856,7 @@ export async function saveDocumentDiff(
     if (!want(spec.table)) continue;
     writes += await syncSpec(sql, tenantId, spec, before, after, ctx, options.retainExtras === true);
   }
+  writes += await eraseLeavers(sql, tenantId, before, after, want);
   if (want("station_duty")) writes += await syncStation(sql, tenantId, before.station, after.station);
   if (want("kids_team")) writes += await syncIdSet(sql, tenantId, "kids_team", before.kidsTeam ?? [], after.kidsTeam ?? []);
   if (want("prayer_amens")) writes += await syncAmens(sql, tenantId, before.amens ?? [], after.amens ?? []);
@@ -721,6 +879,33 @@ export async function saveDocumentDiff(
 
 async function syncStation(sql: SqlClient, tenantId: string, before: string[], after: string[]) {
   return syncIdSet(sql, tenantId, "station_duty", before, after);
+}
+
+/**
+ * Touches and tasks are read a page at a time, so rows for someone who just left may not be in memory.
+ * Delete them by person in Postgres so leaving the church erases all of it.
+ */
+async function eraseLeavers(
+  sql: SqlClient,
+  tenantId: string,
+  before: StoreDocument,
+  after: StoreDocument,
+  want: (table: string) => boolean,
+): Promise<number> {
+  const wasLive = new Set(objects(before.people).filter((row) => !bool(row, "deleted")).map((row) => required(row, "id")));
+  const leavers = objects(after.people)
+    .filter((row) => bool(row, "deleted") && wasLive.has(required(row, "id")))
+    .map((row) => required(row, "id"));
+  let writes = 0;
+  for (const table of ["interactions", "care_tasks"] as const) {
+    if (leavers.length === 0 || !want(table) || !(await relationReady(sql, table))) continue;
+    const removed = await sql.query(`DELETE FROM ${table} WHERE tenant_id = $1 AND person_id = ANY($2::text[]) RETURNING id`, [
+      tenantId,
+      leavers,
+    ]);
+    writes += removed.rows.length;
+  }
+  return writes;
 }
 
 async function syncIdSet(sql: SqlClient, tenantId: string, table: "station_duty" | "kids_team", before: string[], after: string[]) {

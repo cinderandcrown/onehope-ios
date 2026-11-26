@@ -50,8 +50,16 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <p id="mfa-help" className="muted">
             Staff enter a 6-digit code.
           </p>
-          {params.error ? (
-            <p className="error">That sign-in did not go through. Check the email, password, and code.</p>
+          {params.error === "member" ? (
+            <p className="error" role="alert">
+              This sign-in is for church staff. Your member account works in the One Hope app, or{" "}
+              <Link href="/member">open the member app</Link>. If you serve on staff, ask your pastor to give
+              you a staff role.
+            </p>
+          ) : params.error ? (
+            <p className="error" role="alert">
+              That sign-in did not go through. Check the email, password, and code.
+            </p>
           ) : null}
           <button className="button" type="submit">
             {text.signIn}

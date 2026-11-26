@@ -497,6 +497,9 @@ pre {
   align-items: center;
   margin: 0.75rem 0;
 }
+.button.block {
+  width: 100%;
+}
 .button.secondary {
   background: var(--card);
   color: var(--ink);
@@ -805,4 +808,102 @@ pre {
   padding-top: 0.8rem;
   margin-top: 0.8rem;
   max-width: 36rem;
+}
+
+/* Phase 2a: People and person pages */
+.form .check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.form .check input {
+  width: auto;
+}
+.list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.list li {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 0.6rem 0.8rem;
+}
+form.inline {
+  display: inline-block;
+  margin-left: 0.5rem;
+}
+form.inline .button {
+  width: auto;
+  padding: 0.3rem 0.8rem;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  list-style: none;
+}
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--sky);
+  color: #1c1b1b;
+  border-radius: 999px;
+  padding: 0.25rem 0.4rem 0.25rem 0.75rem;
+}
+.chips .chip-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+}
+.touch-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.touch-buttons label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--card);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+}
+.touch-buttons input {
+  width: auto;
+}
+.timeline {
+  list-style: none;
+  padding: 0;
+  border-left: 2px solid var(--olive);
+  margin-left: 0.4rem;
+}
+.timeline li {
+  padding: 0 0 0.9rem 0.9rem;
+}
+.timeline time {
+  font-size: 0.85rem;
+  color: var(--olive);
+}
+
+/* Phase 2b: Today and My tasks */
+.desk-card.late,
+.panel.task.late {
+  border-left: 6px solid #b0412b;
+}
+.today-card .button {
+  width: auto;
+}
+.script {
+  white-space: pre-wrap;
+  background: var(--paper);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
 }

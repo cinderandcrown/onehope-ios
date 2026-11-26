@@ -1,5 +1,55 @@
 # Changelog
 
+## Phase 2c (Import and clean-up) - unreleased
+
+### Added
+
+- Import people (pastor and Master Admin, after step-up): upload a CSV or a one-time Planning Center people export, match columns in plain words, preview the first 10 rows with possible-duplicate flags, then a summary of added, updated, and skipped. Undo for 24 hours. Large files upload in batches and can resume. No Planning Center API and no ongoing sync.
+- Duplicates: pairs that share an email, phone, or name, with Merge (undo for 7 days) or Not the same. The merge stays in the audit trail.
+- Saved lists on People. Filters cover stage, tags, faith steps, last seen, last contact, source, owner, and open tasks. A list is calculated when you open it.
+- Permissions `import_people` (pastor and Master Admin, step-up) and `merge_people` (pastor, care team, Master Admin).
+- Migration `0009_import_cleanup` adds `people_imports`, `person_merges`, `saved_lists`, and `import_id` on people and profiles, with forced row-level security. Undo snapshots are encrypted. Rollback: `server/migrations/rollback/0009_import_cleanup_down.sql`.
+
+## Phase 2b (Care engine) - unreleased
+
+### Added
+
+- Playbooks "Said yes to Jesus" (first call within 24 hours, Bible and first steps, mentor or group, baptism, 30-day check-in) and "First visit" (welcome text, card, coffee on us, invite back). Both ship **off**; only a pastor or Master Admin turns one on or off.
+- Care tasks for care team seats only, balanced by open load. Without consent (or after "do not contact") the only task is prayer. Members who leave take their tasks with them; leaving the care team hands open tasks back.
+- My tasks (Overdue, Today, This week, Later) with suggested words to copy, Done, Couldn't reach (three tries), Skip; pastors get Whole team and Move task. Nothing is ever sent.
+- Overview "Today" card: overdue, due today, decisions this week and reached within 24 hours, whole-team numbers for pastors.
+- Person timeline pages 50 touches at a time from Postgres (`interactions.touched_at`); requests read only the newest 500 touches plus the page being viewed. Leaving deletes touches and tasks by person in Postgres, even ones not loaded.
+- Remove from One Hope for pastors and Master Admin (members and volunteers only, step-up, audited).
+- Permissions `work_care_tasks` (Master Admin, pastor, care team), `manage_playbooks` (Master Admin and pastor can view and toggle), `remove_people` (step-up).
+- Migration `0008_care_engine` adds `care_playbooks`, `care_tasks` and `interactions.touched_at`, with forced RLS. Rollback: `server/migrations/rollback/0008_care_engine_down.sql`.
+
+## Phase 2a (People foundation) - unreleased
+
+### Added
+
+- People list with search (name, email, phone), stage, tag and "quiet 30+ days" filters, and paging.
+- A page for each person: contact, stage, tags, quick "log a touch" (call, text, visit, email, prayer, private note) with an outcome and optional note, a timeline, and their next-step requests for care staff.
+- "Asked us not to contact them" blocks outreach touches until a pastor or care team member lifts it. Praying and private notes still work.
+- Tags and team tags. A team tag names its leaders; team leaders see only people on teams they lead plus people they added, and can only tag people with their own teams.
+- New permissions `view_people`, `edit_people` (Master Admin, pastor, care team, plus kids director and team leader scoped to their people) and `manage_tags` (Master Admin, pastor, care team).
+- Migration `0007_people_care` adds `person_profiles`, `tags`, `person_tags` and `interactions` with forced row-level security per church. Touch notes are encrypted before they are stored. Rollback: `server/migrations/rollback/0007_people_care_down.sql`.
+- Leaving the church erases that person's profile, tags and touches.
+
+## Build 12 - unreleased
+
+### Fixed
+
+- The staff sign-in page and Home no longer fail with a 500 when a church photo is configured (as on Vercel). The photo component passed a function to next/image across the server/client boundary. End-to-end tests now run with a photo set.
+- A member who signs in on the staff desk's sign-in form now sees "This sign-in is for church staff" with a link to the member app, instead of landing back on a blank sign-in page. Their session is ended. A member session that reaches a desk page is sent to the same message.
+- The kids API no longer reports someone as on duty after they are taken off the kids team. Removing them also clocks them out, the station count and names drop them, and putting them back on the team does not silently clock them back in.
+- Invites and role changes follow the approved policy everywhere: every role below Master Admin reaches only roles strictly below its own level (no peer seats, so care team cannot seat finance and a pastor cannot seat a pastor). Only a Master Admin seats pastors or Master Admins.
+- An unknown or mistyped `ONEHOPE_ENV` (for example `prod`) now refuses to start with a clear log line instead of quietly running in demo mode with sample data. Exact values are case-insensitive. On Vercel production a typo still resolves to production and logs loudly. Sample people are refused on Vercel production even when `ONEHOPE_ENV` is unset.
+
+### Added
+
+- A small-iPhone check: CI scrolls every tab to the bottom on an iPhone SE (3rd generation) simulator, saves a screenshot of each, and fails if the last row sits under the tab bar.
+- The staff walkthrough notes that kids volunteers clock in from the app, not the web check-in desk.
+
 ## Build 10 - 2026-11-20
 
 ### Added

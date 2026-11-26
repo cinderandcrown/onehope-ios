@@ -50,16 +50,29 @@ export async function signIn(formData: FormData) {
   try {
     const next = await withChurch((store) => {
       const session = store.login({ email, password, ip: "command-center", userAgent: "staff-form" });
+      if (!session.mfaRequired) {
+        // A member account signed in here. This desk is staff only, so end the session and say so.
+        try {
+          store.staffMe(session.token);
+        } catch (error) {
+          if (isAccessError(error) && error.code === "forbidden") {
+            store.logout(session.token);
+            return { token: "", enroll: false as const, member: true as const };
+          }
+          throw error;
+        }
+      }
       if (session.mfaRequired && store.totpStatus(session.token) === "enroll") {
-        return { token: session.token, enroll: true as const };
+        return { token: session.token, enroll: true as const, member: false as const };
       }
       if (session.mfaRequired) {
         if (!/^\d{6}$/.test(code)) throw new AccessError("mfa_required", "Enter the 6-digit code.");
         store.verifyMfa(session.token, code);
         store.stepUp(session.token, { code });
       }
-      return { token: session.token, enroll: false as const };
+      return { token: session.token, enroll: false as const, member: false as const };
     });
+    if (next.member) redirect("/login?error=member");
     await setSession(next.token);
     if (next.enroll) redirect("/enroll");
   } catch (error) {
