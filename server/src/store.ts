@@ -5730,8 +5730,14 @@ export class ChurchStore {
       {
         id: "event-sunday",
         title: "Sunday gathering",
-        start: ROOM_START,
-        end: ROOM_END,
+        // Keep the fixed fixture date while it is still ahead, then roll to the next real Sunday so the
+        // sample never turns into a past event that hides Register and breaks the member walkthrough.
+        ...(ROOM_END >= this.now()
+          ? { start: ROOM_START, end: ROOM_END }
+          : (() => {
+              const service = nextSundayService(new Date(this.now())).service.getTime();
+              return { start: service, end: service + (ROOM_END - ROOM_START) };
+            })()),
         location: `${CHURCH.addressLine}, ${CHURCH.city}`,
         description: "Weekly gathering. Pre-service at 10:00 a.m.",
         capacity: null,
