@@ -1,0 +1,2 @@
+// The live demo API. $() keeps the URL from being read as an xcconfig comment.
+API_BASE_URL = https:/$()/onehope-beryl.vercel.app

@@ -1,0 +1,145 @@
+# Changelog
+
+## Phase 2c (Import and clean-up) - unreleased
+
+### Added
+
+- Import people (pastor and Master Admin, after step-up): upload a CSV or a one-time Planning Center people export, match columns in plain words, preview the first 10 rows with possible-duplicate flags, then a summary of added, updated, and skipped. Undo for 24 hours. Large files upload in batches and can resume. No Planning Center API and no ongoing sync.
+- Duplicates: pairs that share an email, phone, or name, with Merge (undo for 7 days) or Not the same. The merge stays in the audit trail.
+- Saved lists on People. Filters cover stage, tags, faith steps, last seen, last contact, source, owner, and open tasks. A list is calculated when you open it.
+- Permissions `import_people` (pastor and Master Admin, step-up) and `merge_people` (pastor, care team, Master Admin).
+- Migration `0009_import_cleanup` adds `people_imports`, `person_merges`, `saved_lists`, and `import_id` on people and profiles, with forced row-level security. Undo snapshots are encrypted. Rollback: `server/migrations/rollback/0009_import_cleanup_down.sql`.
+
+## Phase 2b (Care engine) - unreleased
+
+### Added
+
+- Playbooks "Said yes to Jesus" (first call within 24 hours, Bible and first steps, mentor or group, baptism, 30-day check-in) and "First visit" (welcome text, card, coffee on us, invite back). Both ship **off**; only a pastor or Master Admin turns one on or off.
+- Care tasks for care team seats only, balanced by open load. Without consent (or after "do not contact") the only task is prayer. Members who leave take their tasks with them; leaving the care team hands open tasks back.
+- My tasks (Overdue, Today, This week, Later) with suggested words to copy, Done, Couldn't reach (three tries), Skip; pastors get Whole team and Move task. Nothing is ever sent.
+- Overview "Today" card: overdue, due today, decisions this week and reached within 24 hours, whole-team numbers for pastors.
+- Person timeline pages 50 touches at a time from Postgres (`interactions.touched_at`); requests read only the newest 500 touches plus the page being viewed. Leaving deletes touches and tasks by person in Postgres, even ones not loaded.
+- Remove from One Hope for pastors and Master Admin (members and volunteers only, step-up, audited).
+- Permissions `work_care_tasks` (Master Admin, pastor, care team), `manage_playbooks` (Master Admin and pastor can view and toggle), `remove_people` (step-up).
+- Migration `0008_care_engine` adds `care_playbooks`, `care_tasks` and `interactions.touched_at`, with forced RLS. Rollback: `server/migrations/rollback/0008_care_engine_down.sql`.
+
+## Phase 2a (People foundation) - unreleased
+
+### Added
+
+- People list with search (name, email, phone), stage, tag and "quiet 30+ days" filters, and paging.
+- A page for each person: contact, stage, tags, quick "log a touch" (call, text, visit, email, prayer, private note) with an outcome and optional note, a timeline, and their next-step requests for care staff.
+- "Asked us not to contact them" blocks outreach touches until a pastor or care team member lifts it. Praying and private notes still work.
+- Tags and team tags. A team tag names its leaders; team leaders see only people on teams they lead plus people they added, and can only tag people with their own teams.
+- New permissions `view_people`, `edit_people` (Master Admin, pastor, care team, plus kids director and team leader scoped to their people) and `manage_tags` (Master Admin, pastor, care team).
+- Migration `0007_people_care` adds `person_profiles`, `tags`, `person_tags` and `interactions` with forced row-level security per church. Touch notes are encrypted before they are stored. Rollback: `server/migrations/rollback/0007_people_care_down.sql`.
+- Leaving the church erases that person's profile, tags and touches.
+
+## Build 12 - unreleased
+
+### Fixed
+
+- The staff sign-in page and Home no longer fail with a 500 when a church photo is configured (as on Vercel). The photo component passed a function to next/image across the server/client boundary. End-to-end tests now run with a photo set.
+- A member who signs in on the staff desk's sign-in form now sees "This sign-in is for church staff" with a link to the member app, instead of landing back on a blank sign-in page. Their session is ended. A member session that reaches a desk page is sent to the same message.
+- The kids API no longer reports someone as on duty after they are taken off the kids team. Removing them also clocks them out, the station count and names drop them, and putting them back on the team does not silently clock them back in.
+- Invites and role changes follow the approved policy everywhere: every role below Master Admin reaches only roles strictly below its own level (no peer seats, so care team cannot seat finance and a pastor cannot seat a pastor). Only a Master Admin seats pastors or Master Admins.
+- An unknown or mistyped `ONEHOPE_ENV` (for example `prod`) now refuses to start with a clear log line instead of quietly running in demo mode with sample data. Exact values are case-insensitive. On Vercel production a typo still resolves to production and logs loudly. Sample people are refused on Vercel production even when `ONEHOPE_ENV` is unset.
+
+### Added
+
+- A small-iPhone check: CI scrolls every tab to the bottom on an iPhone SE (3rd generation) simulator, saves a screenshot of each, and fails if the last row sits under the tab bar.
+- The staff walkthrough notes that kids volunteers clock in from the app, not the web check-in desk.
+
+## Build 10 - 2026-11-20
+
+### Added
+
+- The church's own photos, from its public websites, replace the colored placeholders on Home, Plan a Visit, Revival Coffee, About, and Watch. Photos, the team, ministry cards, and the Revival gallery arrive at runtime from tenant config (`ONEHOPE_MEDIA_JSON`). None are stored in git, and a missing photo falls back to the brand colors.
+- Home is warmer: a hero photo, quick shortcuts, a Revival Coffee feature, the latest messages with sharp thumbnails, ministries, and a team teaser.
+- Revival Coffee is first in More and on Home, with its menu, hours, gallery, and directions.
+- Our Team screen, a redesigned More menu with icons and one-line descriptions, and friendlier empty states.
+- Images are cached in memory and on disk, warmed after the church loads, and fade in.
+
+- Accessibility: text and icon colors reach 4.5:1 (a darker orange for anything readable, dark-mode safe), 44 pt tap targets, Dynamic Type layouts that reflow instead of clipping, Reduce Motion respected, labeled photos and silent decorative ones, visible form labels, VoiceOver announcements for form results, YouTube captions on by default, and an automated accessibility audit in UI tests.
+- Legal drafts in More: Privacy Policy and Terms of Use (marked DRAFT pending church and attorney review, also reachable from signup), and an About & Credits screen with photo credits and open-source licenses. `LICENSE` (MIT) and `THIRD_PARTY_NOTICES.md` added. Giving statements say no goods or services were provided. App Store privacy answers are in `docs/app-store-privacy.md`.
+
+- App Review fixes: members can report a prayer request (it leaves the wall at once and returns to the pastors' queue, `POST /api/prayers/{id}/report`); unfinished "Coming soon" rows and labels are gone; the unused camera permission is removed; a church contact email (`contactEmail` in tenant config) shows in About, Privacy, and Terms.
+- A branded launch screen, Home ordered for the first 30 seconds (next service, Give / Pray / Revival / Know Jesus, today's encouragement, latest message), and the last photo set is remembered for an instant second launch.
+
+- Fixes from the screenshot review: service, event and sermon dates always show in Richardson (America/Chicago) time, whatever zone the phone is on (Home said 4:30 PM on a UTC device), with unit tests that run on UTC. The privacy manifest now declares the data the app collects, matching the App Store answers. Home's Plan a Visit and Directions grow with text size and stack at large sizes. Lists share the paper background. Events show their date and a details link. At accessibility text sizes the tab bar shows icons with the Large Content Viewer instead of cut-off labels. The More-menu UI test scrolls slowly and waits to return to More, so it no longer flakes.
+
+### Changed
+
+- Smoother tab changes, a haptic tap, and filled icons for the selected tab.
+- Public GET endpoints send cache headers and ETags; sermons and the directory accept paging; the sermon feed keeps a short cache and serves stale if YouTube is slow; the app loads its sections at the same time.
+
+## Build 8 - 2026-11-19
+
+### Added
+
+- Today on Home: a greeting, the Daily Word, a prayer moment, this Sunday, Revival Coffee, and Follow along.
+- Follow along uses only the three links printed on weareonehope.com: Instagram, Facebook, and YouTube. Staff can edit them on the desk. Tapping one opens the phone's app when it is installed.
+- Revival Coffee: the menu, hours, and address from myrevivalcoffee.com. Weekend hours stay TBD. There is no phone number on their site, so the app offers directions and email. Order ahead stays off until `COFFEE_ORDERING_LIVE` and Square are set. Card numbers never come to our server.
+- A 30-day journey of KJV verses after someone says yes to Jesus, and a public invite page a neighbor can open.
+- A staff desk with plain cards: kids here today, people to talk with, prayers to share, help needed Sunday, what's coming up, and giving. Giving stays hidden until the person confirms it's them, and nothing is charged.
+- The app is ready for `app.weareonehope.com`. See DOMAIN_SETUP.md. Nothing was changed at the DNS host or in Vercel.
+- DESIGN.md records the website's colors and type.
+
+### Changed
+
+- The look follows the church website more closely: olive, terracotta, sky, and dove, with ink edges and the church's own photos.
+- The button that used to say "I decided to follow Jesus" now says "I said yes to Jesus."
+
+## Build 7 - 2026-11-18
+
+### Added
+
+- Support and assistance: the church's Support/Assistance Request with its six boxes (pastoral counseling, pre-marital counseling, hospital visitation, One Hope recovery group, volunteering, clothing). Guests and members send it to the staff care queue; the boxes are encrypted with the contact. `POST /api/support` is rate limited and needs consent, and a guest must leave an email or phone.
+- Toolkit for Spiritual Growth from the church's Church Center page: Bible reading plan, scriptures to speak (KJV), Daily Proclamations, staff reads, podcast picks, and the Spotify playlist. `GET /api/growth` (public).
+- Hope City Recovery / Unlocking Freedom: the group with request-to-join on Church Center, and the Life Evaluation Worksheet (ten areas rated 1 to 10) with its printable PDF. Ratings stay on the device.
+- In-app giving form with the Church Center frequencies (Once, Weekly, Every other week, Twice monthly, Monthly). It asks for the password and stays behind `GIVING_LIVE`.
+- Kids check-in shows who is checked in. A family picks up with the code from check-in.
+
+### Changed
+
+- Giving funds are "One Hope Church" and "Christmas Giving Tree". The placeholder funds (Outreach, Kids, Benevolence) are no longer offered; gifts already recorded against them keep their names.
+- Check-in codes come from a cryptographic random source. A code works for one pickup, and pickup locks for an hour after five wrong tries.
+
+## Build 6 - 2026-11-18
+
+### Added
+
+- Guests can use Home, Watch, Know Jesus, Plan a Visit, and Give on the phone and at `/member` without an account. Connect lists groups and events for everyone and asks for sign-in to join, send a prayer request, or check in kids.
+- Know Jesus: the gospel in five KJV passages, a prayer, and next-step buttons (follow Jesus, baptism, new, Growth Track) that land in the staff care queue. A decision opens a 7-day new-believer journey.
+- `POST /api/follow-ups` (guest or member, rate limited, contact details only with consent), `GET /api/care/follow-ups`, `POST /api/care/follow-ups/{id}`, `GET /api/know-jesus`, `GET /api/daily-word`, `POST /api/daily-word/read`.
+- Daily Word with a streak, kept on the phone for guests and synced for members.
+- New accounts start on the default next-steps pathway.
+- Plan a Visit from weareonehope.com, with an "I'm coming" heads-up for the welcome team, and a shareable Sunday invite.
+- Watch shows thumbnails and dates, keeps Shorts apart from messages, and shares each video. Home features the latest message.
+- Give lists Church Center online giving, text 84321, mail, and the Christmas Giving Tree until Christmas. The in-app card form stays behind `GIVING_LIVE`.
+- The church's 13 open Church Center groups and its two open registrations replace the placeholder groups. Request-to-join groups and Church Center events link out instead of signing people up in the app.
+- Prayer requests ask Church Center's questions. "Please contact me" adds a care-queue row for the pastors.
+
+### Changed
+
+- Snapshots saved by earlier builds load unchanged. On load the placeholder groups (`group-kids`, `group-small`, `group-growth`) and their notes are removed, real groups are upserted by id with memberships kept, and the Sunday event moves to the next Sunday once it has passed.
+
+### Fixed (TestFlight build 6 hotfix)
+
+- iOS Watch: videos showed YouTube "Error 153, video player configuration error". The player loaded the embed URL directly, so YouTube got no HTTP Referer, the API client identity it now requires. The player page now loads with `loadHTMLString(_:baseURL:)` under `https://com.cinderandcrown.onehope` (the bundle id, as Google's Required Minimum Functionality rules specify), uses the IFrame Player API with `playsinline`, `origin` and `widget_referrer`, and reports player errors back to the app.
+- If YouTube still refuses a video, the player is covered with "Play on YouTube", which opens the YouTube app or Safari. The same button sits under every video.
+- Web Watch: the embed sets `referrerpolicy="strict-origin-when-cross-origin"` explicitly and has a "Play on YouTube" link.
+
+## 1.0.0 - 2026-11-17
+
+### Added
+
+- SwiftUI member app with Home, Watch, Give, Connect, and More, plus the ministry modules those tabs carry.
+- Staff Command Center for people, care, gatherings, giving, stewardship, and the role matrix.
+- Shared server with household access rules, Tier 3 encryption, Master Admin two-person revoke, and demo integrations that do not charge or send.
+- Postgres migrations and RLS tests.
+- GitHub Actions for iOS, the web app, and a manual TestFlight upload.
+- The iPhone tabs load from the shared API when a base URL is set, and keep a labeled sample if it is not.
+- Connect shows the signed-in household's classrooms, next steps, and serving assignments. Medical notes, allergy text, and security codes stay off that response.
+- The staff site, `/member` (installable on a phone home screen), and `/api` share one store. With `DATABASE_URL` or `POSTGRES_URL` that store is a Postgres snapshot seeded with labeled demo rows. See `docs/deploy.md`.
+- Release builds of the iPhone app read the live API from `ios/Config/Release.xcconfig`. `codemagic.yaml` workflow `ios-testflight` archives that build for TestFlight. The App Store Connect key stays in the Codemagic integration.

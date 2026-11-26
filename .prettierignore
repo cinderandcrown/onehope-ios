@@ -1,0 +1,9 @@
+node_modules
+.next
+server/src/generated
+web/test-results
+web/playwright-report
+ios/**/*.png
+ios/**/*.jpg
+web/public
+package-lock.json

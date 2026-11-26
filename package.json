@@ -1,0 +1,20 @@
+{
+  "name": "onehope",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "test": "npm test -w @onehope/server",
+    "typecheck": "npm run typecheck -w @onehope/server && npm run typecheck -w web",
+    "lint": "npm run lint -w web",
+    "build": "npm run build -w web",
+    "e2e": "npm run e2e -w web",
+    "format": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

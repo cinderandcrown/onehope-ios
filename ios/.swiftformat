@@ -1,0 +1,4 @@
+--swiftversion 5.9
+--indent 4
+--maxwidth 160
+--disable wrap,wrapArguments,wrapMultilineStatementBraces,redundantSelf,unusedArguments,sortImports,trailingCommas,blankLinesAtStartOfScope,blankLinesAtEndOfScope
