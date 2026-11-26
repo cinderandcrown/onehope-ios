@@ -121,6 +121,9 @@ export function emptyDocument(): StoreDocument {
     touches: [],
     playbooks: [],
     careTasks: [],
+    imports: [],
+    merges: [],
+    lists: [],
     featuredMessage: null,
   };
 }
@@ -139,6 +142,9 @@ const OPTIONAL_TABLES = new Set([
   "interactions",
   "care_playbooks",
   "care_tasks",
+  "people_imports",
+  "person_merges",
+  "saved_lists",
 ]);
 
 function epoch(row: Row, key: string): string | null {
@@ -188,6 +194,12 @@ function required(row: Row, key: string): string {
 
 function bool(row: Row, key: string): boolean {
   return row[key] === true;
+}
+
+function faithColumn(row: Row): string {
+  const value = row.faithSteps;
+  if (!Array.isArray(value)) return "";
+  return value.filter((item): item is string => typeof item === "string").join(",");
 }
 
 function recordColumn(row: Row): string {
@@ -251,6 +263,7 @@ const SPECS: readonly SyncSpec[] = [
       "last_ip",
       "last_user_agent",
       "sample",
+      "import_id",
       "record",
     ],
     rows: (doc) => objects(doc.people),
@@ -272,6 +285,7 @@ const SPECS: readonly SyncSpec[] = [
       text(row, "lastIp"),
       text(row, "lastUserAgent"),
       bool(row, "sample"),
+      text(row, "importId"),
       secretFree(row),
     ],
     identity: idKey,
@@ -498,8 +512,17 @@ const SPECS: readonly SyncSpec[] = [
     "person_profiles",
     (doc) => doc.profiles,
     assignArray("profiles"),
-    ["person_id", "stage", "last_contact_at"],
-    (row) => [required(row, "personId"), required(row, "stage"), epoch(row, "lastContactAt")],
+    ["person_id", "stage", "last_contact_at", "source", "owner_id", "last_seen_at", "faith_steps", "import_id"],
+    (row) => [
+      required(row, "personId"),
+      required(row, "stage"),
+      epoch(row, "lastContactAt"),
+      required(row, "source"),
+      text(row, "ownerId"),
+      epoch(row, "lastSeenAt"),
+      faithColumn(row),
+      text(row, "importId"),
+    ],
   ),
   recordSpec("tags", (doc) => doc.tags, assignArray("tags"), ["kind", "archived"], (row) => [
     required(row, "kind"),
@@ -538,6 +561,24 @@ const SPECS: readonly SyncSpec[] = [
       epoch(row, "completedAt"),
     ],
   ),
+  recordSpec(
+    "people_imports",
+    (doc) => doc.imports,
+    assignArray("imports"),
+    ["status", "created_by", "undo_until"],
+    (row) => [required(row, "status"), text(row, "createdBy"), epoch(row, "undoUntil")],
+  ),
+  recordSpec(
+    "person_merges",
+    (doc) => doc.merges,
+    assignArray("merges"),
+    ["kept_id", "merged_id", "by_id", "kind"],
+    (row) => [required(row, "keptId"), required(row, "mergedId"), text(row, "byId"), required(row, "kind")],
+  ),
+  recordSpec("saved_lists", (doc) => doc.lists, assignArray("lists"), ["owner_id", "shared"], (row) => [
+    text(row, "ownerId"),
+    bool(row, "shared"),
+  ]),
   recordSpec(
     "featured_messages",
     (doc) => (doc.featuredMessage ? [{ id: "current", ...doc.featuredMessage }] : []),

@@ -95,6 +95,12 @@ Nothing on People sends a message. Salvation and first-visit playbooks are not p
 - A person's timeline shows 50 touches at a time with **Older** and **Newest**.
 - **Remove from One Hope** (pastors and Master Admin, after confirming it's you) is on a member's or volunteer's page, for duplicates, test entries, or someone who asked. Staff seats are changed on Roles first.
 
+### Import and clean-up (Phase 2c)
+
+- **Import** (pastor and Master Admin only): choose a spreadsheet or a one-time Planning Center people export, tap **Look at this file**, check the column matches, tap **Preview the first 10**, then **Import these people**. The summary says how many were added, updated, or skipped, and why. **Undo this import** works for 24 hours. If a large file stops partway, upload the same file again and it continues. This does not connect to Planning Center and does not keep syncing.
+- **Duplicates**: pairs that look like the same person. Tap **Keep** one of them, or **Not the same**. **Undo merge** works for 7 days.
+- **Saved lists** sit on People. Set a filter (stage, tag, faith step, last seen, last contact, how they found us, who looks after them, or an open task), name it, and tap **Save this list**. Opening the list runs the filter again, so it does not go stale. Tags are still how you group people by hand.
+
 ## 7. Serving
 
 Open **Serving**. Choose a person and a spot such as Door or Kids. Tap **Ask them to serve**. **Undo** works while it still says they are waiting. Nothing is texted.

@@ -97,6 +97,31 @@ export async function archiveTagAction(form: FormData) {
   await run("/people", (store, session) => store.archiveTag(session, field(form, "tagId")));
 }
 
+export async function saveListAction(form: FormData) {
+  await run(
+    "/people",
+    (store, session) =>
+      store.saveList(session, {
+        name: field(form, "name"),
+        shared: field(form, "shared") === "yes",
+        stage: field(form, "stage"),
+        tagIds: field(form, "tag") ? [field(form, "tag")] : [],
+        faithSteps: field(form, "faith") ? [field(form, "faith")] : [],
+        source: field(form, "source"),
+        ownerId: field(form, "owner"),
+        seen: field(form, "seen"),
+        contact: field(form, "contact"),
+        task: field(form, "task"),
+        quiet: field(form, "quiet") === "1",
+      }),
+    "list",
+  );
+}
+
+export async function deleteListAction(form: FormData) {
+  await run("/people", (store, session) => store.deleteList(session, field(form, "id")), "list");
+}
+
 export async function removePersonAction(form: FormData) {
   if (field(form, "confirm") !== "yes") redirect(`${personPath(form)}?error=confirm`);
   const session = await token();

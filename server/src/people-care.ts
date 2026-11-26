@@ -69,6 +69,16 @@ export type PersonProfileRow = {
   doNotContact: boolean;
   updatedAt: number;
   updatedBy: string;
+  /** Where this person came from. Empty on rows written before import. */
+  source?: string;
+  faithSteps?: string[];
+  ownerId?: string | null;
+  firstSeenAt?: number | null;
+  lastSeenAt?: number | null;
+  /** The import that created or last changed this profile, when there was one. */
+  importId?: string | null;
+  /** Encrypted `{ note, address, birthday }`. Empty when there is nothing extra. */
+  detailCiphertext?: string;
 };
 
 export type TagRow = {

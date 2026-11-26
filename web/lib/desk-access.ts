@@ -9,6 +9,8 @@ export function canOpenSection(role: Role, section: SectionId): boolean {
   }
   if (section === "tasks") return allows(role, "work_care_tasks");
   if (section === "playbooks") return allows(role, "manage_playbooks");
+  if (section === "import") return allows(role, "import_people");
+  if (section === "duplicates") return allows(role, "merge_people");
   if (section === "events") return allows(role, "manage_events") || role === "team_leader";
   return true;
 }

@@ -497,6 +497,9 @@ pre {
   align-items: center;
   margin: 0.75rem 0;
 }
+.button.block {
+  width: 100%;
+}
 .button.secondary {
   background: var(--card);
   color: var(--ink);

@@ -1,6 +1,6 @@
 // Generated from server/migrations by server/scripts/generate-table-types.mjs. Do not edit.
 
-export const tableNames = ["households","people","gifts","kids","care_notes","care_note_shares","prayers","background_checks","audit_log","retention_settings","sync_cursors","demo_runtime","tenants","tenant_domains","accounts","mfa_factors","snapshot_imports","demo_runtime_backup","memberships","sessions","alerts","proposals","station_duty","groups","group_messages","events","registrations","announcements","schedule_assignments","volunteers","rooms","bookings","expenses","pathways","visitors","care_requests","message_drafts","member_invites","follow_ups","streaks","rate_limits","prayer_amens","my_five","testimonies","milestones","outreach_events","outreach_rsvps","coffee_orders","social_links","tenant_modules","tenant_themes","tenant_integrations","tenant_links","locations","outbox_jobs","webhook_inbox","exports","operator_grants","pickup_settings","tenant_runtime","tenant_passwords","featured_messages","kids_team","person_profiles","tags","person_tags","interactions","care_playbooks","care_tasks"] as const;
+export const tableNames = ["households","people","gifts","kids","care_notes","care_note_shares","prayers","background_checks","audit_log","retention_settings","sync_cursors","demo_runtime","tenants","tenant_domains","accounts","mfa_factors","snapshot_imports","demo_runtime_backup","memberships","sessions","alerts","proposals","station_duty","groups","group_messages","events","registrations","announcements","schedule_assignments","volunteers","rooms","bookings","expenses","pathways","visitors","care_requests","message_drafts","member_invites","follow_ups","streaks","rate_limits","prayer_amens","my_five","testimonies","milestones","outreach_events","outreach_rsvps","coffee_orders","social_links","tenant_modules","tenant_themes","tenant_integrations","tenant_links","locations","outbox_jobs","webhook_inbox","exports","operator_grants","pickup_settings","tenant_runtime","tenant_passwords","featured_messages","kids_team","person_profiles","tags","person_tags","interactions","care_playbooks","care_tasks","people_imports","person_merges","saved_lists"] as const;
 
 export type TableName = (typeof tableNames)[number];
 
@@ -570,6 +570,42 @@ export type CareTasksRow = {
   status: string;
   due_at: string;
   completed_at: string;
+  record: string;
+  created_at: string;
+  updated_at: string;
+  row_version: number;
+};
+
+export type PeopleImportsRow = {
+  tenant_id: string;
+  id: string;
+  status: string;
+  created_by: string;
+  undo_until: string;
+  record: string;
+  created_at: string;
+  updated_at: string;
+  row_version: number;
+};
+
+export type PersonMergesRow = {
+  tenant_id: string;
+  id: string;
+  kept_id: string;
+  merged_id: string;
+  by_id: string;
+  kind: string;
+  record: string;
+  created_at: string;
+  updated_at: string;
+  row_version: number;
+};
+
+export type SavedListsRow = {
+  tenant_id: string;
+  id: string;
+  owner_id: string;
+  shared: boolean;
   record: string;
   created_at: string;
   updated_at: string;
