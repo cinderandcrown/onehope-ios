@@ -7,6 +7,7 @@ import { AdminDesk } from "@/components/staff/admin";
 import { MessageDesk } from "@/components/staff/message";
 import { PushDesk } from "@/components/staff/push";
 import { PeopleDesk } from "@/components/staff/people";
+import { PlaybooksDesk, TasksDesk, TodayCard } from "@/components/staff/tasks";
 import { SecurityDesk } from "@/components/staff/security";
 import { ServingDesk } from "@/components/staff/serving";
 import { WeekPreview } from "@/components/staff/week-preview";
@@ -127,6 +128,7 @@ function renderSection(
       const seats = store.seats();
       return (
         <>
+          <TodayCard store={store} token={token} />
           <Desk store={store} token={token} />
           <WeekPreview store={store} />
           <section className="hero">
@@ -218,6 +220,10 @@ function renderSection(
         </section>
       );
     }
+    case "tasks":
+      return <TasksDesk store={store} token={token} query={query} />;
+    case "playbooks":
+      return <PlaybooksDesk store={store} token={token} query={query} />;
     case "care":
       return <CareDesk store={store} token={token} query={query} />;
     case "groups": {

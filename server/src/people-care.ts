@@ -18,7 +18,7 @@ export const STAGE_LABELS: Record<Stage, string> = {
   leading: "Leading",
 };
 
-export const TOUCH_KINDS = ["call", "text", "visit", "email", "prayer", "note"] as const;
+export const TOUCH_KINDS = ["call", "text", "visit", "email", "card", "prayer", "note"] as const;
 export type TouchKind = (typeof TOUCH_KINDS)[number];
 
 export const TOUCH_LABELS: Record<TouchKind, string> = {
@@ -26,6 +26,7 @@ export const TOUCH_LABELS: Record<TouchKind, string> = {
   text: "Texted",
   visit: "Visited",
   email: "Emailed",
+  card: "Sent a card",
   prayer: "Prayed with",
   note: "Note",
 };
@@ -56,6 +57,8 @@ export type TagKind = (typeof TAG_KINDS)[number];
 export const QUIET_AFTER_DAYS = 30;
 export const NOTE_LIMIT = 2000;
 export const TAG_NAME_LIMIT = 40;
+/** Touches shown per page on a person's timeline. */
+export const TOUCH_PAGE = 50;
 
 export type PersonProfileRow = {
   /** Same as personId: one profile per person. */
@@ -152,7 +155,7 @@ export function countsAsContact(kind: TouchKind): boolean {
 
 /** Reaching out is blocked after someone asks us to stop; praying and private notes are not. */
 export function reachesOut(kind: TouchKind): boolean {
-  return kind === "call" || kind === "text" || kind === "visit" || kind === "email";
+  return kind === "call" || kind === "text" || kind === "visit" || kind === "email" || kind === "card";
 }
 
 export function isQuiet(lastContactAt: number | null, now: number): boolean {

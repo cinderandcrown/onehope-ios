@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createHmac } from "node:crypto";
 import { mkdirSync } from "node:fs";
 
 const shots = process.env.SCREENSHOT_DIR ?? "test-results/screenshots";
@@ -101,7 +102,10 @@ test("a member who signs in on the staff form is told the desk is for staff", as
 test("sign-in and member pages render when a church photo is configured", async ({ page }) => {
   const login = await page.goto("/login");
   expect(login?.status()).toBe(200);
-  await expect(page.locator("img.login-photo")).toHaveAttribute("src", "https://images.onehope.test/hero.jpg");
+  await expect(page.locator("img.login-photo")).toHaveAttribute(
+    "src",
+    "https://images.onehope.test/hero.jpg",
+  );
   const member = await page.goto("/member");
   expect(member?.status()).toBe(200);
 });
@@ -149,5 +153,103 @@ test("People: find someone, log a touch, tag them and set their stage", async ({
   await page.getByRole("link", { name: "← All people" }).click();
   await page.getByLabel("Stage").selectOption("returning");
   await page.getByRole("button", { name: "Show" }).click();
-  await expect(page.getByRole("table", { name: "People" }).getByRole("link", { name: "Casey Sample" })).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "People" }).getByRole("link", { name: "Casey Sample" }),
+  ).toBeVisible();
+});
+
+test("Care engine: a pastor turns on a playbook, a decision becomes a task, and Today counts it", async ({
+  page,
+  request,
+}) => {
+  mkdirSync(shots, { recursive: true });
+  await page.goto("/login");
+  await page.getByRole("button", { name: /sample pastor/i }).click();
+  await expect(page.getByRole("heading", { name: "Sunday at 10:30", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today", level: 2 })).toBeVisible();
+
+  await page.goto("/playbooks");
+  const salvation = page.getByRole("article", { name: "Said yes to Jesus" });
+  await expect(salvation.getByRole("heading", { name: "Said yes to Jesus · Off" })).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "First visit" }).getByRole("heading", { name: "First visit · Off" }),
+  ).toBeVisible();
+  await salvation.getByRole("button", { name: "Turn on Said yes to Jesus" }).click();
+  await expect(page.getByText("Playbook is on.")).toBeVisible();
+  await expect(salvation.getByRole("heading", { name: "Said yes to Jesus · On" })).toBeVisible();
+  await page.screenshot({ path: `${shots}/playbooks.png`, fullPage: true });
+
+  const sent = await request.post("/api/follow-ups", {
+    data: { kind: "salvation", name: "Jordan E2E", phone: "214-555-0142", consent: true },
+  });
+  expect(sent.status()).toBe(200);
+
+  await page.goto("/tasks?team=1");
+  await expect(page.getByRole("heading", { name: "Whole care team", level: 1 })).toBeVisible();
+  const call = page.getByRole("article", { name: "Celebrate and pray with them for Jordan E2E" });
+  await expect(call).toBeVisible();
+  await expect(call).toContainText("Said yes to Jesus, within 24 hours");
+  await expect(call).toContainText("Eden Sample");
+  await expect(call).toContainText("214-555-0142");
+  await call.getByText("Suggested words").click();
+  await expect(call).toContainText("Hi Jordan, this is Reese from One Hope Church.");
+  await page.screenshot({ path: `${shots}/tasks-team.png`, fullPage: true });
+  await call.getByLabel("How did it go? (optional)").fill("Prayed together on the phone.");
+  await call.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Done. Thank you for reaching out.")).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "Celebrate and pray with them for Jordan E2E" }),
+  ).toHaveCount(0);
+
+  await page.goto("/overview");
+  const today = page.locator("section.today-card");
+  await expect(today).toContainText("Decisions this week");
+  await expect(today).toContainText("1 reached within 24 hours");
+  await expect(today).toContainText("Playbooks on: Said yes to Jesus.");
+
+  await page.goto("/playbooks");
+  await page.getByRole("button", { name: "Turn off Said yes to Jesus" }).click();
+  await expect(page.getByText("Playbook is off.")).toBeVisible();
+});
+
+// RFC 6238 code from a base32 setup key, so the test can finish authenticator setup like a person would.
+function authenticatorCode(setupKey: string, at = Date.now()): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const char of setupKey.replace(/=+$/, "").toUpperCase()) {
+    bits += alphabet.indexOf(char).toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(at / 30_000)));
+  const digest = createHmac("sha1", Buffer.from(bytes)).update(counter).digest();
+  const offset = digest[digest.length - 1]! & 0xf;
+  const value = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
+  return String(value).padStart(6, "0");
+}
+
+test("Master Admin can turn a playbook on and off too", async ({ page }) => {
+  // The Master Admin seat signs in with the test-only boot password set in playwright.config.ts.
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("nicholas.will@cinderandcrown.com");
+  await page.getByLabel("Password").fill(process.env.E2E_MASTER_ADMIN_BOOT_PASSWORD ?? "e2e-only-boot-pass");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Set up your code" })).toBeVisible();
+  const setupKey = (await page.locator(".setup-key").innerText()).trim();
+  await page.getByLabel("6-digit code").fill(authenticatorCode(setupKey));
+  await page.getByRole("button", { name: "Finish setup" }).click();
+  await expect(page.getByRole("heading", { name: "Sunday at 10:30", level: 1 })).toBeVisible();
+
+  await page.goto("/playbooks");
+  await expect(page.getByText("You can turn one on or off.")).toBeVisible();
+  const visit = page.getByRole("article", { name: "First visit" });
+  await expect(visit.getByRole("heading", { name: "First visit · Off" })).toBeVisible();
+  await visit.getByRole("button", { name: "Turn on First visit" }).click();
+  await expect(page.getByText("Playbook is on.")).toBeVisible();
+  await expect(visit.getByRole("heading", { name: "First visit · On" })).toBeVisible();
+  await expect(visit).toContainText("Last changed by Nicholas Will");
+  await visit.getByRole("button", { name: "Turn off First visit" }).click();
+  await expect(page.getByText("Playbook is off.")).toBeVisible();
+  await expect(visit.getByRole("heading", { name: "First visit · Off" })).toBeVisible();
 });

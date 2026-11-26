@@ -23,6 +23,8 @@ const english = {
   people: "People",
   discipleship: "Discipleship",
   care: "Care",
+  tasks: "My tasks",
+  playbooks: "Playbooks",
   groups: "Groups",
   events: "Events",
   checkin: "Check-in",
@@ -65,6 +67,8 @@ const spanish: { [Key in keyof typeof english]: string } = {
   people: "Personas",
   discipleship: "Discipulado",
   care: "Cuidado",
+  tasks: "Mis tareas",
+  playbooks: "Guías de seguimiento",
   groups: "Grupos",
   events: "Eventos",
   checkin: "Registro",
@@ -99,7 +103,7 @@ export function copy(language: Language): { [Key in CopyKey]: string } {
 
 export const navGroups = [
   { id: "home", items: ["overview"] },
-  { id: "people", items: ["people", "discipleship", "care", "groups"] },
+  { id: "people", items: ["people", "tasks", "care", "playbooks", "discipleship", "groups"] },
   { id: "gather", items: ["events", "checkin", "serving", "worship", "kids", "facilities"] },
   { id: "message", items: ["communications", "push", "media"] },
   { id: "money", items: ["giving", "stewardship", "finance", "missions"] },

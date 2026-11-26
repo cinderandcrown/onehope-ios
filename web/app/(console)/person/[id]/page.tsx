@@ -4,11 +4,13 @@ import { formatChicago, isAccessError, type ChurchStore } from "@onehope/server"
 
 import {
   allowContactAction,
+  removePersonAction,
   logTouchAction,
   setStageAction,
   tagPersonAction,
   untagPersonAction,
 } from "@/app/people-actions";
+import { TaskCard } from "@/components/staff/tasks";
 import { withChurch } from "@/lib/church";
 import { lastContactLabel, peopleNotice } from "@/lib/people-notices";
 import { staffSession } from "@/lib/session";
@@ -25,9 +27,15 @@ export default async function PersonPage({
   const { id } = await params;
   const query = await searchParams;
   const { token } = await staffSession();
+  const personId = decodeURIComponent(id);
+  const rawBefore = Array.isArray(query.before) ? query.before[0] : query.before;
+  const before = rawBefore && /^\d{1,15}$/.test(rawBefore) ? Number(rawBefore) : null;
   let care: Care;
   try {
-    care = await withChurch((store) => store.personCare(token, decodeURIComponent(id)), { token });
+    care = await withChurch((store) => store.personCare(token, personId, { before }), {
+      token,
+      touchPage: { personId, before },
+    });
   } catch (error) {
     if (isAccessError(error)) {
       if (error.code === "unauthenticated" || error.code === "session_expired") redirect("/login");
@@ -76,6 +84,15 @@ export default async function PersonPage({
             </form>
           ) : null}
         </article>
+      ) : null}
+
+      {care.openTasks.length > 0 ? (
+        <section aria-label="Open tasks">
+          <h2>Open tasks</h2>
+          {care.openTasks.map((task) => (
+            <TaskCard key={task.id} task={task} back={`/person/${care.id}`} />
+          ))}
+        </section>
       ) : null}
 
       <article className="panel">
@@ -196,7 +213,9 @@ export default async function PersonPage({
 
       <article className="panel">
         <h2>Timeline</h2>
-        {care.touches.length === 0 ? <p>No touches yet. Be the first to reach out.</p> : null}
+        {care.touches.length === 0 && !care.newerPage ? (
+          <p>No touches yet. Be the first to reach out.</p>
+        ) : null}
         <ol className="timeline" aria-label="Timeline">
           {care.touches.map((touch) => (
             <li key={touch.id}>
@@ -208,7 +227,41 @@ export default async function PersonPage({
             </li>
           ))}
         </ol>
+        <div className="template-row">
+          {care.newerPage ? (
+            <Link className="button secondary" href={`/person/${encodeURIComponent(care.id)}`}>
+              Newest
+            </Link>
+          ) : null}
+          {care.olderTouchesBefore ? (
+            <Link
+              className="button secondary"
+              href={`/person/${encodeURIComponent(care.id)}?before=${care.olderTouchesBefore}`}
+            >
+              Older
+            </Link>
+          ) : null}
+        </div>
       </article>
+
+      {care.mayRemove ? (
+        <details className="panel">
+          <summary>Remove from One Hope</summary>
+          <p>
+            For duplicates, test entries, or someone who asked to be removed. Their touches, tags, tasks and
+            next steps are erased. This cannot be undone. The audit log keeps a note that you removed them.
+          </p>
+          <form className="form" action={removePersonAction}>
+            <input type="hidden" name="personId" value={care.id} />
+            <label className="check">
+              <input type="checkbox" name="confirm" value="yes" required /> Yes, remove {care.displayName}
+            </label>
+            <button className="button secondary" type="submit">
+              Remove {care.displayName}
+            </button>
+          </form>
+        </details>
+      ) : null}
 
       {care.followUps.length > 0 ? (
         <article className="panel">

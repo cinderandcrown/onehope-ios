@@ -29,7 +29,16 @@ export type LoadOptions = {
   platformKey?: Buffer | null;
   /** When set, only these tables are read. Omit it to read every table. */
   tables?: readonly string[];
+  /** Read every touch (snapshots and exports). Requests read the recent window plus one person's page. */
+  allTouches?: boolean;
+  /** One page of one person's timeline, newest first, older than `before` (ms) when set. */
+  touchPage?: { personId: string; before?: number | null } | null;
 };
+
+/** Touches a normal request reads across the whole church: the newest ones. */
+export const RECENT_TOUCHES = 500;
+/** Rows read for one person's timeline page. One extra tells the page there is more. */
+export const PERSON_TOUCH_ROWS = 51;
 
 export type SaveOptions = {
   syncModules: boolean;
@@ -110,6 +119,8 @@ export function emptyDocument(): StoreDocument {
     tags: [],
     personTags: [],
     touches: [],
+    playbooks: [],
+    careTasks: [],
     featuredMessage: null,
   };
 }
@@ -126,6 +137,8 @@ const OPTIONAL_TABLES = new Set([
   "tags",
   "person_tags",
   "interactions",
+  "care_playbooks",
+  "care_tasks",
 ]);
 
 function epoch(row: Row, key: string): string | null {
@@ -503,8 +516,27 @@ const SPECS: readonly SyncSpec[] = [
     "interactions",
     (doc) => doc.touches,
     assignArray("touches"),
-    ["person_id", "kind", "outcome"],
-    (row) => [required(row, "personId"), required(row, "kind"), required(row, "outcome")],
+    ["person_id", "kind", "outcome", "touched_at"],
+    (row) => [required(row, "personId"), required(row, "kind"), required(row, "outcome"), epoch(row, "at")],
+  ),
+  recordSpec("care_playbooks", (doc) => doc.playbooks, assignArray("playbooks"), ["trigger", "active"], (row) => [
+    required(row, "trigger"),
+    bool(row, "active"),
+  ]),
+  recordSpec(
+    "care_tasks",
+    (doc) => doc.careTasks,
+    assignArray("careTasks"),
+    ["person_id", "follow_up_id", "playbook_id", "assignee_id", "status", "due_at", "completed_at"],
+    (row) => [
+      text(row, "personId"),
+      text(row, "followUpId"),
+      text(row, "playbookId"),
+      text(row, "assigneeId"),
+      required(row, "status"),
+      epoch(row, "dueAt"),
+      epoch(row, "completedAt"),
+    ],
   ),
   recordSpec(
     "featured_messages",
@@ -646,6 +678,39 @@ async function loadRecords(
   });
 }
 
+/** The church's newest touches, plus one page of one person's timeline when asked. */
+async function loadTouches(
+  sql: SqlClient,
+  tenantId: string,
+  spec: SyncSpec,
+  doc: StoreDocument,
+  platformKey: Buffer | null,
+  page: { personId: string; before?: number | null } | null,
+): Promise<Row[]> {
+  const recent = await loadRecords(
+    sql,
+    tenantId,
+    spec,
+    doc,
+    platformKey,
+    ` ORDER BY touched_at DESC NULLS LAST, id DESC LIMIT ${RECENT_TOUCHES}`,
+  );
+  if (!page) return recent;
+  const before = typeof page.before === "number" && page.before > 0 ? new Date(page.before).toISOString() : null;
+  const personRows = await loadRecords(
+    sql,
+    tenantId,
+    spec,
+    doc,
+    platformKey,
+    ` AND person_id = $2 AND ($3::timestamptz IS NULL OR touched_at < $3::timestamptz)
+     ORDER BY touched_at DESC NULLS LAST, id DESC LIMIT ${PERSON_TOUCH_ROWS}`,
+    [page.personId, before],
+  );
+  const seen = new Set(recent.map((row) => String(row.id)));
+  return [...recent, ...personRows.filter((row) => !seen.has(String(row.id)))];
+}
+
 export async function loadDocument(
   sql: SqlClient,
   tenantId: string,
@@ -666,6 +731,16 @@ export async function loadDocument(
           ? " AND source = 'app'"
           : "";
     const params = spec.table === "sessions" && options.sessionToken ? [options.sessionToken] : [];
+    if (spec.table === "interactions" && !options.allTouches) {
+      spec.assign(doc, await loadTouches(sql, tenantId, spec, doc, platformKey, options.touchPage ?? null));
+      continue;
+    }
+    if (spec.table === "care_tasks" && !options.allTouches) {
+      // Open tasks, plus the last 30 days of finished ones for the Today numbers.
+      const recent = " AND (status = 'open' OR completed_at > now() - interval '30 days')";
+      spec.assign(doc, await loadRecords(sql, tenantId, spec, doc, platformKey, recent));
+      continue;
+    }
     spec.assign(doc, await loadRecords(sql, tenantId, spec, doc, platformKey, extra, params));
   }
   if (want("station_duty")) {
@@ -740,6 +815,7 @@ export async function saveDocumentDiff(
     if (!want(spec.table)) continue;
     writes += await syncSpec(sql, tenantId, spec, before, after, ctx, options.retainExtras === true);
   }
+  writes += await eraseLeavers(sql, tenantId, before, after, want);
   if (want("station_duty")) writes += await syncStation(sql, tenantId, before.station, after.station);
   if (want("kids_team")) writes += await syncIdSet(sql, tenantId, "kids_team", before.kidsTeam ?? [], after.kidsTeam ?? []);
   if (want("prayer_amens")) writes += await syncAmens(sql, tenantId, before.amens ?? [], after.amens ?? []);
@@ -762,6 +838,33 @@ export async function saveDocumentDiff(
 
 async function syncStation(sql: SqlClient, tenantId: string, before: string[], after: string[]) {
   return syncIdSet(sql, tenantId, "station_duty", before, after);
+}
+
+/**
+ * Touches and tasks are read a page at a time, so rows for someone who just left may not be in memory.
+ * Delete them by person in Postgres so leaving the church erases all of it.
+ */
+async function eraseLeavers(
+  sql: SqlClient,
+  tenantId: string,
+  before: StoreDocument,
+  after: StoreDocument,
+  want: (table: string) => boolean,
+): Promise<number> {
+  const wasLive = new Set(objects(before.people).filter((row) => !bool(row, "deleted")).map((row) => required(row, "id")));
+  const leavers = objects(after.people)
+    .filter((row) => bool(row, "deleted") && wasLive.has(required(row, "id")))
+    .map((row) => required(row, "id"));
+  let writes = 0;
+  for (const table of ["interactions", "care_tasks"] as const) {
+    if (leavers.length === 0 || !want(table) || !(await relationReady(sql, table))) continue;
+    const removed = await sql.query(`DELETE FROM ${table} WHERE tenant_id = $1 AND person_id = ANY($2::text[]) RETURNING id`, [
+      tenantId,
+      leavers,
+    ]);
+    writes += removed.rows.length;
+  }
+  return writes;
 }
 
 async function syncIdSet(sql: SqlClient, tenantId: string, table: "station_duty" | "kids_team", before: string[], after: string[]) {

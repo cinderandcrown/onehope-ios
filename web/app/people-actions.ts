@@ -96,3 +96,18 @@ export async function createTagAction(form: FormData) {
 export async function archiveTagAction(form: FormData) {
   await run("/people", (store, session) => store.archiveTag(session, field(form, "tagId")));
 }
+
+export async function removePersonAction(form: FormData) {
+  if (field(form, "confirm") !== "yes") redirect(`${personPath(form)}?error=confirm`);
+  const session = await token();
+  let failure = "";
+  try {
+    await withChurch((store) => store.removePerson(session, field(form, "personId")), { token: session });
+  } catch (error) {
+    if (isAccessError(error) && (error.code === "unauthenticated" || error.code === "session_expired")) {
+      redirect("/login");
+    }
+    failure = isAccessError(error) && error.code === "step_up_required" ? "stepup" : errorCode(error);
+  }
+  redirect(failure ? `${personPath(form)}?error=${failure}` : "/people?saved=removed");
+}
