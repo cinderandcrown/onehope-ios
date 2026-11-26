@@ -21,6 +21,8 @@ const english = {
   sendsOff: "No message is sent from this screen.",
   overview: "Overview",
   people: "People",
+  import: "Import",
+  duplicates: "Duplicates",
   discipleship: "Discipleship",
   care: "Care",
   tasks: "My tasks",
@@ -65,6 +67,8 @@ const spanish: { [Key in keyof typeof english]: string } = {
   sendsOff: "Esta pantalla no envía ningún mensaje.",
   overview: "Resumen",
   people: "Personas",
+  import: "Importar",
+  duplicates: "Duplicados",
   discipleship: "Discipulado",
   care: "Cuidado",
   tasks: "Mis tareas",
@@ -103,7 +107,7 @@ export function copy(language: Language): { [Key in CopyKey]: string } {
 
 export const navGroups = [
   { id: "home", items: ["overview"] },
-  { id: "people", items: ["people", "tasks", "care", "playbooks", "discipleship", "groups"] },
+  { id: "people", items: ["people", "import", "duplicates", "tasks", "care", "playbooks", "discipleship", "groups"] },
   { id: "gather", items: ["events", "checkin", "serving", "worship", "kids", "facilities"] },
   { id: "message", items: ["communications", "push", "media"] },
   { id: "money", items: ["giving", "stewardship", "finance", "missions"] },

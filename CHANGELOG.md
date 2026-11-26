@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 2c (Import and clean-up) - unreleased
+
+### Added
+
+- Import people (pastor and Master Admin, after step-up): upload a CSV or a one-time Planning Center people export, match columns in plain words, preview the first 10 rows with possible-duplicate flags, then a summary of added, updated, and skipped. Undo for 24 hours. Large files upload in batches and can resume. No Planning Center API and no ongoing sync.
+- Duplicates: pairs that share an email, phone, or name, with Merge (undo for 7 days) or Not the same. The merge stays in the audit trail.
+- Saved lists on People. Filters cover stage, tags, faith steps, last seen, last contact, source, owner, and open tasks. A list is calculated when you open it.
+- Permissions `import_people` (pastor and Master Admin, step-up) and `merge_people` (pastor, care team, Master Admin).
+- Migration `0009_import_cleanup` adds `people_imports`, `person_merges`, `saved_lists`, and `import_id` on people and profiles, with forced row-level security. Undo snapshots are encrypted. Rollback: `server/migrations/rollback/0009_import_cleanup_down.sql`.
+
 ## Phase 2b (Care engine) - unreleased
 
 ### Added

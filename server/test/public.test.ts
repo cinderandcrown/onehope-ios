@@ -187,7 +187,8 @@ test("seats stay behind staff sign-in and deletion removes owned rows", async ()
     ip: "t",
     userAgent: "t",
   });
-  store.register(member.token, store.publicHome().events[0]?.id ?? "");
+  // Home hides a gathering after it ends. The row is still there, so register against it directly.
+  store.register(member.token, "event-sunday");
   store.joinGroup(member.token, store.listGroups(member.token)[0]?.id ?? "");
   store.stepUp(member.token, { password: "hope-sample" });
   store.deleteSelf(member.token);

@@ -6,6 +6,8 @@ import { EventsDesk } from "@/components/staff/events";
 import { AdminDesk } from "@/components/staff/admin";
 import { MessageDesk } from "@/components/staff/message";
 import { PushDesk } from "@/components/staff/push";
+import { DuplicatesDesk } from "@/components/staff/duplicates";
+import { ImportDesk } from "@/components/staff/import-desk";
 import { PeopleDesk } from "@/components/staff/people";
 import { PlaybooksDesk, TasksDesk, TodayCard } from "@/components/staff/tasks";
 import { SecurityDesk } from "@/components/staff/security";
@@ -205,6 +207,10 @@ function renderSection(
     }
     case "people":
       return <PeopleDesk store={store} token={token} query={query} />;
+    case "import":
+      return <ImportDesk store={store} token={token} query={query} />;
+    case "duplicates":
+      return <DuplicatesDesk store={store} token={token} query={query} />;
     case "discipleship": {
       const ministry = store.ministry(token);
       const rows = ministry.pathwayRoster.length > 0 ? ministry.pathwayRoster : [ministry.pathways];

@@ -43,6 +43,8 @@ export const ACTIONS = [
   "work_care_tasks",
   "manage_playbooks",
   "remove_people",
+  "import_people",
+  "merge_people",
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -86,6 +88,7 @@ export function actionsFor(role: Role): readonly Action[] {
         "edit_people",
         "manage_tags",
         "work_care_tasks",
+        "merge_people",
       ];
     case "pastor":
       return [
@@ -108,6 +111,8 @@ export function actionsFor(role: Role): readonly Action[] {
         "work_care_tasks",
         "manage_playbooks",
         "remove_people",
+        "import_people",
+        "merge_people",
       ];
     case "master_admin":
       return ACTIONS;
@@ -206,6 +211,7 @@ export const TIER3_ACTIONS: ReadonlySet<Action> = new Set<Action>([
   "view_kids_medical",
   "view_background_checks",
   "remove_people",
+  "import_people",
 ]);
 
 export const SENSITIVE_STAFF_ROLES: ReadonlySet<Role> = new Set<Role>([

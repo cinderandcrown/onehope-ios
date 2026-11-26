@@ -3,7 +3,7 @@ import { formatChicago, labelRole, type ChurchStore } from "@onehope/server";
 
 import { addPersonAction, editPersonAction } from "@/app/actions";
 import { changeRoleAction, clearIssuedAction, undoPersonAction } from "@/app/staff-actions";
-import { archiveTagAction, createTagAction } from "@/app/people-actions";
+import { archiveTagAction, createTagAction, deleteListAction, saveListAction } from "@/app/people-actions";
 import { CopyButton } from "@/components/staff/clipboard";
 import { readIssued } from "@/lib/issued-code";
 import { lastContactLabel, peopleNotice } from "@/lib/people-notices";
@@ -29,6 +29,13 @@ export async function PeopleDesk({
     quiet: one(query, "quiet") === "1",
     offset: Number.parseInt(one(query, "from") || "0", 10) || 0,
     limit: 100,
+    listId: one(query, "list"),
+    faithStep: one(query, "faith"),
+    source: one(query, "source"),
+    ownerId: one(query, "owner"),
+    seen: one(query, "seen"),
+    contact: one(query, "contact"),
+    task: one(query, "task"),
   };
   let care: ReturnType<ChurchStore["peopleDirectory"]> | null = null;
   let tags: ReturnType<ChurchStore["careTags"]> | null = null;
@@ -66,12 +73,22 @@ export async function PeopleDesk({
       : one(query, "error")
         ? "That did not work. Undo is only for someone you added in the last 10 minutes."
         : "";
+  const applied = care?.filters;
   const pageLink = (from: number) => {
     const params = new URLSearchParams();
     if (filter.q) params.set("q", filter.q);
-    if (filter.stage) params.set("stage", filter.stage);
-    if (filter.tagId) params.set("tag", filter.tagId);
-    if (filter.quiet) params.set("quiet", "1");
+    if (care?.activeList) params.set("list", care.activeList.id);
+    else if (applied) {
+      if (applied.stage) params.set("stage", applied.stage);
+      if (applied.tagIds[0]) params.set("tag", applied.tagIds[0]);
+      if (applied.faithSteps[0]) params.set("faith", applied.faithSteps[0]);
+      if (applied.source) params.set("source", applied.source);
+      if (applied.ownerId) params.set("owner", applied.ownerId);
+      if (applied.seen) params.set("seen", applied.seen);
+      if (applied.contact) params.set("contact", applied.contact);
+      if (applied.task) params.set("task", applied.task);
+      if (applied.quiet) params.set("quiet", "1");
+    }
     if (from > 0) params.set("from", String(from));
     const text = params.toString();
     return text ? `/people?${text}` : "/people";
@@ -131,7 +148,7 @@ export async function PeopleDesk({
             </label>
             <label>
               Stage
-              <select name="stage" defaultValue={filter.stage}>
+              <select name="stage" defaultValue={applied?.stage ?? ""}>
                 <option value="">Any stage</option>
                 {care.stages.map((stage) => (
                   <option key={stage.id} value={stage.id}>
@@ -142,7 +159,7 @@ export async function PeopleDesk({
             </label>
             <label>
               Tag
-              <select name="tag" defaultValue={filter.tagId}>
+              <select name="tag" defaultValue={applied?.tagIds[0] ?? ""}>
                 <option value="">Any tag</option>
                 {care.tags.map((tag) => (
                   <option key={tag.id} value={tag.id}>
@@ -151,9 +168,70 @@ export async function PeopleDesk({
                 ))}
               </select>
             </label>
+            <label>
+              Faith step
+              <select name="faith" defaultValue={applied?.faithSteps[0] ?? ""}>
+                <option value="">Any faith step</option>
+                {care.faithSteps.map((step) => (
+                  <option key={step.id} value={step.id}>
+                    {step.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Last contact
+              <select name="contact" defaultValue={applied?.contact ?? ""}>
+                {care.windows.map((window) => (
+                  <option key={`contact-${window.id || "any"}`} value={window.id}>
+                    {window.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Last seen
+              <select name="seen" defaultValue={applied?.seen ?? ""}>
+                {care.windows.map((window) => (
+                  <option key={`seen-${window.id || "any"}`} value={window.id}>
+                    {window.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              How they found us
+              <select name="source" defaultValue={applied?.source ?? ""}>
+                <option value="">Any source</option>
+                {care.sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Who looks after them
+              <select name="owner" defaultValue={applied?.ownerId ?? ""}>
+                <option value="">Anyone</option>
+                {care.owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {owner.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Open task
+              <select name="task" defaultValue={applied?.task ?? ""}>
+                <option value="">Any</option>
+                <option value="open">Has an open task</option>
+                <option value="none">No open task</option>
+              </select>
+            </label>
             <label className="check">
-              <input type="checkbox" name="quiet" value="1" defaultChecked={filter.quiet} /> Only quiet (30+
-              days)
+              <input type="checkbox" name="quiet" value="1" defaultChecked={applied?.quiet ?? false} /> Only quiet
+              (30+ days)
             </label>
             <div className="template-row">
               <button className="button" type="submit">
@@ -164,6 +242,61 @@ export async function PeopleDesk({
               </Link>
             </div>
           </form>
+          <h3>Saved lists</h3>
+          {care.activeList ? <p>Showing the list “{care.activeList.name}”. It is calculated now, not a saved copy.</p> : null}
+          {care.lists.length === 0 ? (
+            <p>No saved lists yet. Set a filter above, name it, and tap Save this list.</p>
+          ) : (
+            <ul className="list" aria-label="Saved lists">
+              {care.lists.map((list) => (
+                <li key={list.id}>
+                  <Link href={`/people?list=${encodeURIComponent(list.id)}`}>{list.name}</Link>
+                  {list.shared ? " · shared" : ""}
+                  {list.mine ? (
+                    <form action={deleteListAction} className="inline">
+                      <input type="hidden" name="id" value={list.id} />
+                      <button className="button secondary" type="submit">
+                        Delete {list.name}
+                      </button>
+                    </form>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          <form className="form" action={saveListAction}>
+            <input type="hidden" name="stage" value={applied?.stage ?? ""} />
+            <input type="hidden" name="tag" value={applied?.tagIds[0] ?? ""} />
+            <input type="hidden" name="faith" value={applied?.faithSteps[0] ?? ""} />
+            <input type="hidden" name="source" value={applied?.source ?? ""} />
+            <input type="hidden" name="owner" value={applied?.ownerId ?? ""} />
+            <input type="hidden" name="seen" value={applied?.seen ?? ""} />
+            <input type="hidden" name="contact" value={applied?.contact ?? ""} />
+            <input type="hidden" name="task" value={applied?.task ?? ""} />
+            {applied?.quiet ? <input type="hidden" name="quiet" value="1" /> : null}
+            <label>
+              List name
+              <input name="name" required maxLength={60} placeholder="Guests to call" />
+            </label>
+            {care.mayShareLists ? (
+              <label className="check">
+                <input type="checkbox" name="shared" value="yes" /> Share with the team
+              </label>
+            ) : null}
+            <button className="button secondary" type="submit">
+              Save this list
+            </button>
+          </form>
+          {care.mayImport ? (
+            <p>
+              <Link href="/import">Import a spreadsheet</Link>
+            </p>
+          ) : null}
+          {care.mayMerge ? (
+            <p>
+              <Link href="/duplicates">Review duplicates</Link>
+            </p>
+          ) : null}
           <p className="muted" aria-live="polite">
             {care.total === 1 ? "1 person" : `${care.total} people`}
             {care.total > care.rows.length

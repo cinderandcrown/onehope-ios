@@ -8,6 +8,7 @@ const SAVED: Record<string, string> = {
   moved: "Moved to another care team seat.",
   on: "Playbook is on. New next steps will create tasks for the care team.",
   off: "Playbook is off. No new tasks will be created. Open tasks stay on the list.",
+  list: "List saved. It stays up to date as people change.",
 };
 
 const ERRORS: Record<string, string> = {

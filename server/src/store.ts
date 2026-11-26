@@ -110,6 +110,39 @@ import {
   type TouchRow,
 } from "./people-care";
 import {
+  BATCH_ROWS,
+  chunkRows,
+  FAITH_LABELS,
+  FAITH_STEPS,
+  FIELD_LABELS,
+  IMPORT_FIELDS,
+  IMPORT_UNDO_MS,
+  MERGE_UNDO_MS,
+  SOURCE_LABELS,
+  SOURCES,
+  WINDOW_LABELS,
+  cleanFilters,
+  cleanMapping,
+  displayNameOf,
+  emptyFilters,
+  filtersAreNarrow,
+  findDuplicatePairs,
+  hashImport,
+  isFaithStep,
+  looksLikePlanningCenter,
+  mapCells,
+  matchesList,
+  parseCsv,
+  planImport,
+  suggestMapping,
+  whyLabel,
+  type FaithStep,
+  type ImportField,
+  type ListFilters,
+  type MappedRow,
+  type PlanItem,
+} from "./import-people";
+import {
   announcementIsLive,
   type AnnouncementCard,
   formatChicago,
@@ -177,6 +210,8 @@ type Person = PersonView & {
   /** Who added this person from the desk, and when. Sample seats leave both empty. */
   addedBy?: string | null;
   addedAt?: number | null;
+  /** Set when an import created or changed this person. */
+  importId?: string | null;
 };
 
 type IssuedInvite = {
@@ -330,6 +365,83 @@ const GUEST_LIMIT_PER_CLIENT = 5;
 const GUEST_LIMIT_TOTAL = 120;
 const MEMBER_LIMIT = 10;
 
+type ImportStatus = "receiving" | "ready" | "imported" | "undone";
+
+type ImportCounts = {
+  added: number;
+  updated: number;
+  skipped: number;
+  reasons: { why: string; count: number }[];
+};
+
+type UndoPerson = {
+  personId: string;
+  displayName: string;
+  email: string;
+  phone: string;
+  importId: string | null;
+  profile: PersonProfileRow | null;
+  tagIdsAdded: string[];
+};
+
+type ImportUndo = {
+  createdIds: string[];
+  createdTagIds: string[];
+  updated: UndoPerson[];
+};
+
+type ImportPayload = {
+  batches: { index: number; rows: string[][] }[];
+  undo: ImportUndo | null;
+};
+
+type PeopleImportRow = {
+  id: string;
+  filename: string;
+  status: ImportStatus;
+  createdBy: string;
+  createdAt: number;
+  undoUntil: number | null;
+  contentHash: string;
+  headers: string[];
+  mapping: ImportField[];
+  totalBatches: number;
+  planningCenter: boolean;
+  counts: ImportCounts | null;
+  payloadCiphertext: string;
+};
+
+type MergeSnapshot = {
+  person: { displayName: string; email: string; phone: string; deleted: boolean; importId: string | null };
+  profile: PersonProfileRow | null;
+  tagIds: string[];
+  touchIds: string[];
+  taskIds: string[];
+  keptTagIdsAdded: string[];
+  keptProfile: PersonProfileRow | null;
+  keptPerson: { displayName: string; email: string; phone: string; importId: string | null };
+};
+
+type PersonMergeRow = {
+  id: string;
+  keptId: string;
+  mergedId: string;
+  byId: string;
+  at: number;
+  kind: "merge" | "not_same";
+  undoneAt: number | null;
+  snapshotCiphertext: string;
+};
+
+type SavedListRow = {
+  id: string;
+  name: string;
+  ownerId: string;
+  shared: boolean;
+  filters: ListFilters;
+  createdAt: number;
+};
+
 type StoredPerson = Omit<Person, "totpSecret"> & { totpSecret?: string | null };
 
 export type StoreDocument = {
@@ -413,6 +525,10 @@ export type StoreDocument = {
   /** Phase 2b. Older snapshots load as empty: every playbook off, no tasks. */
   playbooks?: PlaybookRow[];
   careTasks?: CareTaskRow[];
+  /** Phase 2c. Older snapshots load as empty. */
+  imports?: PeopleImportRow[];
+  merges?: PersonMergeRow[];
+  lists?: SavedListRow[];
   /** The message staff chose for Home and Watch. Older snapshots omit it. */
   featuredMessage?: {
     videoId: string;
@@ -558,6 +674,9 @@ export class ChurchStore {
   private readonly touches: TouchRow[] = [];
   private readonly playbookRows: PlaybookRow[] = [];
   private readonly careTasks: CareTaskRow[] = [];
+  private readonly imports: PeopleImportRow[] = [];
+  private readonly merges: PersonMergeRow[] = [];
+  private readonly lists: SavedListRow[] = [];
   private featured: {
     videoId: string;
     title: string;
@@ -754,6 +873,17 @@ export class ChurchStore {
     person.passwordHash = localAuthProvider.hashPassword(input.password);
     person.displayName = displayName;
     this.people.set(id, person);
+    this.profiles.set(id, {
+      id,
+      personId: id,
+      stage: defaultStage("member", true),
+      lastContactAt: null,
+      doNotContact: false,
+      updatedAt: this.now(),
+      updatedBy: id,
+      source: "app_signup",
+      firstSeenAt: this.now(),
+    });
     this.ensurePathway(id);
     return this.login({ email, password: input.password, ip: input.ip, userAgent: input.userAgent });
   }
@@ -2075,6 +2205,9 @@ export class ChurchStore {
     person.addedBy = actor.personId;
     person.addedAt = this.now();
     this.people.set(person.id, person);
+    const profile = this.writableProfile(person, actor);
+    profile.source = "staff_added";
+    profile.firstSeenAt = this.now();
     this.ensurePathway(person.id);
     const expires = this.now() + 7 * 24 * 60 * 60 * 1000;
     const inviteToken = newId("invite");
@@ -3035,31 +3168,75 @@ export class ChurchStore {
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  /** People list with search and filters. Each page is at most `limit` rows. */
+  /** People list with search and filters. Each page is at most `limit` rows. Saved lists are computed here, never copied. */
   peopleDirectory(
     token: string,
-    filter: { q?: string; stage?: string; tagId?: string; quiet?: boolean; limit?: number; offset?: number } = {},
+    filter: {
+      q?: string;
+      stage?: string;
+      tagId?: string;
+      quiet?: boolean;
+      limit?: number;
+      offset?: number;
+      listId?: string;
+      faithStep?: string;
+      source?: string;
+      ownerId?: string;
+      seen?: string;
+      contact?: string;
+      task?: string;
+    } = {},
   ) {
     const actor = this.actor(token);
     const visible = this.careScope(actor);
     const now = this.now();
     const q = (filter.q ?? "").trim().toLowerCase();
-    const stage = isStage(filter.stage) ? filter.stage : null;
-    const tagged = filter.tagId
-      ? new Set(this.personTags.filter((row) => row.tagId === filter.tagId).map((row) => row.personId))
-      : null;
+    const activeList = filter.listId ? this.visibleList(actor, filter.listId) : null;
+    const filters = activeList
+      ? activeList.filters
+      : cleanFilters({
+          stage: filter.stage,
+          tagIds: filter.tagId ? [filter.tagId] : [],
+          faithSteps: filter.faithStep ? [filter.faithStep] : [],
+          seen: filter.seen,
+          contact: filter.contact,
+          source: filter.source,
+          ownerId: filter.ownerId,
+          task: filter.task,
+          quiet: filter.quiet === true,
+        });
+    const openTasks = new Set(
+      this.careTasks.filter((task) => task.status === "open" && task.personId).map((task) => task.personId as string),
+    );
+    const tagsByPerson = new Map<string, string[]>();
+    for (const row of this.personTags) {
+      const list = tagsByPerson.get(row.personId) ?? [];
+      list.push(row.tagId);
+      tagsByPerson.set(row.personId, list);
+    }
     const rows = [...this.people.values()]
       .filter(visible)
       .map((person) => ({ person, profile: this.careProfile(person) }))
       .filter(({ person, profile }) => {
-        if (stage && profile.stage !== stage) return false;
-        if (tagged && !tagged.has(person.id)) return false;
-        if (filter.quiet && !isQuiet(profile.lastContactAt, now)) return false;
         if (q) {
           const hay = `${person.displayName} ${person.email} ${person.phone}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
-        return true;
+        return matchesList(
+          filters,
+          {
+            stage: profile.stage,
+            tagIds: tagsByPerson.get(person.id) ?? [],
+            faithSteps: this.faithStepsFor(person, profile),
+            lastSeenAt: profile.lastSeenAt ?? null,
+            lastContactAt: profile.lastContactAt,
+            source: profile.source ?? "",
+            ownerId: profile.ownerId ?? "",
+            openTasks: openTasks.has(person.id) ? 1 : 0,
+            quiet: isQuiet(profile.lastContactAt, now),
+          },
+          now,
+        );
       })
       .sort((left, right) => left.person.displayName.localeCompare(right.person.displayName));
     const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500);
@@ -3088,6 +3265,19 @@ export class ChurchStore {
         .filter((tag) => !tag.archived)
         .map((tag) => ({ id: tag.id, name: tag.name, kind: tag.kind })),
       seesEveryone: seesEveryone(actor.role),
+      filters,
+      activeList: activeList ? { id: activeList.id, name: activeList.name } : null,
+      lists: this.listsFor(actor),
+      owners: this.ownerChoices(),
+      faithSteps: FAITH_STEPS.map((id) => ({ id, label: FAITH_LABELS[id] })),
+      sources: SOURCES.map((id) => ({ id, label: SOURCE_LABELS[id] })),
+      windows: (["", "within7", "within30", "older30", "older60"] as const).map((id) => ({
+        id,
+        label: WINDOW_LABELS[id],
+      })),
+      mayImport: allows(actor.role, "import_people"),
+      mayMerge: allows(actor.role, "merge_people"),
+      mayShareLists: allows(actor.role, "manage_tags"),
     };
   }
 
@@ -3323,6 +3513,810 @@ export class ChurchStore {
       }
     }
     return unique;
+  }
+
+  // ---- Phase 2c: import, duplicates, saved lists ---------------------------------------------
+
+  private importer(token: string): Actor {
+    const actor = this.actor(token);
+    authorize(actor, "import_people", this.now());
+    return actor;
+  }
+
+  private faithStepsFor(person: Person, profile: PersonProfileRow): FaithStep[] {
+    const found = new Set<FaithStep>();
+    for (const step of profile.faithSteps ?? []) if (isFaithStep(step)) found.add(step);
+    for (const step of this.pathways.get(person.id) ?? []) {
+      if (step.id === "salvation" && step.status === "complete") found.add("salvation");
+      if (step.id === "baptism" && step.status !== "not-started") found.add("baptized");
+      if (step.id === "growth-track" && step.status !== "not-started") found.add("growth_track");
+    }
+    if (person.role === "volunteer" || profile.stage === "serving" || profile.stage === "leading") {
+      found.add("serving");
+    }
+    return FAITH_STEPS.filter((step) => found.has(step));
+  }
+
+  private ownerChoices() {
+    return [...this.people.values()]
+      .filter((person) => !person.deleted && allows(person.role, "edit_people"))
+      .map((person) => ({ id: person.id, displayName: person.displayName }))
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
+  }
+
+  private listsFor(actor: Actor) {
+    return this.lists
+      .filter((list) => list.shared || list.ownerId === actor.personId)
+      .map((list) => ({
+        id: list.id,
+        name: list.name,
+        shared: list.shared,
+        mine: list.ownerId === actor.personId,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  private visibleList(actor: Actor, listId: string): SavedListRow {
+    const list = this.lists.find((row) => row.id === listId);
+    if (!list || (!list.shared && list.ownerId !== actor.personId)) {
+      throw new AccessError("not_found", "That list isn't here.");
+    }
+    return list;
+  }
+
+  /** Saves the filters, not the people. Opening the list runs them again. */
+  saveList(token: string, input: { name: string; shared?: boolean } & Partial<ListFilters>) {
+    const actor = this.actor(token);
+    authorize(actor, "view_people", this.now());
+    const name = input.name.replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!name) throw new AccessError("invalid", "Give the list a name.");
+    const filters = cleanFilters(input);
+    if (!filtersAreNarrow(filters)) throw new AccessError("invalid", "Set a filter first, then save the list.");
+    const mine = this.lists.filter((list) => list.ownerId === actor.personId);
+    if (mine.length >= 50) throw new AccessError("invalid", "You already have 50 lists. Delete one first.");
+    if (mine.some((list) => list.name.toLowerCase() === name.toLowerCase())) {
+      throw new AccessError("invalid", "You already have a list with that name.");
+    }
+    const row: SavedListRow = {
+      id: newId("list"),
+      name,
+      ownerId: actor.personId,
+      shared: Boolean(input.shared) && allows(actor.role, "manage_tags"),
+      filters,
+      createdAt: this.now(),
+    };
+    this.lists.push(row);
+    this.record(actor, "write", "saved_list", row.id, 1);
+    return { id: row.id, name: row.name };
+  }
+
+  deleteList(token: string, listId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "view_people", this.now());
+    const index = this.lists.findIndex((list) => list.id === listId);
+    const list = this.lists[index];
+    if (!list) throw new AccessError("not_found", "That list isn't here.");
+    if (list.ownerId !== actor.personId && !allows(actor.role, "manage_tags")) {
+      throw new AccessError("forbidden", "Only the person who saved this list can delete it.");
+    }
+    this.lists.splice(index, 1);
+    this.record(actor, "write", "saved_list", list.id, 1);
+    return { id: list.id, removed: true as const };
+  }
+
+  private readPayload(row: PeopleImportRow): ImportPayload {
+    if (!row.payloadCiphertext) return { batches: [], undo: null };
+    const value = this.readJson(row.payloadCiphertext);
+    if (!value || typeof value !== "object") return { batches: [], undo: null };
+    const raw = value as { batches?: unknown; undo?: ImportUndo | null };
+    const batches = Array.isArray(raw.batches)
+      ? raw.batches.filter(
+          (batch): batch is { index: number; rows: string[][] } =>
+            Boolean(batch) &&
+            typeof batch === "object" &&
+            typeof (batch as { index?: unknown }).index === "number" &&
+            Array.isArray((batch as { rows?: unknown }).rows),
+        )
+      : [];
+    return { batches, undo: raw.undo ?? null };
+  }
+
+  private writePayload(row: PeopleImportRow, payload: ImportPayload) {
+    row.payloadCiphertext = encryptString(JSON.stringify(payload), this.key);
+  }
+
+  private importOwned(actor: Actor, importId: string): PeopleImportRow {
+    const row = this.imports.find((item) => item.id === importId && item.createdBy === actor.personId);
+    if (!row) throw new AccessError("not_found", "That import isn't here.");
+    return row;
+  }
+
+  openPeopleImport(
+    token: string,
+    input: { filename: string; headers: string[]; totalBatches: number; contentHash: string },
+  ) {
+    const actor = this.importer(token);
+    const filename = input.filename.replace(/\s+/g, " ").trim().slice(0, 120) || "people.csv";
+    const headers = input.headers.map((header) => String(header).trim().slice(0, 80));
+    if (headers.length === 0 || headers.length > 40) {
+      throw new AccessError("invalid", "This file needs column names, and no more than 40 of them.");
+    }
+    if (!Number.isInteger(input.totalBatches) || input.totalBatches < 1 || input.totalBatches > 100) {
+      throw new AccessError("invalid", "That file could not be split into batches.");
+    }
+    if (!/^[a-f0-9]{64}$/.test(input.contentHash)) {
+      throw new AccessError("invalid", "That file could not be checked. Upload it again.");
+    }
+    const existing = this.imports.find(
+      (row) =>
+        row.createdBy === actor.personId &&
+        row.contentHash === input.contentHash &&
+        (row.status === "receiving" || row.status === "ready"),
+    );
+    if (existing) {
+      const payload = this.readPayload(existing);
+      return {
+        id: existing.id,
+        resumed: true as const,
+        received: payload.batches.length,
+        totalBatches: existing.totalBatches,
+      };
+    }
+    const row: PeopleImportRow = {
+      id: newId("import"),
+      filename,
+      status: "receiving",
+      createdBy: actor.personId,
+      createdAt: this.now(),
+      undoUntil: null,
+      contentHash: input.contentHash,
+      headers,
+      mapping: suggestMapping(headers),
+      totalBatches: input.totalBatches,
+      planningCenter: looksLikePlanningCenter(headers),
+      counts: null,
+      payloadCiphertext: "",
+    };
+    this.writePayload(row, { batches: [], undo: null });
+    this.imports.push(row);
+    this.record(actor, "write", "people_import", row.id, 2);
+    return { id: row.id, resumed: false as const, received: 0, totalBatches: row.totalBatches };
+  }
+
+  /** Reads a whole spreadsheet, stores it in batches, and can continue an upload that stopped. */
+  receivePeopleFile(token: string, input: { filename: string; text: string }) {
+    this.importer(token);
+    const parsed = parseCsv(input.text);
+    const batches = chunkRows(parsed.rows, BATCH_ROWS);
+    const opened = this.openPeopleImport(token, {
+      filename: input.filename,
+      headers: parsed.headers,
+      totalBatches: batches.length,
+      contentHash: hashImport(parsed.headers, parsed.rows),
+    });
+    for (let index = 0; index < batches.length; index += 1) {
+      const rows = batches[index];
+      if (rows) this.addPeopleImportBatch(token, opened.id, { index, rows });
+    }
+    return opened;
+  }
+
+  addPeopleImportBatch(token: string, importId: string, input: { index: number; rows: string[][] }) {
+    const actor = this.importer(token);
+    const row = this.importOwned(actor, importId);
+    if (row.status !== "receiving" && row.status !== "ready") {
+      throw new AccessError("invalid", "This import is already finished.");
+    }
+    if (!Number.isInteger(input.index) || input.index < 0 || input.index >= row.totalBatches) {
+      throw new AccessError("invalid", "That batch is not part of this file.");
+    }
+    if (input.rows.length > BATCH_ROWS) throw new AccessError("invalid", `Send at most ${BATCH_ROWS} people in one batch.`);
+    const payload = this.readPayload(row);
+    const prior = payload.batches.find((batch) => batch.index === input.index);
+    if (prior) {
+      if (JSON.stringify(prior.rows) !== JSON.stringify(input.rows)) {
+        throw new AccessError("invalid", "That part of the file does not match what was already uploaded.");
+      }
+      return { id: row.id, received: payload.batches.length, totalBatches: row.totalBatches };
+    }
+    const width = row.headers.length;
+    payload.batches.push({
+      index: input.index,
+      rows: input.rows.map((cells) => {
+        const copy = cells.slice(0, width).map((cell) => String(cell ?? "").slice(0, 2000));
+        while (copy.length < width) copy.push("");
+        return copy;
+      }),
+    });
+    if (payload.batches.length === row.totalBatches) row.status = "ready";
+    this.writePayload(row, payload);
+    return { id: row.id, received: payload.batches.length, totalBatches: row.totalBatches };
+  }
+
+  setPeopleImportMapping(token: string, importId: string, chosen: readonly string[]) {
+    const actor = this.importer(token);
+    const row = this.importOwned(actor, importId);
+    if (row.status === "imported" || row.status === "undone") {
+      throw new AccessError("invalid", "This import is already finished.");
+    }
+    const payload = this.readPayload(row);
+    if (payload.batches.length !== row.totalBatches) {
+      throw new AccessError("invalid", "This file is still uploading. Upload it again to finish.");
+    }
+    row.mapping = cleanMapping(row.headers, chosen);
+    row.status = "ready";
+    this.record(actor, "write", "people_import", row.id, 2);
+    return { id: row.id };
+  }
+
+  /** The import wizard: upload, match columns, preview, or the summary. */
+  importPage(token: string, query: { id?: string; step?: string } = {}) {
+    const actor = this.importer(token);
+    const now = this.now();
+    const mine = this.imports.filter((row) => row.createdBy === actor.personId);
+    const recent = mine
+      .slice()
+      .reverse()
+      .slice(0, 8)
+      .map((row) => ({
+        id: row.id,
+        filename: row.filename,
+        status: row.status,
+        added: row.counts?.added ?? 0,
+        updated: row.counts?.updated ?? 0,
+        skipped: row.counts?.skipped ?? 0,
+        reasons: row.counts?.reasons ?? [],
+        undoUntil: row.undoUntil,
+        canUndo: row.status === "imported" && row.undoUntil !== null && row.undoUntil > now,
+      }));
+    const unfinished = mine
+      .filter((row) => row.status === "receiving" || row.status === "ready")
+      .map((row) => {
+        const payload = this.readPayload(row);
+        return { id: row.id, filename: row.filename, received: payload.batches.length, total: row.totalBatches };
+      });
+    const row = query.id ? mine.find((item) => item.id === query.id) : undefined;
+    const asked = query.step === "match" || query.step === "preview" || query.step === "summary" ? query.step : "upload";
+    if (!row || asked === "upload") return { step: "upload" as const, recent, unfinished };
+    if (asked === "summary" || row.status === "imported" || row.status === "undone") {
+      return {
+        step: "summary" as const,
+        recent,
+        unfinished,
+        id: row.id,
+        filename: row.filename,
+        status: row.status,
+        counts: row.counts,
+        undoUntil: row.undoUntil,
+        canUndo: row.status === "imported" && row.undoUntil !== null && row.undoUntil > now,
+        planningCenter: row.planningCenter,
+      };
+    }
+    const options = IMPORT_FIELDS.map((id) => ({ id, label: FIELD_LABELS[id] }));
+    const payload = this.readPayload(row);
+    if (asked === "match" || payload.batches.length !== row.totalBatches) {
+      return {
+        step: "match" as const,
+        recent,
+        unfinished,
+        id: row.id,
+        filename: row.filename,
+        planningCenter: row.planningCenter,
+        received: payload.batches.length,
+        totalBatches: row.totalBatches,
+        headers: row.headers.map((name, index) => ({
+          index,
+          name: name || `Column ${index + 1}`,
+          field: row.mapping[index] ?? "ignore",
+        })),
+        options,
+      };
+    }
+    const ordered = payload.batches.slice().sort((left, right) => left.index - right.index);
+    const mapped = this.mappedRows(row, ordered);
+    const plan = planImport(mapped, this.knownPeople());
+    return {
+      step: "preview" as const,
+      recent,
+      unfinished,
+      id: row.id,
+      filename: row.filename,
+      planningCenter: row.planningCenter,
+      total: plan.length,
+      rows: plan.slice(0, 10).map((item) => this.previewLine(item)),
+    };
+  }
+
+  private knownPeople() {
+    return [...this.people.values()].map((person) => ({
+      id: person.id,
+      displayName: person.displayName,
+      email: person.email,
+      phone: person.phone,
+      role: person.role,
+      deleted: person.deleted,
+    }));
+  }
+
+  private mappedRows(row: PeopleImportRow, batches: { index: number; rows: string[][] }[]): MappedRow[] {
+    const mapped: MappedRow[] = [];
+    let line = 1;
+    for (const batch of batches) {
+      for (const cells of batch.rows) {
+        mapped.push(mapCells(cells, row.mapping, line));
+        line += 1;
+      }
+    }
+    return mapped;
+  }
+
+  private previewLine(item: PlanItem) {
+    if (item.kind === "skip") {
+      return { line: item.line, name: "—", email: "", phone: "", stage: "", tags: "", note: item.why, flag: "" };
+    }
+    return {
+      line: item.line,
+      name: displayNameOf(item.row),
+      email: item.row.email,
+      phone: item.row.phone,
+      stage: item.row.stage ? STAGE_LABELS[item.row.stage] : "",
+      tags: item.row.tags.join(", "),
+      note: item.kind === "add" ? "Will add" : `Will update ${item.name}`,
+      flag: item.flag,
+    };
+  }
+
+  commitPeopleImport(token: string, importId: string) {
+    const actor = this.importer(token);
+    const row = this.importOwned(actor, importId);
+    if (row.status === "imported" && row.counts) {
+      return { id: row.id, ...row.counts, undoUntil: row.undoUntil, kept: 0 };
+    }
+    if (row.status === "undone") throw new AccessError("invalid", "This import was undone. Upload the file again.");
+    const payload = this.readPayload(row);
+    if (payload.batches.length !== row.totalBatches) {
+      throw new AccessError("invalid", "This file is still uploading. Upload it again to finish.");
+    }
+    const ordered = payload.batches.slice().sort((left, right) => left.index - right.index);
+    const flat = ordered.flatMap((batch) => batch.rows);
+    if (hashImport(row.headers, flat) !== row.contentHash) {
+      throw new AccessError("invalid", "This upload is incomplete. Upload the file again.");
+    }
+    if (row.mapping.length !== row.headers.length) throw new AccessError("invalid", "Match the columns before importing.");
+    const applied = this.applyImport(actor, row.id, planImport(this.mappedRows(row, ordered), this.knownPeople()));
+    row.counts = applied.counts;
+    row.status = "imported";
+    row.undoUntil = this.now() + IMPORT_UNDO_MS;
+    payload.undo = applied.undo;
+    this.writePayload(row, payload);
+    this.record(actor, "write", "people_import", row.id, 2);
+    return { id: row.id, ...applied.counts, undoUntil: row.undoUntil, kept: 0 };
+  }
+
+  undoPeopleImport(token: string, importId: string) {
+    const actor = this.importer(token);
+    const row = this.importOwned(actor, importId);
+    if (row.status !== "imported") throw new AccessError("invalid", "This import is not waiting to be undone.");
+    if (row.undoUntil === null || row.undoUntil < this.now()) {
+      throw new AccessError("invalid", "Undo is only available for 24 hours.");
+    }
+    const payload = this.readPayload(row);
+    if (!payload.undo) throw new AccessError("invalid", "This import cannot be undone.");
+    const undo = payload.undo;
+    for (const snap of undo.updated) {
+      const person = this.people.get(snap.personId);
+      if (!person || person.deleted) continue;
+      person.displayName = snap.displayName;
+      person.email = snap.email;
+      person.phone = snap.phone;
+      person.importId = snap.importId;
+      if (snap.profile) this.profiles.set(person.id, { ...snap.profile, faithSteps: [...(snap.profile.faithSteps ?? [])] });
+      else this.profiles.delete(person.id);
+      for (const tagId of snap.tagIdsAdded) {
+        const index = this.personTags.findIndex((link) => link.id === personTagId(person.id, tagId));
+        if (index >= 0) this.personTags.splice(index, 1);
+      }
+    }
+    let kept = 0;
+    for (const id of undo.createdIds) {
+      const person = this.people.get(id);
+      if (!person || person.deleted) continue;
+      if (person.passwordHash) {
+        kept += 1;
+        continue;
+      }
+      this.eraseOwnedData(person.id, person.householdId);
+      person.deleted = true;
+      person.email = "";
+      person.phone = "";
+      person.displayName = "Former member";
+      person.importId = null;
+    }
+    for (const tagId of undo.createdTagIds) {
+      if (this.personTags.some((link) => link.tagId === tagId)) continue;
+      const index = this.tags.findIndex((tag) => tag.id === tagId);
+      if (index >= 0) this.tags.splice(index, 1);
+    }
+    row.status = "undone";
+    this.writePayload(row, { batches: [], undo: null });
+    this.record(actor, "write", "people_import", row.id, 2);
+    return { id: row.id, kept };
+  }
+
+  private applyImport(actor: Actor, importId: string, plan: readonly PlanItem[]) {
+    const reasons = new Map<string, number>();
+    let added = 0;
+    let updated = 0;
+    let skipped = 0;
+    const createdIds: string[] = [];
+    const created = new Set<string>();
+    const createdTagIds: string[] = [];
+    const updatedRows: UndoPerson[] = [];
+    const remembered = new Set<string>();
+    const ids = new Map<string, string>();
+    const tagByName = new Map(this.tags.filter((tag) => !tag.archived).map((tag) => [tag.name.toLowerCase(), tag]));
+    const skip = (why: string) => {
+      skipped += 1;
+      reasons.set(why, (reasons.get(why) ?? 0) + 1);
+    };
+    for (const item of plan) {
+      if (item.kind === "skip") {
+        skip(item.why);
+        continue;
+      }
+      if (item.kind === "update") {
+        const targetId = item.personId || ids.get(item.key) || "";
+        const person = targetId ? this.people.get(targetId) : undefined;
+        if (!person || person.deleted) {
+          skip("No matching person");
+          continue;
+        }
+        let snap: UndoPerson | null = null;
+        if (!created.has(person.id)) {
+          snap = updatedRows.find((row) => row.personId === person.id) ?? null;
+          if (!snap && !remembered.has(person.id)) {
+            snap = this.snapshotPerson(person);
+            remembered.add(person.id);
+            updatedRows.push(snap);
+          }
+        }
+        this.applyImportedRow(actor, person, item.row, importId, createdTagIds, tagByName, snap);
+        updated += 1;
+        continue;
+      }
+      const person = this.makePerson({
+        id: newId("person"),
+        displayName: item.name,
+        email: item.row.email.includes("@") ? item.row.email : "",
+        role: "member",
+        householdId: newId("hh"),
+        sample: false,
+        password: false,
+        totp: false,
+        listed: false,
+        phone: item.row.phone,
+      });
+      person.addedBy = actor.personId;
+      person.addedAt = this.now();
+      person.importId = importId;
+      this.people.set(person.id, person);
+      this.ensurePathway(person.id);
+      ids.set(item.key, person.id);
+      createdIds.push(person.id);
+      created.add(person.id);
+      this.applyImportedRow(actor, person, item.row, importId, createdTagIds, tagByName, null);
+      added += 1;
+    }
+    return {
+      counts: {
+        added,
+        updated,
+        skipped,
+        reasons: [...reasons].map(([why, count]) => ({ why, count })),
+      } satisfies ImportCounts,
+      undo: { createdIds, createdTagIds, updated: updatedRows } satisfies ImportUndo,
+    };
+  }
+
+  private snapshotPerson(person: Person): UndoPerson {
+    const profile = this.profiles.get(person.id);
+    return {
+      personId: person.id,
+      displayName: person.displayName,
+      email: person.email,
+      phone: person.phone,
+      importId: person.importId ?? null,
+      profile: profile ? { ...profile, faithSteps: [...(profile.faithSteps ?? [])] } : null,
+      tagIdsAdded: [],
+    };
+  }
+
+  private applyImportedRow(
+    actor: Actor,
+    person: Person,
+    row: MappedRow,
+    importId: string,
+    createdTagIds: string[],
+    tagByName: Map<string, TagRow>,
+    undoRow: UndoPerson | null,
+  ) {
+    const profile = this.writableProfile(person, actor);
+    const name = displayNameOf(row);
+    if (name) person.displayName = name;
+    if (row.email.includes("@") && !person.email) person.email = row.email;
+    if (row.phone) person.phone = row.phone;
+    person.importId = importId;
+    if (row.stage) profile.stage = row.stage;
+    if (row.source) profile.source = row.source;
+    else if (!undoRow && !profile.source) profile.source = "import";
+    const steps = new Set(profile.faithSteps ?? []);
+    for (const step of row.faithSteps) steps.add(step);
+    profile.faithSteps = [...steps];
+    if (row.ownerEmail) {
+      const owner = [...this.people.values()].find(
+        (candidate) => !candidate.deleted && candidate.email.toLowerCase() === row.ownerEmail && allows(candidate.role, "edit_people"),
+      );
+      if (owner) profile.ownerId = owner.id;
+    }
+    if (row.lastSeenAt) profile.lastSeenAt = row.lastSeenAt;
+    if (row.lastContactAt) profile.lastContactAt = row.lastContactAt;
+    if (!undoRow && !profile.firstSeenAt) profile.firstSeenAt = row.lastSeenAt ?? this.now();
+    profile.importId = importId;
+    if (row.note || row.address || row.birthday) {
+      const detail = this.readDetail(profile.detailCiphertext);
+      if (row.note) detail.note = row.note.slice(0, NOTE_LIMIT);
+      if (row.address) detail.address = row.address;
+      if (row.birthday) detail.birthday = row.birthday;
+      profile.detailCiphertext = this.writeDetail(detail);
+    }
+    for (const tagName of row.tags) {
+      const cleaned = cleanTagName(tagName);
+      if (!cleaned) continue;
+      let tag = tagByName.get(cleaned.toLowerCase());
+      if (!tag) {
+        tag = {
+          id: newId("tag"),
+          name: cleaned,
+          kind: "custom",
+          leaderIds: [],
+          archived: false,
+          createdAt: this.now(),
+          createdBy: actor.personId,
+        };
+        this.tags.push(tag);
+        tagByName.set(cleaned.toLowerCase(), tag);
+        createdTagIds.push(tag.id);
+      }
+      const id = personTagId(person.id, tag.id);
+      if (this.personTags.some((link) => link.id === id)) continue;
+      this.personTags.push({ id, personId: person.id, tagId: tag.id, addedBy: actor.personId, addedAt: this.now() });
+      if (undoRow) undoRow.tagIdsAdded.push(tag.id);
+    }
+  }
+
+  private readDetail(ciphertext: string | undefined): { note: string; address: string; birthday: string } {
+    if (!ciphertext) return { note: "", address: "", birthday: "" };
+    try {
+      const value = this.readJson(ciphertext);
+      return {
+        note: textField(value, "note"),
+        address: textField(value, "address"),
+        birthday: textField(value, "birthday"),
+      };
+    } catch {
+      return { note: "", address: "", birthday: "" };
+    }
+  }
+
+  private writeDetail(detail: { note: string; address: string; birthday: string }): string {
+    if (!detail.note && !detail.address && !detail.birthday) return "";
+    return encryptString(JSON.stringify(detail), this.key);
+  }
+
+  duplicatePage(token: string) {
+    const actor = this.actor(token);
+    authorize(actor, "merge_people", this.now());
+    const now = this.now();
+    const blocked = this.merges
+      .filter((row) => row.kind === "not_same" || (row.kind === "merge" && row.undoneAt === null))
+      .map((row) => ({ leftId: row.keptId, rightId: row.mergedId }));
+    return {
+      pairs: findDuplicatePairs(this.knownPeople(), blocked).map((pair) => ({
+        leftId: pair.leftId,
+        rightId: pair.rightId,
+        why: whyLabel(pair.why),
+        left: this.pairSide(this.people.get(pair.leftId)),
+        right: this.pairSide(this.people.get(pair.rightId)),
+      })),
+      merges: this.merges
+        .filter((row) => row.kind === "merge" && row.undoneAt === null && row.at + MERGE_UNDO_MS > now)
+        .slice()
+        .reverse()
+        .map((row) => ({
+          id: row.id,
+          keptName: this.people.get(row.keptId)?.displayName ?? "Someone",
+          until: row.at + MERGE_UNDO_MS,
+        })),
+    };
+  }
+
+  private pairSide(person: Person | undefined) {
+    if (!person || person.deleted) return { name: "Someone", email: "", phone: "", stage: "" };
+    return {
+      name: person.displayName,
+      email: person.email,
+      phone: person.phone,
+      stage: STAGE_LABELS[this.careProfile(person).stage],
+    };
+  }
+
+  mergePeople(token: string, keptId: string, mergedId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "merge_people", this.now());
+    if (keptId === mergedId) throw new AccessError("invalid", "Pick two different people.");
+    const kept = this.requireMergePerson(actor, keptId);
+    const merged = this.requireMergePerson(actor, mergedId);
+    const snapshot = this.mergeSnapshot(kept, merged);
+    if (!kept.email && merged.email) {
+      kept.email = merged.email;
+      merged.email = "";
+    }
+    if (!kept.phone && merged.phone) {
+      kept.phone = merged.phone;
+      merged.phone = "";
+    }
+    const keptProfile = this.writableProfile(kept, actor);
+    const mergedProfile = this.profiles.get(merged.id);
+    if (mergedProfile) {
+      keptProfile.faithSteps = [...new Set([...(keptProfile.faithSteps ?? []), ...(mergedProfile.faithSteps ?? [])])];
+      if ((mergedProfile.lastContactAt ?? 0) > (keptProfile.lastContactAt ?? 0)) {
+        keptProfile.lastContactAt = mergedProfile.lastContactAt;
+      }
+      if ((mergedProfile.lastSeenAt ?? 0) > (keptProfile.lastSeenAt ?? 0)) keptProfile.lastSeenAt = mergedProfile.lastSeenAt;
+      if (mergedProfile.doNotContact) keptProfile.doNotContact = true;
+      if (!keptProfile.ownerId && mergedProfile.ownerId) keptProfile.ownerId = mergedProfile.ownerId;
+      if (!keptProfile.source && mergedProfile.source) keptProfile.source = mergedProfile.source;
+    }
+    const keptTags = new Set(this.personTags.filter((link) => link.personId === kept.id).map((link) => link.tagId));
+    for (const link of this.personTags.filter((item) => item.personId === merged.id)) {
+      if (keptTags.has(link.tagId)) continue;
+      this.personTags.push({
+        id: personTagId(kept.id, link.tagId),
+        personId: kept.id,
+        tagId: link.tagId,
+        addedBy: actor.personId,
+        addedAt: this.now(),
+      });
+      snapshot.keptTagIdsAdded.push(link.tagId);
+    }
+    for (const touch of this.touches) if (touch.personId === merged.id) touch.personId = kept.id;
+    for (const task of this.careTasks) if (task.personId === merged.id) task.personId = kept.id;
+    merged.deleted = true;
+    merged.displayName = "Former member";
+    merged.email = "";
+    merged.phone = "";
+    const record: PersonMergeRow = {
+      id: newId("merge"),
+      keptId: kept.id,
+      mergedId: merged.id,
+      byId: actor.personId,
+      at: this.now(),
+      kind: "merge",
+      undoneAt: null,
+      snapshotCiphertext: encryptString(JSON.stringify(snapshot), this.key),
+    };
+    this.merges.push(record);
+    this.record(actor, "write", "person_merge", record.id, 2);
+    return { id: record.id, keptId: kept.id };
+  }
+
+  private requireMergePerson(actor: Actor, personId: string): Person {
+    const person = this.people.get(personId);
+    const visible = this.careScope(actor);
+    if (!person || !visible(person)) throw new AccessError("not_found", "That person isn't here.");
+    if (isStaff(person.role)) {
+      throw new AccessError("invalid", "Staff seats are not merged here. Change roles on the Roles page first.");
+    }
+    return person;
+  }
+
+  private mergeSnapshot(kept: Person, merged: Person): MergeSnapshot {
+    const copyProfile = (personId: string) => {
+      const profile = this.profiles.get(personId);
+      return profile ? { ...profile, faithSteps: [...(profile.faithSteps ?? [])] } : null;
+    };
+    return {
+      person: {
+        displayName: merged.displayName,
+        email: merged.email,
+        phone: merged.phone,
+        deleted: merged.deleted,
+        importId: merged.importId ?? null,
+      },
+      profile: copyProfile(merged.id),
+      tagIds: this.personTags.filter((link) => link.personId === merged.id).map((link) => link.tagId),
+      touchIds: this.touches.filter((touch) => touch.personId === merged.id).map((touch) => touch.id),
+      taskIds: this.careTasks.filter((task) => task.personId === merged.id).map((task) => task.id),
+      keptTagIdsAdded: [],
+      keptProfile: copyProfile(kept.id),
+      keptPerson: {
+        displayName: kept.displayName,
+        email: kept.email,
+        phone: kept.phone,
+        importId: kept.importId ?? null,
+      },
+    };
+  }
+
+  undoMerge(token: string, mergeId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "merge_people", this.now());
+    const row = this.merges.find((item) => item.id === mergeId && item.kind === "merge");
+    if (!row || (row.byId !== actor.personId && !allows(actor.role, "manage_tags"))) {
+      throw new AccessError("not_found", "That merge isn't here.");
+    }
+    if (row.undoneAt !== null) throw new AccessError("invalid", "That merge was already undone.");
+    if (row.at + MERGE_UNDO_MS < this.now()) throw new AccessError("invalid", "Undo is only available for 7 days.");
+    const snapshot = this.readJson(row.snapshotCiphertext) as MergeSnapshot;
+    const kept = this.people.get(row.keptId);
+    const merged = this.people.get(row.mergedId);
+    if (!kept || !merged || !snapshot?.person || !snapshot.keptPerson) {
+      throw new AccessError("not_found", "That person isn't here.");
+    }
+    kept.displayName = snapshot.keptPerson.displayName;
+    kept.email = snapshot.keptPerson.email;
+    kept.phone = snapshot.keptPerson.phone;
+    kept.importId = snapshot.keptPerson.importId;
+    if (snapshot.keptProfile) {
+      this.profiles.set(kept.id, { ...snapshot.keptProfile, faithSteps: [...(snapshot.keptProfile.faithSteps ?? [])] });
+    } else this.profiles.delete(kept.id);
+    for (const tagId of snapshot.keptTagIdsAdded ?? []) {
+      const index = this.personTags.findIndex((link) => link.id === personTagId(kept.id, tagId));
+      if (index >= 0) this.personTags.splice(index, 1);
+    }
+    merged.displayName = snapshot.person.displayName;
+    merged.email = snapshot.person.email;
+    merged.phone = snapshot.person.phone;
+    merged.deleted = snapshot.person.deleted;
+    merged.importId = snapshot.person.importId;
+    if (snapshot.profile) {
+      this.profiles.set(merged.id, { ...snapshot.profile, faithSteps: [...(snapshot.profile.faithSteps ?? [])] });
+    }
+    const touchIds = new Set(snapshot.touchIds ?? []);
+    for (const touch of this.touches) if (touchIds.has(touch.id)) touch.personId = merged.id;
+    const taskIds = new Set(snapshot.taskIds ?? []);
+    for (const task of this.careTasks) if (taskIds.has(task.id)) task.personId = merged.id;
+    row.undoneAt = this.now();
+    this.record(actor, "write", "person_merge", row.id, 2);
+    return { id: row.id, restoredId: merged.id };
+  }
+
+  /** Remembers that these two are not the same person, so the pair stays off the list. */
+  dismissDuplicate(token: string, leftId: string, rightId: string) {
+    const actor = this.actor(token);
+    authorize(actor, "merge_people", this.now());
+    if (leftId === rightId) throw new AccessError("invalid", "Pick two different people.");
+    this.requireMergePerson(actor, leftId);
+    this.requireMergePerson(actor, rightId);
+    const existing = this.merges.find(
+      (row) =>
+        row.kind === "not_same" &&
+        ((row.keptId === leftId && row.mergedId === rightId) || (row.keptId === rightId && row.mergedId === leftId)),
+    );
+    if (existing) return { id: existing.id };
+    const row: PersonMergeRow = {
+      id: newId("merge"),
+      keptId: leftId,
+      mergedId: rightId,
+      byId: actor.personId,
+      at: this.now(),
+      kind: "not_same",
+      undoneAt: null,
+      snapshotCiphertext: "",
+    };
+    this.merges.push(row);
+    this.record(actor, "write", "person_merge", row.id, 1);
+    return { id: row.id };
   }
 
   // ---- Phase 2b: care engine -----------------------------------------------------------------
@@ -4916,6 +5910,12 @@ export class ChurchStore {
       touches: this.touches.map((row) => ({ ...row })),
       playbooks: this.playbookRows.map((row) => ({ ...row })),
       careTasks: this.careTasks.map((row) => ({ ...row })),
+      imports: this.imports.map((row) => ({ ...row, headers: [...row.headers], mapping: [...row.mapping] })),
+      merges: this.merges.map((row) => ({ ...row })),
+      lists: this.lists.map((row) => ({
+        ...row,
+        filters: { ...row.filters, tagIds: [...row.filters.tagIds], faithSteps: [...row.filters.faithSteps] },
+      })),
     };
   }
 
@@ -5002,6 +6002,25 @@ export class ChurchStore {
     this.touches.splice(0, this.touches.length, ...(document.touches ?? []).map((row) => ({ ...row })));
     this.playbookRows.splice(0, this.playbookRows.length, ...(document.playbooks ?? []).map((row) => ({ ...row })));
     this.careTasks.splice(0, this.careTasks.length, ...(document.careTasks ?? []).map((row) => ({ ...row })));
+    this.imports.splice(
+      0,
+      this.imports.length,
+      ...(document.imports ?? []).map((row) => ({ ...row, headers: [...row.headers], mapping: [...row.mapping] })),
+    );
+    this.merges.splice(0, this.merges.length, ...(document.merges ?? []).map((row) => ({ ...row })));
+    this.lists.splice(
+      0,
+      this.lists.length,
+      ...(document.lists ?? []).map((row) => ({
+        ...row,
+        filters: {
+          ...emptyFilters(),
+          ...row.filters,
+          tagIds: [...(row.filters?.tagIds ?? [])],
+          faithSteps: [...(row.filters?.faithSteps ?? [])],
+        },
+      })),
+    );
   }
 
   installDocument(document: StoreDocument): void {
@@ -5026,6 +6045,15 @@ export class ChurchStore {
     for (const row of this.followUps) {
       row.ciphertext = rotate(row.ciphertext);
       if (row.noteCiphertext) row.noteCiphertext = rotate(row.noteCiphertext);
+    }
+    for (const row of this.imports) {
+      if (row.payloadCiphertext) row.payloadCiphertext = rotate(row.payloadCiphertext);
+    }
+    for (const row of this.merges) {
+      if (row.snapshotCiphertext) row.snapshotCiphertext = rotate(row.snapshotCiphertext);
+    }
+    for (const row of this.profiles.values()) {
+      if (row.detailCiphertext) row.detailCiphertext = rotate(row.detailCiphertext);
     }
   }
 
